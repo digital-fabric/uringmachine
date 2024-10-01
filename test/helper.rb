@@ -2,7 +2,7 @@
 
 require 'bundler/setup'
 require_relative './coverage' if ENV['COVERAGE']
-require 'iou'
+require 'uringmachine'
 require 'minitest/autorun'
 
 module ::Kernel
@@ -51,6 +51,7 @@ class IOURingBaseTest < Minitest::Test
   
   def setup
     @ring = IOU::Ring.new
+    @machine = UM.new
   end
 
   def teardown

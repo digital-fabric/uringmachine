@@ -1,22 +1,22 @@
-require_relative './lib/iou/version'
+require_relative './lib/uringmachine/version'
 
 Gem::Specification.new do |s|
-  s.name        = 'iou'
-  s.version     = IOU::VERSION
+  s.name        = 'uringmachine'
+  s.version     = UM_VERSION
   s.licenses    = ['MIT']
-  s.summary     = 'io_uring for Ruby'
+  s.summary     = 'A lean, mean io_uring machine'
   s.author      = 'Sharon Rosner'
   s.email       = 'sharon@noteflakes.com'
   s.files       = `git ls-files --recurse-submodules`.split.reject { |fn| fn =~ /liburing\/man/ }
-  s.homepage    = 'https://github.com/digital-fabric/iou'
+  s.homepage    = 'https://github.com/digital-fabric/uringmachine'
   s.metadata    = {
-    "source_code_uri" => "https://github.com/digital-fabric/iou",
-    "documentation_uri" => "https://www.rubydoc.info/gems/iou",
-    "changelog_uri" => "https://github.com/digital-fabric/iou/blob/master/CHANGELOG.md"
+    "source_code_uri" => "https://github.com/digital-fabric/uringmachine",
+    "documentation_uri" => "https://www.rubydoc.info/gems/uringmachine",
+    "changelog_uri" => "https://github.com/digital-fabric/uringmachine/blob/master/CHANGELOG.md"
   }
-  s.rdoc_options = ["--title", "IOU", "--main", "README.md"]
+  s.rdoc_options = ["--title", "UringMachine", "--main", "README.md"]
   s.extra_rdoc_files = ["README.md"]
-  s.extensions = ["ext/iou/extconf.rb"]
+  s.extensions = ["ext/um/extconf.rb"]
   s.require_paths = ["lib"]
   s.required_ruby_version = '>= 3.3'
 

@@ -4,12 +4,12 @@ require 'rubygems'
 require 'mkmf'
 require 'rbconfig'
 
-dir_config 'iou_ext'
+dir_config 'um_ext'
 
 KERNEL_INFO_RE = /Linux (\d)\.(\d+)(?:\.)?((?:\d+\.?)*)(?:\-)?([\w\-]+)?/
 def get_config
   config = { linux: !!(RUBY_PLATFORM =~ /linux/) }
-  raise "IOU only works on Linux!" if !config[:linux]
+  raise "UringMachine only works on Linux!" if !config[:linux]
 
   kernel_info = `uname -sr`
   m = kernel_info.match(KERNEL_INFO_RE)
@@ -18,7 +18,7 @@ def get_config
   version, major_revision, distribution = m[1].to_i, m[2].to_i, m[4]
 
   combined_version = version.to_i * 100 + major_revision.to_i
-  raise "IOU requires kernel version 6.4 or newer!" if combined_version < 604
+  raise "UringMachine requires kernel version 6.4 or newer!" if combined_version < 604
 
   config[:kernel_version]     = combined_version
   config[:pidfd_open]         = combined_version > 503
@@ -34,7 +34,7 @@ def get_config
 end
 
 config = get_config
-puts "Building IOU (\n#{config.map { |(k, v)| "  #{k}: #{v}\n"}.join})"
+puts "Building UringMachine (\n#{config.map { |(k, v)| "  #{k}: #{v}\n"}.join})"
 
 # require_relative 'zlib_conf'
 
@@ -68,4 +68,4 @@ $CFLAGS << ' -Wno-pointer-arith'
 
 CONFIG['optflags'] << ' -fno-strict-aliasing'
 
-create_makefile 'iou_ext'
+create_makefile 'um_ext'

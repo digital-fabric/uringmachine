@@ -5,8 +5,8 @@ require "rake/clean"
 require "rake/testtask"
 require "rake/extensiontask"
 
-Rake::ExtensionTask.new("iou_ext") do |ext|
-  ext.ext_dir = "ext/iou"
+Rake::ExtensionTask.new("um_ext") do |ext|
+  ext.ext_dir = "ext/um"
 end
 
 task :recompile => [:clean, :compile]
@@ -25,14 +25,14 @@ end
 CLEAN.include "**/*.o", "**/*.so", "**/*.so.*", "**/*.a", "**/*.bundle", "**/*.jar", "pkg", "tmp"
 
 task :release do
-  require_relative './lib/iou/version'
-  version = IOU::VERSION
+  require_relative './lib/uringmachine/version'
+  version = UM::VERSION
 
-  puts 'Building iou...'
-  `gem build iou.gemspec`
+  puts 'Building uringmachine...'
+  `gem build uringmachine.gemspec`
 
-  puts "Pushing iou #{version}..."
-  `gem push iou-#{version}.gem`
+  puts "Pushing uringmachine #{version}..."
+  `gem push uringmachine-#{version}.gem`
 
   puts "Cleaning up..."
   `rm *.gem`
