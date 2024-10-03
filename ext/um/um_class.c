@@ -74,6 +74,29 @@ VALUE UM_initialize(VALUE self) {
   return self;
 }
 
+VALUE UM_snooze(VALUE self) {
+  struct um *machine = get_machine(self);
+  um_schedule(machine, rb_fiber_current(), Qnil);
+  return um_await(machine);
+}
+
+VALUE UM_yield(VALUE self) {
+  struct um *machine = get_machine(self);
+  return um_await(machine);
+}
+
+VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
+  struct um *machine = get_machine(self);
+  um_schedule(machine, fiber, value);
+  return self;
+}
+
+VALUE UM_interrupt(VALUE self, VALUE fiber, VALUE value) {
+  struct um *machine = get_machine(self);
+  um_interrupt(machine, fiber, value);
+  return self;
+}
+
 VALUE UM_sleep(VALUE self, VALUE duration) {
   struct um *machine = get_machine(self);
   um_sleep(machine, NUM2DBL(duration));
@@ -88,6 +111,11 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "initialize", UM_initialize, 0);
   // rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 1);
+
+  rb_define_method(cUM, "snooze", UM_snooze, 0);
+  rb_define_method(cUM, "yield", UM_yield, 0);
+  rb_define_method(cUM, "schedule", UM_schedule, 2);
+  rb_define_method(cUM, "interrupt", UM_interrupt, 2);
 
   rb_define_method(cUM, "sleep", UM_sleep, 1);
 

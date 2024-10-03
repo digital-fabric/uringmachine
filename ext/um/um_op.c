@@ -1,24 +1,29 @@
 #include "um.h"
 
-struct um_op *um_op_checkout(struct um *machine) {
+inline void um_op_clear(struct um_op *op) {
+  memset(op, 0, sizeof(struct um_op));
+  op->fiber = op->resume_value = Qnil;
+}
+
+inline struct um_op *um_op_checkout(struct um *machine) {
   if (machine->freelist_head) {
     struct um_op *op = machine->freelist_head;
     machine->freelist_head = op->next;
-    memset(op, 0, sizeof(struct um_op));
+    um_op_clear(op);
     return op;
   }
 
   struct um_op *op = malloc(sizeof(struct um_op));
-  memset(op, 0, sizeof(struct um_op));
+  um_op_clear(op);
   return op;
 }
 
-void um_op_checkin(struct um *machine, struct um_op *op) {
+inline void um_op_checkin(struct um *machine, struct um_op *op) {
   op->next = machine->freelist_head;
   machine->freelist_head = op;
 }
 
-struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber) {
+inline struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber) {
   struct um_op *op = machine->runqueue_head;
   while (op) {
     if (op->fiber == fiber) return op;
@@ -28,7 +33,7 @@ struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber) {
   return NULL;
 }
 
-void um_runqueue_push(struct um *machine, struct um_op *op) {
+inline void um_runqueue_push(struct um *machine, struct um_op *op) {
   if (machine->runqueue_tail) {
     op->prev = machine->runqueue_tail;
     machine->runqueue_tail->next = op;
@@ -41,7 +46,7 @@ void um_runqueue_push(struct um *machine, struct um_op *op) {
   op->next = NULL;
 }
 
-void um_runqueue_unshift(struct um *machine, struct um_op *op) {
+inline void um_runqueue_unshift(struct um *machine, struct um_op *op) {
   if (machine->runqueue_head) {
     op->next = machine->runqueue_head;
     machine->runqueue_head->prev = op;
@@ -54,7 +59,7 @@ void um_runqueue_unshift(struct um *machine, struct um_op *op) {
   op->prev = NULL;
 }
 
-struct um_op *um_runqueue_shift(struct um *machine) {
+inline struct um_op *um_runqueue_shift(struct um *machine) {
   struct um_op *op = machine->runqueue_head;
   if (!op) return NULL;
 

@@ -24,7 +24,7 @@ done:
   return sqe;
 }
 
-void um_cleanup(struct um *machine) {
+inline void um_cleanup(struct um *machine) {
   if (!machine->ring_initialized) return;
 
   for (unsigned i = 0; i < machine->buffer_ring_count; i++) {
@@ -40,23 +40,12 @@ void um_cleanup(struct um *machine) {
   um_free_linked_list(machine->freelist_head);
 }
 
-void um_free_linked_list(struct um_op *op) {
+inline void um_free_linked_list(struct um_op *op) {
   while (op) {
     struct um_op *next = op->next;
     free(op);
     op = next;
   }
-}
-
-VALUE um_await(struct um *machine, struct um_op *op) {
-  op->fiber = rb_fiber_current();
-  um_fiber_switch(machine);
-  VALUE v = op->resume_value;
-  if (op->state == OP_cancelled)
-    op->state = OP_abandonned;
-  else
-    um_op_checkin(machine, op);
-  return um_value_is_exception_p(v) ? um_raise_exception(v) : v;
 }
 
 struct wait_for_cqe_ctx {
@@ -76,7 +65,7 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   return NULL;
 }
 
-void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
+inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (!op) return;
 
@@ -96,7 +85,7 @@ void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   }
 }
 
-void um_wait_for_and_process_cqe(struct um *machine) {
+static inline void um_wait_for_and_process_cqe(struct um *machine) {
   struct wait_for_cqe_ctx ctx = {
     .machine = machine,
     .cqe = NULL
@@ -117,7 +106,6 @@ static inline bool cq_ring_needs_flush(struct io_uring *ring) {
 
 static inline int um_process_ready_cqes(struct um *machine) {
   unsigned total_count = 0;
-
 iterate:
   bool overflow_checked = false;
   struct io_uring_cqe *cqe;
@@ -142,37 +130,69 @@ done:
   return total_count;
 }
 
-void um_wait_for_and_process_ready_cqes(struct um *machine) {
+static inline void um_wait_for_and_process_ready_cqes(struct um *machine) {
   um_wait_for_and_process_cqe(machine);
   um_process_ready_cqes(machine);
 }
 
-void um_fiber_switch(struct um *machine) {
+inline VALUE um_fiber_switch(struct um *machine) {
   struct um_op *op = 0;
 loop:
   op = um_runqueue_shift(machine);
   if (op) {
+    VALUE resume_value = op->resume_value;
+    if (op->state == OP_interrupt)
+      um_op_checkin(machine, op);
     // the resume value is disregarded, we pass the fiber itself
-    rb_fiber_transfer(op->fiber, 1, &op->fiber);
-    return;
+    VALUE v = rb_fiber_transfer(op->fiber, 1, &resume_value);
+    return v;
   }
 
   um_wait_for_and_process_ready_cqes(machine);
   goto loop;
 }
 
-void um_fiber_interrupt(struct um *machine, VALUE fiber, VALUE value) {
-  struct um_op *op = um_runqueue_find_by_fiber(machine, fiber);
-  if (!op)
-    rb_raise(rb_eRuntimeError, "Can't interrupt fiber that is not awaiting something");
+static inline VALUE um_await_op(struct um *machine, struct um_op *op) {
+  op->fiber = rb_fiber_current();
+  VALUE v = um_fiber_switch(machine);
 
-  op->state = OP_cancelled;
-  op->resume_value = value;
+  int is_exception = um_value_is_exception_p(v);
+
+  if (is_exception || op->state == OP_cancelled)
+    op->state = OP_abandonned;
+  else
+    um_op_checkin(machine, op);
+  return is_exception ? um_raise_exception(v) : v;
 }
 
-// operations
+inline VALUE um_await(struct um *machine) {
+  VALUE v = um_fiber_switch(machine);
+  return um_value_is_exception_p(v) ? um_raise_exception(v) : v;
+}
 
-VALUE um_sleep(struct um *machine, double duration) {
+inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
+  struct um_op *op = um_op_checkout(machine);
+  op->state = OP_interrupt;
+  op->fiber = fiber;
+  op->resume_value = value;
+  um_runqueue_push(machine, op);
+}
+
+inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
+  struct um_op *op = um_runqueue_find_by_fiber(machine, fiber);
+  if (op) {
+    op->state = OP_cancelled;
+    op->resume_value = value;
+  }
+  else {
+    op = um_op_checkout(machine);
+    op->fiber = fiber;
+    op->resume_value = value;
+    um_runqueue_unshift(machine, op);
+  }
+}
+
+inline VALUE um_sleep(struct um *machine, double duration) {
   struct um_op *op = um_op_checkout(machine);
   struct __kernel_timespec ts = um_double_to_timespec(duration);
 
@@ -180,5 +200,6 @@ VALUE um_sleep(struct um *machine, double duration) {
   io_uring_prep_timeout(sqe, &ts, 0, 0);
   op->state = OP_submitted;
 
-  return um_await(machine, op);
+  return um_await_op(machine, op);
 }
+

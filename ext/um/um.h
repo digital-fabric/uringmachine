@@ -25,7 +25,8 @@ enum op_state {
   OP_submitted,
   OP_completed,
   OP_cancelled,
-  OP_abandonned
+  OP_abandonned,
+  OP_interrupt,
 };
 
 struct um_op {
@@ -55,6 +56,8 @@ struct um {
   struct um_op *freelist_head;
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
+  struct um_op *pending_head;
+  struct um_op *pending_tail;
 
   struct io_uring ring;
 
@@ -65,12 +68,15 @@ struct um {
   unsigned int buffer_ring_count;
 };
 
+extern VALUE cUM;
+
 struct __kernel_timespec um_double_to_timespec(double value);
 
 void um_cleanup(struct um *machine);
 
 void um_free_linked_list(struct um_op *op);
-void um_fiber_switch(struct um *machine);
+VALUE um_fiber_switch(struct um *machine);
+VALUE um_await(struct um *machine);
 
 void um_op_checkin(struct um *machine, struct um_op *op);
 struct um_op* um_op_checkout(struct um *machine);
@@ -80,11 +86,13 @@ VALUE um_raise_exception(VALUE v);
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
+void um_runqueue_unshift(struct um *machine, struct um_op *op);
 
 int um_value_is_exception_p(VALUE v);
 
 
-
+void um_schedule(struct um *machine, VALUE fiber, VALUE value);
+void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 
 VALUE um_sleep(struct um *machine, double duration);
 

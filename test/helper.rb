@@ -51,10 +51,20 @@ class IOURingBaseTest < Minitest::Test
   
   def setup
     @ring = IOU::Ring.new
-    @machine = UM.new
   end
 
   def teardown
     ring.close
+  end
+end
+
+class UMBaseTest < Minitest::Test
+  attr_accessor :machine
+  
+  def setup
+    @machine = UM.new
+  end
+
+  def teardown
   end
 end
