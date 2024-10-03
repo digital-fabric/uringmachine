@@ -57,38 +57,41 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   return NULL;
 }
 
+inline void um_handle_submitted_op_cqe_single(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
+  op->cqe_result = cqe->res;
+  op->cqe_flags = cqe->flags;
+  op->state = OP_completed;
+  um_runqueue_push(machine, op);
+}
+
+inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
+  if (!op->results_head) {
+    struct um_op *op2 = um_op_checkout(machine);
+    op2->state = OP_schedule;
+    op2->fiber = op->fiber;
+    op2->resume_value = Qnil;
+    um_runqueue_push(machine, op2);
+  }
+  um_op_result_push(machine, op, cqe->res, cqe->flags);
+
+  if (!(cqe->flags & IORING_CQE_F_MORE))
+    op->state = OP_completed;
+}
+
 inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
-  if (!op) return;
+  if (unlikely(!op)) return;
 
   switch (op->state) {
     case OP_submitted:
-      if (cqe->res == -ECANCELED) {
+      if (unlikely(cqe->res == -ECANCELED)) {
         um_op_checkin(machine, op);
+        break;
       }
-      else {
-        int multishot = op->is_multishot;
-        if (!multishot) {
-          op->cqe_result = cqe->res;
-          op->cqe_flags = cqe->flags;
-          op->state = OP_completed;
-          um_runqueue_push(machine, op);
-        }
-        else {
-          if (!op->results_head) {
-            struct um_op *op2 = um_op_checkout(machine);
-            op2->state = OP_schedule;
-            op2->fiber = op->fiber;
-            op2->resume_value = Qnil;
-            um_runqueue_push(machine, op2);
-          }
-          um_op_result_push(machine, op, cqe->res, cqe->flags);
-
-          if (!(cqe->flags & IORING_CQE_F_MORE))
-            op->state = OP_completed;
-        }
-
-      }
+      if (!op->is_multishot)
+        um_handle_submitted_op_cqe_single(machine, op, cqe);
+      else
+        um_handle_submitted_op_cqe_multi(machine, op, cqe);
       break;
     case OP_abandonned:
       // op has been abandonned by the I/O method, so we need to cleanup (check
@@ -195,7 +198,7 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op, int *resul
   VALUE v = um_fiber_switch(machine);
   int is_exception = um_value_is_exception_p(v);
 
-  if (is_exception && op->state == OP_submitted) {
+  if (unlikely(is_exception && op->state == OP_submitted)) {
     um_cancel_op(machine, op);
     op->state = OP_abandonned;
   }
@@ -208,7 +211,7 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op, int *resul
       um_op_checkin(machine, op);
   }
 
-  if (is_exception) um_raise_exception(v);
+  if (unlikely(is_exception)) um_raise_exception(v);
   return v;
 }
 
@@ -310,11 +313,15 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
 
 VALUE um_read_each_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-  if (ctx->op->state == OP_submitted) {
-    um_cancel_op(ctx->machine, ctx->op);
+  switch (ctx->op->state) {
+    case OP_submitted:
+      um_cancel_op(ctx->machine, ctx->op);
+      break;
+    case OP_completed:
+      um_op_checkin(ctx->machine, ctx->op);
+      break;
+    default:  
   }
-  else if (ctx->op->state == OP_completed)
-    um_op_checkin(ctx->machine, ctx->op);
   return Qnil;
 }
 
@@ -331,7 +338,7 @@ VALUE um_read_each_safe_loop(VALUE arg) {
       printf("no result found!\n");
     }
     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-      if (result > 0) {
+      if (likely(result > 0)) {
         total += result;
         VALUE buf = get_string_from_buffer_ring(ctx->machine, ctx->bgid, result, flags);
         rb_yield(buf);

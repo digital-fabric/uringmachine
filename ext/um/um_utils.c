@@ -23,7 +23,7 @@ inline VALUE um_raise_exception(VALUE e) {
 }
 
 inline void um_raise_on_system_error(int result) {
-  if (result < 0) rb_syserr_fail(-result, strerror(-result));
+  if (unlikely(result < 0)) rb_syserr_fail(-result, strerror(-result));
 }
 
 inline void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs) {
@@ -47,35 +47,26 @@ static inline void adjust_read_buffer_len(VALUE buffer, int result, int ofs) {
 }
 
 inline void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, int result, int flags) {
-  if (flags & IORING_CQE_F_BUFFER) {
-    rb_raise(rb_eRuntimeError, "TODO: implement reading from buffer ring");
-    // update_read_buffer_from_buffer_ring(iour, ctx, cqe);
-    return;
-  }
-
   if (!result) return;
 
   adjust_read_buffer_len(buffer, result, buffer_offset);
 }
 
 inline VALUE get_string_from_buffer_ring(struct um *machine, int bgid, int result, int flags) {
-  VALUE buf = Qnil;
+  if (!result) return Qnil;
+
   unsigned buf_idx = flags >> IORING_CQE_BUFFER_SHIFT;
+  struct buf_ring_descriptor *desc = machine->buffer_rings + bgid;
+  char *src = desc->buf_base + desc->buf_size * buf_idx;
+  // TODO: add support for UTF8
+  // buf = rd->utf8_encoding ? rb_utf8_str_new(src, cqe->res) : rb_str_new(src, cqe->res);
+  VALUE buf = rb_str_new(src, result);
 
-  if (result > 0) {
-    struct buf_ring_descriptor *desc = machine->buffer_rings + bgid;
-    char *src = desc->buf_base + desc->buf_size * buf_idx;
-    // TODO: add support for UTF8
-    // buf = rd->utf8_encoding ? rb_utf8_str_new(src, cqe->res) : rb_str_new(src, cqe->res);
-    buf = rb_str_new(src, result);
-
-    // add buffer back to buffer ring
-    io_uring_buf_ring_add(
-      desc->br, src, desc->buf_size, buf_idx, io_uring_buf_ring_mask(desc->buf_count), 0
-    );
-    io_uring_buf_ring_advance(desc->br, 1);
-  }
-  
+  // add buffer back to buffer ring
+  io_uring_buf_ring_add(
+    desc->br, src, desc->buf_size, buf_idx, io_uring_buf_ring_mask(desc->buf_count), 0
+  );
+  io_uring_buf_ring_advance(desc->br, 1);
 
   RB_GC_GUARD(buf);
   return buf;
