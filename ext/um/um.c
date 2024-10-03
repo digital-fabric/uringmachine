@@ -173,7 +173,7 @@ static inline void um_cancel_op(struct um *machine, struct um_op *op) {
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
-static inline VALUE um_await_op(struct um *machine, struct um_op *op) {
+static inline VALUE um_await_op(struct um *machine, struct um_op *op, int *result, int *flags) {
   op->fiber = rb_fiber_current();
   VALUE v = um_fiber_switch(machine);
 
@@ -183,9 +183,16 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op) {
     um_cancel_op(machine, op);
     op->state = OP_abandonned;
   }
-  else
+  else {
+    // We copy over the CQE result and flags, since the op is immediately
+    // checked in.
+    *result = op->cqe_result;
+    if (flags) *flags = op->cqe_flags;
     um_op_checkin(machine, op);
-  return is_exception ? um_raise_exception(v) : v;
+  }
+
+  if (is_exception) um_raise_exception(v);
+  return v;
 }
 
 inline VALUE um_await(struct um *machine) {
@@ -257,11 +264,28 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
 inline VALUE um_sleep(struct um *machine, double duration) {
   struct um_op *op = um_op_checkout(machine);
   struct __kernel_timespec ts = um_double_to_timespec(duration);
-
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
   io_uring_prep_timeout(sqe, &ts, 0, 0);
   op->state = OP_submitted;
 
-  return um_await_op(machine, op);
+  return um_await_op(machine, op, &result, NULL);
 }
 
+inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int flags = 0;
+
+  void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
+  io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, &flags);
+
+  um_raise_on_system_error(result);
+  um_update_read_buffer(machine, buffer, buffer_offset, result, flags);
+  return INT2FIX(result);
+}

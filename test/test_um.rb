@@ -3,16 +3,6 @@
 require_relative 'helper'
 require 'socket'
 
-class SleepTest < UMBaseTest
-  def test_sleep
-    t0 = monotonic_clock
-    res = machine.sleep(0.1)
-    t1 = monotonic_clock
-    assert_in_range 0.09..0.13, t1 - t0
-    assert_equal 0.1, res
-  end
-end
-
 class SchedulingTest < UMBaseTest
   def test_schedule_and_yield
     buf = []
@@ -164,5 +154,78 @@ class SchedulingTest < UMBaseTest
 
     assert_kind_of TO2Error, e
     assert_equal [3], buf
+  end
+end
+
+class SleepTest < UMBaseTest
+  def test_sleep
+    t0 = monotonic_clock
+    res = machine.sleep(0.1)
+    t1 = monotonic_clock
+    assert_in_range 0.09..0.13, t1 - t0
+    assert_equal 0.1, res
+  end
+end
+
+class ReadTest < UMBaseTest
+  def test_read
+    r, w = IO.pipe
+
+    w << 'foobar'
+
+    buf = +''
+    res = machine.read(r.fileno, buf, 3)
+    assert_equal 3, res
+    assert_equal 'foo', buf
+
+    buf = +''
+    res = machine.read(r.fileno, buf, 128)
+    assert_equal 3, res
+    assert_equal 'bar', buf
+
+    w.close
+    buf = +''
+    res = machine.read(r.fileno, buf, 128)
+    assert_equal 0, res
+    assert_equal '', buf
+  end
+
+  def test_prep_read_bad_fd
+    r, w = IO.pipe
+
+    assert_raises(Errno::EBADF) do
+      machine.read(w.fileno, +'', 8192)
+    end
+  end
+
+  def test_read_with_buffer_offset
+    buffer = +'foo'
+
+    r, w = IO.pipe
+    w << 'bar'
+
+    result = machine.read(r.fileno, buffer, 100, buffer.bytesize)
+    assert_equal 3, result
+    assert_equal 'foobar', buffer
+  end
+
+  def test_read_with_negative_buffer_offset
+    buffer = +'foo'
+
+    r, w = IO.pipe
+    w << 'bar'
+
+    result = machine.read(r.fileno, buffer, 100, -1)
+    assert_equal 3, result
+    assert_equal 'foobar', buffer
+
+    buffer = +'foogrr'
+
+    r, w = IO.pipe
+    w << 'bar'
+
+    result = machine.read(r.fileno, buffer, 100, -4)
+    assert_equal 3, result
+    assert_equal 'foobar', buffer
   end
 end

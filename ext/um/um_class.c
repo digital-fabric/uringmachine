@@ -114,6 +114,20 @@ VALUE UM_sleep(VALUE self, VALUE duration) {
   return duration;
 }
 
+VALUE UM_read(int argc, VALUE *argv, VALUE self) {
+  struct um *machine = get_machine(self);
+  VALUE fd;
+  VALUE buffer;
+  VALUE maxlen;
+  VALUE buffer_offset;
+  rb_scan_args(argc, argv, "31", &fd, &buffer, &maxlen, &buffer_offset);
+
+  return um_read(
+    machine, NUM2INT(fd), buffer, NUM2INT(maxlen),
+    NIL_P(buffer_offset) ? 0 : NUM2INT(buffer_offset)
+  );
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -132,6 +146,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "timeout", UM_timeout, 2);
 
   rb_define_method(cUM, "sleep", UM_sleep, 1);
+  rb_define_method(cUM, "read", UM_read, -1);
 
   // rb_define_method(cUM, "emit", UM_emit, 1);
 

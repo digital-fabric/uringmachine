@@ -68,6 +68,12 @@ struct um {
 extern VALUE cUM;
 
 struct __kernel_timespec um_double_to_timespec(double value);
+int um_value_is_exception_p(VALUE v);
+VALUE um_raise_exception(VALUE v);
+void um_raise_on_system_error(int result);
+
+void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
+void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, int result, int flags);
 
 void um_cleanup(struct um *machine);
 
@@ -78,20 +84,16 @@ VALUE um_await(struct um *machine);
 void um_op_checkin(struct um *machine, struct um_op *op);
 struct um_op* um_op_checkout(struct um *machine);
 
-VALUE um_raise_exception(VALUE v);
-
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
 void um_runqueue_unshift(struct um *machine, struct um_op *op);
-
-int um_value_is_exception_p(VALUE v);
-
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
+VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
 
 #endif // UM_H
