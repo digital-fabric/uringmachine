@@ -6,6 +6,8 @@ inline void um_op_clear(struct um_op *op) {
 }
 
 inline struct um_op *um_op_checkout(struct um *machine) {
+  machine->pending_count++;
+
   if (machine->freelist_head) {
     struct um_op *op = machine->freelist_head;
     machine->freelist_head = op->next;
@@ -19,6 +21,8 @@ inline struct um_op *um_op_checkout(struct um *machine) {
 }
 
 inline void um_op_checkin(struct um *machine, struct um_op *op) {
+  machine->pending_count--;
+
   op->next = machine->freelist_head;
   machine->freelist_head = op;
 }

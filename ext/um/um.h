@@ -21,12 +21,12 @@
 #endif
 
 enum op_state {
-  OP_initial,
-  OP_submitted,
-  OP_completed,
-  OP_cancelled,
-  OP_abandonned,
-  OP_interrupt,
+  OP_initial,     // initial state
+  OP_submitted,   // op has been submitted (SQE prepared)
+  OP_completed,   // op has been completed (CQE processed)
+  OP_cancelled,   // op is cancelled (after CQE is processed)
+  OP_abandonned,  // op is abandonned by fiber (before CQE is processed)
+  OP_schedule,    // the corresponding fiber is scheduled
 };
 
 struct um_op {
@@ -43,11 +43,9 @@ struct um_op {
 struct buf_ring_descriptor {
   struct io_uring_buf_ring *br;
   size_t br_size;
-  // struct io_uring_buf_ring *buf_ring;
   unsigned buf_count;
   unsigned buf_size;
 	char *buf_base;
-  // size_t buf_ring_size;
 };
 
 #define BUFFER_RING_MAX_COUNT 10
@@ -56,13 +54,12 @@ struct um {
   struct um_op *freelist_head;
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
-  struct um_op *pending_head;
-  struct um_op *pending_tail;
 
   struct io_uring ring;
 
   unsigned int    ring_initialized;
   unsigned int    unsubmitted_count;
+  unsigned int    pending_count;
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
   unsigned int buffer_ring_count;

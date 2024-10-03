@@ -137,12 +137,27 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine) {
 
 inline VALUE um_fiber_switch(struct um *machine) {
   struct um_op *op = 0;
+  unsigned int loop_count = 0;
 loop:
+  // in the case where:
+  // - first time through loop
+  // - there are SQEs waiting to be submitted
+  // - the runqueue head references the current fiber
+  // we need to submit events and check completions without blocking
+  if (!loop_count && machine->unsubmitted_count && 
+      machine->runqueue_head &&
+      machine->runqueue_head->fiber == rb_fiber_current()
+  ) {
+    io_uring_submit(&machine->ring);
+    um_process_ready_cqes(machine);
+  }
+
   op = um_runqueue_shift(machine);
   if (op) {
     VALUE resume_value = op->resume_value;
-    if (op->state == OP_interrupt)
+    if (op->state == OP_schedule) {
       um_op_checkin(machine, op);
+    }
     // the resume value is disregarded, we pass the fiber itself
     VALUE v = rb_fiber_transfer(op->fiber, 1, &resume_value);
     return v;
@@ -152,14 +167,21 @@ loop:
   goto loop;
 }
 
+static inline void um_cancel_op(struct um *machine, struct um_op *op) {
+  struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
+  io_uring_prep_cancel64(sqe, (long long)op, 0);
+}
+
 static inline VALUE um_await_op(struct um *machine, struct um_op *op) {
   op->fiber = rb_fiber_current();
   VALUE v = um_fiber_switch(machine);
 
   int is_exception = um_value_is_exception_p(v);
 
-  if (is_exception || op->state == OP_cancelled)
+  if ((is_exception && op->state == OP_submitted) || (op->state == OP_cancelled)) {
+    um_cancel_op(machine, op);
     op->state = OP_abandonned;
+  }
   else
     um_op_checkin(machine, op);
   return is_exception ? um_raise_exception(v) : v;
@@ -172,7 +194,7 @@ inline VALUE um_await(struct um *machine) {
 
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = um_op_checkout(machine);
-  op->state = OP_interrupt;
+  op->state = OP_schedule;
   op->fiber = fiber;
   op->resume_value = value;
   um_runqueue_push(machine, op);
@@ -186,6 +208,7 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
   }
   else {
     op = um_op_checkout(machine);
+    op->state = OP_schedule;
     op->fiber = fiber;
     op->resume_value = value;
     um_runqueue_unshift(machine, op);

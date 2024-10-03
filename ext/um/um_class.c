@@ -46,6 +46,7 @@ VALUE UM_initialize(VALUE self) {
   machine->ring_initialized = 0;
   machine->unsubmitted_count = 0;
   machine->buffer_ring_count = 0;
+  machine->pending_count = 0;
   machine->runqueue_head = NULL;
   machine->runqueue_tail = NULL;
   machine->freelist_head = NULL;
@@ -72,6 +73,11 @@ VALUE UM_initialize(VALUE self) {
   machine->ring_initialized = 1;
 
   return self;
+}
+
+VALUE UM_pending_count(VALUE self) {
+  struct um *machine = get_machine(self);
+  return INT2FIX(machine->pending_count);
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -111,6 +117,8 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "initialize", UM_initialize, 0);
   // rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 1);
+
+  rb_define_method(cUM, "pending_count", UM_pending_count, 0);
 
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "yield", UM_yield, 0);
