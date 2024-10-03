@@ -107,11 +107,10 @@ class SchedulingTest < UMBaseTest
     end
 
     # at this point, the sleep cancelled CQE should not yet have been received.
-    # So we still have a pending operation.
+    # So we still have a pending operation. Snooze should have let the CQE be
+    # received.
     assert_equal 1, machine.pending_count
     machine.snooze
-
-    # Snooze should have let the CQE be received
     assert_equal 0, machine.pending_count
 
     assert_equal [1, 2, 5], buf
