@@ -26,7 +26,7 @@ CLEAN.include "**/*.o", "**/*.so", "**/*.so.*", "**/*.a", "**/*.bundle", "**/*.j
 
 task :release do
   require_relative './lib/uringmachine/version'
-  version = UM_VERSION
+  version = UringMachine::VERSION
 
   puts 'Building uringmachine...'
   `gem build uringmachine.gemspec`

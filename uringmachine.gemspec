@@ -2,7 +2,7 @@ require_relative './lib/uringmachine/version'
 
 Gem::Specification.new do |s|
   s.name        = 'uringmachine'
-  s.version     = UM_VERSION
+  s.version     = UringMachine::VERSION
   s.licenses    = ['MIT']
   s.summary     = 'A lean, mean io_uring machine'
   s.author      = 'Sharon Rosner'

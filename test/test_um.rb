@@ -109,7 +109,7 @@ class SchedulingTest < UMBaseTest
 
   def test_timeout_with_raising_block
     e = nil
-    v = begin
+    begin
       machine.timeout(0.01, TOError) do
         raise 'hi'
       end
@@ -190,7 +190,7 @@ class ReadTest < UMBaseTest
   end
 
   def test_prep_read_bad_fd
-    r, w = IO.pipe
+    _r, w = IO.pipe
 
     assert_raises(Errno::EBADF) do
       machine.read(w.fileno, +'', 8192)
@@ -259,7 +259,6 @@ class ReadEachTest < UMBaseTest
   # send once and close write fd
   def test_read_each_raising_1
     r, w = IO.pipe
-    bufs = []
 
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -283,7 +282,6 @@ class ReadEachTest < UMBaseTest
   # send once and leave write fd open
   def test_read_each_raising_2
     r, w = IO.pipe
-    bufs = []
 
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -311,7 +309,6 @@ class ReadEachTest < UMBaseTest
   # send twice
   def test_read_each_raising_3
     r, w = IO.pipe
-    bufs = []
 
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
