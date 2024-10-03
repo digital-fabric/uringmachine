@@ -1,3 +1,6 @@
+# 2024-10-03 Version 0.2
+
+- Remove old IOU code.
 - Add `#read_each`
 - Add `#read`
 
