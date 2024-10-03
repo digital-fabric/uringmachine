@@ -170,7 +170,6 @@ end
 class ReadTest < UMBaseTest
   def test_read
     r, w = IO.pipe
-
     w << 'foobar'
 
     buf = +''
@@ -200,7 +199,6 @@ class ReadTest < UMBaseTest
 
   def test_read_with_buffer_offset
     buffer = +'foo'
-
     r, w = IO.pipe
     w << 'bar'
 
@@ -227,5 +225,115 @@ class ReadTest < UMBaseTest
     result = machine.read(r.fileno, buffer, 100, -4)
     assert_equal 3, result
     assert_equal 'foobar', buffer
+  end
+end
+
+class ReadEachTest < UMBaseTest
+  def test_read_each
+    r, w = IO.pipe
+    bufs = []
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    f = Fiber.new do
+      w << 'foo'
+      machine.snooze
+      w << 'bar'
+      machine.snooze
+      w << 'baz'
+      machine.snooze
+      w.close
+      machine.yield
+    end
+    machine.schedule(f, nil)
+
+    machine.read_each(r.fileno, bgid) do |buf|
+      bufs << buf
+    end
+
+    assert_equal ['foo', 'bar', 'baz'], bufs
+    assert_equal 0, machine.pending_count
+  end
+
+  # send once and close write fd
+  def test_read_each_raising_1
+    r, w = IO.pipe
+    bufs = []
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    w << 'foo'
+    w.close
+
+    e = nil
+    begin
+      machine.read_each(r.fileno, bgid) do |buf|
+        raise 'hi'
+      end
+    rescue => e
+    end
+
+    assert_kind_of RuntimeError, e
+    assert_equal 'hi', e.message
+    assert_equal 0, machine.pending_count
+  end
+
+  # send once and leave write fd open
+  def test_read_each_raising_2
+    r, w = IO.pipe
+    bufs = []
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    w << 'foo'
+
+    e = nil
+    begin
+      machine.read_each(r.fileno, bgid) do |buf|
+        raise 'hi'
+      end
+    rescue => e
+    end
+
+    assert_kind_of RuntimeError, e
+    assert_equal 'hi', e.message
+
+    # since the write fd is still open, the read_each impl is supposed to cancel
+    # the op, which is done asynchronously.
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+  end
+
+  # send twice
+  def test_read_each_raising_3
+    r, w = IO.pipe
+    bufs = []
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    w << 'foo'
+    w << 'bar'
+
+    e = nil
+    begin
+      machine.read_each(r.fileno, bgid) do |buf|
+        raise 'hi'
+      end
+    rescue => e
+    end
+
+    assert_kind_of RuntimeError, e
+    assert_equal 'hi', e.message
+
+    # since the write fd is still open, the read_each impl is supposed to cancel
+    # the op, which is done asynchronously.
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
   end
 end

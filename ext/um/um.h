@@ -29,13 +29,25 @@ enum op_state {
   OP_schedule,    // the corresponding fiber is scheduled
 };
 
+struct um_result_entry {
+  struct um_result_entry *next;
+
+  int result;
+  int flags;
+};
+
 struct um_op {
   enum op_state state;
   struct um_op *prev;
   struct um_op *next;
+
+  // linked list for multishot results
+  struct um_result_entry *results_head;
+  struct um_result_entry *results_tail;
   
   VALUE fiber;
   VALUE resume_value;
+  int is_multishot;
   int cqe_result;
   int cqe_flags;
 };
@@ -74,15 +86,18 @@ void um_raise_on_system_error(int result);
 
 void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, int result, int flags);
+VALUE get_string_from_buffer_ring(struct um *machine, int bgid, int result, int flags);
 
 void um_cleanup(struct um *machine);
 
-void um_free_linked_list(struct um_op *op);
+void um_free_linked_list(struct um *machine, struct um_op *op);
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 
 void um_op_checkin(struct um *machine, struct um_op *op);
 struct um_op* um_op_checkout(struct um *machine);
+void um_op_result_push(struct um *machine, struct um_op *op, int result, int flags);
+int um_op_result_shift(struct um *machine, struct um_op *op, int *result, int *flags);
 
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
@@ -95,5 +110,6 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
+VALUE um_read_each(struct um *machine, int fd, int bgid);
 
 #endif // UM_H

@@ -1,4 +1,5 @@
 #include "um.h"
+#include <sys/mman.h>
 
 VALUE cUM;
 
@@ -75,6 +76,57 @@ VALUE UM_initialize(VALUE self) {
   return self;
 }
 
+VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
+  struct um *machine = get_machine(self);
+
+  if (machine->buffer_ring_count == BUFFER_RING_MAX_COUNT)
+    rb_raise(rb_eRuntimeError, "Cannot setup more than BUFFER_RING_MAX_COUNT buffer rings");
+
+  struct buf_ring_descriptor *desc = machine->buffer_rings + machine->buffer_ring_count;
+  desc->buf_count = NUM2UINT(count);
+  desc->buf_size = NUM2UINT(size);
+
+  desc->br_size = sizeof(struct io_uring_buf) * desc->buf_count;
+	void *mapped = mmap(
+    NULL, desc->br_size, PROT_READ | PROT_WRITE,
+		MAP_ANONYMOUS | MAP_PRIVATE, 0, 0
+  );
+  if (mapped == MAP_FAILED)
+    rb_raise(rb_eRuntimeError, "Failed to allocate buffer ring");
+
+  desc->br = (struct io_uring_buf_ring *)mapped;
+  io_uring_buf_ring_init(desc->br);
+
+  unsigned bg_id = machine->buffer_ring_count;
+  struct io_uring_buf_reg reg = {
+    .ring_addr = (unsigned long)desc->br,
+		.ring_entries = desc->buf_count,
+		.bgid = bg_id
+  };
+	int ret = io_uring_register_buf_ring(&machine->ring, &reg, 0);
+	if (ret) {
+    munmap(desc->br, desc->br_size);
+    rb_syserr_fail(-ret, strerror(-ret));
+	}
+
+  desc->buf_base = malloc(desc->buf_count * desc->buf_size);
+  if (!desc->buf_base) {
+    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, bg_id);
+    rb_raise(rb_eRuntimeError, "Failed to allocate buffers");
+  }
+
+  int mask = io_uring_buf_ring_mask(desc->buf_count);
+	for (unsigned i = 0; i < desc->buf_count; i++) {
+		io_uring_buf_ring_add(
+      desc->br, desc->buf_base + i * desc->buf_size, desc->buf_size,
+      i, mask, i);
+	}
+	io_uring_buf_ring_advance(desc->br, desc->buf_count);
+  machine->buffer_ring_count++;
+  return UINT2NUM(bg_id);
+}
+
+
 VALUE UM_pending_count(VALUE self) {
   struct um *machine = get_machine(self);
   return INT2FIX(machine->pending_count);
@@ -128,6 +180,11 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   );
 }
 
+VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
+  struct um *machine = get_machine(self);
+  return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -135,8 +192,7 @@ void Init_UM(void) {
   rb_define_alloc_func(cUM, UM_allocate);
 
   rb_define_method(cUM, "initialize", UM_initialize, 0);
-  // rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 1);
-
+  rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
 
   rb_define_method(cUM, "snooze", UM_snooze, 0);
@@ -147,6 +203,7 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "read", UM_read, -1);
+  rb_define_method(cUM, "read_each", UM_read_each, 2);
 
   // rb_define_method(cUM, "emit", UM_emit, 1);
 
