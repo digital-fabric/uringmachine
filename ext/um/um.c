@@ -12,9 +12,9 @@ static inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *
   // TODO: retry getting SQE?
 
   // if (likely(backend->pending_sqes))
-  //   io_uring_backend_immediate_submit(backend);
+  //   io_uring_um_immediate_submit(backend);
   // else {
-  //   VALUE resume_value = backend_snooze(&backend->base);
+  //   VALUE resume_value = um_snooze(&backend->base);
   //   RAISE_IF_EXCEPTION(resume_value);
   // }
 done:
@@ -40,14 +40,6 @@ inline void um_cleanup(struct um *machine) {
   um_free_linked_list(machine->freelist_head);
 }
 
-inline void um_free_linked_list(struct um_op *op) {
-  while (op) {
-    struct um_op *next = op->next;
-    free(op);
-    op = next;
-  }
-}
-
 struct wait_for_cqe_ctx {
   struct um *machine;
   struct io_uring_cqe *cqe;
@@ -71,10 +63,15 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
 
   switch (op->state) {
     case OP_submitted:
-      op->state = OP_completed;
-      op->cqe_result = cqe->res;
-      op->cqe_flags = cqe->flags;
-      um_runqueue_push(machine, op);
+      if (cqe->res == -ECANCELED) {
+        um_op_checkin(machine, op);
+      }
+      else {
+        op->state = OP_completed;
+        op->cqe_result = cqe->res;
+        op->cqe_flags = cqe->flags;
+        um_runqueue_push(machine, op);
+      }
       break;
     case OP_abandonned:
       // op has been abandonned by the I/O method, so we need to cleanup (check
@@ -137,20 +134,24 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine) {
 
 inline VALUE um_fiber_switch(struct um *machine) {
   struct um_op *op = 0;
-  unsigned int loop_count = 0;
+  unsigned int first_iteration = 1;
 loop:
   // in the case where:
   // - first time through loop
   // - there are SQEs waiting to be submitted
   // - the runqueue head references the current fiber
   // we need to submit events and check completions without blocking
-  if (!loop_count && machine->unsubmitted_count && 
+  if (
+    unlikely(
+      first_iteration && machine->unsubmitted_count && 
       machine->runqueue_head &&
       machine->runqueue_head->fiber == rb_fiber_current()
+    )
   ) {
     io_uring_submit(&machine->ring);
     um_process_ready_cqes(machine);
   }
+  first_iteration = 0;
 
   op = um_runqueue_shift(machine);
   if (op) {
@@ -178,7 +179,7 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op) {
 
   int is_exception = um_value_is_exception_p(v);
 
-  if ((is_exception && op->state == OP_submitted) || (op->state == OP_cancelled)) {
+  if (is_exception && op->state == OP_submitted) {
     um_cancel_op(machine, op);
     op->state = OP_abandonned;
   }
@@ -213,6 +214,44 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
     op->resume_value = value;
     um_runqueue_unshift(machine, op);
   }
+}
+
+struct timeout_ctx {
+  struct um *machine;
+  struct um_op *op;
+};
+
+VALUE um_timeout_ensure(VALUE arg) {
+  struct timeout_ctx *ctx = (struct timeout_ctx *)arg;
+
+  if (ctx->op->state == OP_submitted) {
+    // A CQE has not yet been received, we cancel the timeout and abandon the op
+    // (it will be checked in upon receiving the -ECANCELED CQE)
+    um_cancel_op(ctx->machine, ctx->op);
+    ctx->op->state == OP_abandonned;
+  }
+  else {
+    // completed, so can be checked in
+    um_op_checkin(ctx->machine, ctx->op);
+  }
+  return Qnil;
+}
+
+VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
+  static ID ID_new = 0;
+  if (!ID_new) ID_new = rb_intern("new");
+
+  struct um_op *op = um_op_checkout(machine);
+  struct __kernel_timespec ts = um_double_to_timespec(NUM2DBL(interval));
+
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_timeout(sqe, &ts, 0, 0);
+  op->state = OP_submitted;
+  op->fiber = rb_fiber_current();
+  op->resume_value = rb_funcall(class, ID_new, 0);
+
+  struct timeout_ctx ctx = { .machine = machine, .op = op };
+  return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
 }
 
 inline VALUE um_sleep(struct um *machine, double duration) {

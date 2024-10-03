@@ -90,29 +90,80 @@ class SchedulingTest < UMBaseTest
     assert_in_range 0..0.1, t1 - t0
   end
 
-  # def test_timeout
-  #   buf = []
-  #   t0 = monotonic_clock
-  #   res = machine.timeout(0.5, 42) do
-  #     buf << :sleep_pre
-  #     machine.sleep(0.1)
-  #     buf << :sleep_post
-  #   end
-  #   t1 = monotonic_clock
-  #   assert_in_range 0.09..0.13, t1 - t0
-  #   assert_equal 0.1, res
-  #   assert_equal [:sleep_pre, :sleep_post], buf
+  class TOError < RuntimeError; end
 
-  #   buf = []
-  #   t0 = monotonic_clock
-  #   res = machine.timeout(0.05, 42) do
-  #     buf << :sleep_pre
-  #     machine.sleep(0.1)
-  #     buf << :sleep_post
-  #   end
-  #   t1 = monotonic_clock
-  #   assert_in_range 0.04..0.06, t1 - t0
-  #   assert_equal 42, res
-  #   assert_equal [:sleep_pre], buf
-  # end
+  def test_timeout
+    buf = []
+    begin
+      buf << 1
+      machine.timeout(0.01, TOError) do
+        buf << 2
+        machine.sleep(1)
+        buf << 3
+      end
+      buf << 4
+    rescue => e
+      buf << 5
+    end
+
+    # at this point, the sleep cancelled CQE should not yet have been received.
+    # So we still have a pending operation.
+    assert_equal 1, machine.pending_count
+    machine.snooze
+
+    # Snooze should have let the CQE be received
+    assert_equal 0, machine.pending_count
+
+    assert_equal [1, 2, 5], buf
+    assert_kind_of TOError, e
+  end
+
+  def test_timeout_with_raising_block
+    e = nil
+    v = begin
+      machine.timeout(0.01, TOError) do
+        raise 'hi'
+      end
+    rescue => e
+    end
+
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+
+    assert_kind_of RuntimeError, e
+    assert_equal 'hi', e.message
+  end
+
+  def test_timeout_with_nothing_blocking
+    v = machine.timeout(0.01, TOError) { 42 }
+
+    assert_equal 42, v
+
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+  end
+
+  class TO2Error < RuntimeError; end
+  class TO3Error < RuntimeError; end
+
+  def test_timeout_nested
+    e = nil
+    buf = []
+    begin
+      machine.timeout(0.04, TOError) do
+        machine.timeout(0.02, TO2Error) do
+          machine.timeout(0.03, TO3Error) do
+            buf << machine.pending_count
+            machine.sleep(1)
+          end
+        end
+      end
+    rescue => e
+    end
+
+    assert_kind_of TO2Error, e
+    assert_equal [3], buf
+  end
 end

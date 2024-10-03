@@ -16,9 +16,8 @@ inline int um_value_is_exception_p(VALUE v) {
 }
 
 VALUE um_raise_exception(VALUE e) {
-  static ID ID_raise_exception = 0;
-  
-  if (!ID_raise_exception) ID_raise_exception = rb_intern("raise_exception");
+  static ID ID_raise = 0;
+  if (!ID_raise) ID_raise = rb_intern("raise");
 
-  return rb_funcall(cUM, ID_raise_exception, 1, e);
+  return rb_funcall(rb_mKernel, ID_raise, 1, e);
 }

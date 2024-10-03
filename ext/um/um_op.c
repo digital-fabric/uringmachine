@@ -77,3 +77,11 @@ inline struct um_op *um_runqueue_shift(struct um *machine) {
   }
   return op;
 }
+
+inline void um_free_linked_list(struct um_op *op) {
+  while (op) {
+    struct um_op *next = op->next;
+    free(op);
+    op = next;
+  }
+}
