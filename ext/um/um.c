@@ -317,11 +317,11 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
 
 inline VALUE um_sleep(struct um *machine, double duration) {
   struct um_op *op = um_op_checkout(machine);
-  struct __kernel_timespec ts = um_double_to_timespec(duration);
+  op->ts = um_double_to_timespec(duration);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
-  io_uring_prep_timeout(sqe, &ts, 0, 0);
+  io_uring_prep_timeout(sqe, &op->ts, 0, 0);
   op->state = OP_submitted;
 
   return um_await_op(machine, op, &result, NULL);

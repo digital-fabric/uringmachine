@@ -1,3 +1,4 @@
+- Fix race condition affecting `#timeout` and `#sleep`.
 - Add `#accept_each`
 - Add `#accept`
 
