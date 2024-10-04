@@ -32,4 +32,4 @@ jobs:
     - name: Compile C-extension
       run: bundle exec rake compile
     - name: Run tests
-      run:  bundle exec ruby test/test_um.rb --name test_timeout_with_raising_block
+      run:  bundle exec rake test
