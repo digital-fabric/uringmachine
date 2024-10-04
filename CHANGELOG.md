@@ -1,3 +1,6 @@
+- Add `#recv`, `#send`
+- Add `#socket`, `#connect`
+
 # 2024-10-04 Version 0.3
 
 - Fix race condition affecting `#timeout` and `#sleep`.

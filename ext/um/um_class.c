@@ -1,5 +1,6 @@
 #include "um.h"
 #include <sys/mman.h>
+#include <arpa/inet.h>
 
 VALUE cUM;
 
@@ -186,6 +187,28 @@ VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flag
   return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
 }
 
+VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
+  struct um *machine = get_machine(self);
+
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = inet_addr(StringValueCStr(host));
+  addr.sin_port = htons(NUM2INT(port));
+
+  return um_connect(machine, NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
+}
+
+VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
+  struct um *machine = get_machine(self);
+  return um_send(machine, NUM2INT(fd), buffer, NUM2INT(len), NUM2INT(flags));
+}
+
+VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
+  struct um *machine = get_machine(self);
+  return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -211,4 +234,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);
   rb_define_method(cUM, "socket", UM_socket, 4);
+  rb_define_method(cUM, "connect", UM_connect, 3);
+  rb_define_method(cUM, "send", UM_send, 4);
+  rb_define_method(cUM, "recv", UM_recv, 4);
 }

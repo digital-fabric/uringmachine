@@ -436,3 +436,102 @@ class SocketTest < UMBaseTest
   end
 end
 
+class ConnectTest < UMBaseTest
+  def setup
+    super
+    @port = 9000 + rand(1000)
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+    super
+  end
+
+  def test_connect
+    t = Thread.new do
+      conn = @server.accept
+      conn.write('foobar')
+      sleep
+    end
+
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  ensure
+    t&.kill
+  end
+end
+
+class SendTest < UMBaseTest
+  def setup
+    super
+    @port = 9000 + rand(1000)
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+    super
+  end
+
+  def test_send
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str}")
+      sleep
+    end
+
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    res = machine.send(fd, 'foobar', 6, 0)
+    assert_equal 6, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 16, res
+    assert_equal 'You said: foobar', buf
+  ensure
+    t&.kill
+  end
+end
+
+class RecvTest < UMBaseTest
+  def setup
+    super
+    @port = 9000 + rand(1000)
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+    super
+  end
+
+  def test_recv
+    t = Thread.new do
+      conn = @server.accept
+      conn.write('foobar')
+      sleep
+    end
+
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buf = +''
+    res = machine.recv(fd, buf, 42, 0)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  ensure
+    t&.kill
+  end
+end

@@ -429,6 +429,7 @@ VALUE um_accept(struct um *machine, int fd) {
   socklen_t len;
   int result = 0;
   int flags = 0;
+
   io_uring_prep_accept(sqe, fd, &addr, &len, 0);
   op->state = OP_submitted;
 
@@ -474,11 +475,53 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
-  int cqe_flags = 0;
+
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
   op->state = OP_submitted;
 
-  um_await_op(machine, op, &result, &cqe_flags);
+  um_await_op(machine, op, &result, NULL);
   um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  io_uring_prep_connect(sqe, fd, addr, addrlen);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
+  io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+
+  um_raise_on_system_error(result);
+  um_update_read_buffer(machine, buffer, 0, result, flags);
   return INT2FIX(result);
 }
