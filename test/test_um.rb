@@ -364,6 +364,7 @@ class AcceptTest < UMBaseTest
 
   def teardown
     @server&.close
+    super
   end
 
   def test_accept
@@ -389,6 +390,7 @@ class AcceptEachTest < UMBaseTest
 
   def teardown
     @server&.close
+    super
   end
 
   def test_accept_each

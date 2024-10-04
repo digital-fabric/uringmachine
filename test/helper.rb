@@ -50,18 +50,6 @@ module Minitest::Assertions
   end
 end
 
-class IOURingBaseTest < Minitest::Test
-  attr_accessor :ring
-  
-  def setup
-    @ring = IOU::Ring.new
-  end
-
-  def teardown
-    ring.close
-  end
-end
-
 class UMBaseTest < Minitest::Test
   attr_accessor :machine
   
@@ -70,5 +58,6 @@ class UMBaseTest < Minitest::Test
   end
 
   def teardown
+    # @machine&.cleanup
   end
 end
