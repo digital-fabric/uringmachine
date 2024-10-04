@@ -114,6 +114,7 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
+  printf("process_cqe op: %p result: %d\n", op, cqe->res);
   switch (op->state) {
     case OP_submitted:
       if (unlikely(cqe->res == -ECANCELED)) {
@@ -285,6 +286,7 @@ struct op_ensure_ctx {
 VALUE um_timeout_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
 
+  printf("timeout_ensure op: %p state: %d\n", ctx->op, ctx->op->state);
   if (ctx->op->state == OP_submitted) {
     // A CQE has not yet been received, we cancel the timeout and abandon the op
     // (it will be checked in upon receiving the -ECANCELED CQE)
