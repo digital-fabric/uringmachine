@@ -1,17 +1,34 @@
 #include "um.h"
 
-inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {
+inline struct um_result_entry *um_result_checkout(struct um *machine) {
+  if (machine->result_freelist) {
+    struct um_result_entry *entry = machine->result_freelist;
+    machine->result_freelist = entry->next;
+    return entry;
+  }
+
+  struct um_result_entry *entry = malloc(sizeof(struct um_result_entry));
+  return entry;
+}
+
+inline void um_result_checkin(struct um *machine, struct um_result_entry *entry) {
+  entry->next = machine->result_freelist;
+  machine->result_freelist = entry;  
+}
+
+inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {  
   struct um_result_entry *entry = op->results_head;
   while (entry) {
     struct um_result_entry *next = entry->next;
-    free(entry);
+    um_result_checkin(machine, entry);
+    // free(entry);
     entry = next;
   }
   op->results_head = op->results_tail = NULL;
 }
 
 inline void um_op_result_push(struct um *machine, struct um_op *op, int result, int flags) {
-  struct um_result_entry *entry = malloc(sizeof(struct um_result_entry));
+  struct um_result_entry *entry = um_result_checkout(machine);
   entry->next = 0;
   entry->result = result;
   entry->flags = flags;
@@ -33,7 +50,7 @@ inline int um_op_result_shift(struct um *machine, struct um_op *op, int *result,
   op->results_head = entry->next;
   if (!op->results_head)
     op->results_tail = NULL;
-  free(entry);
+  um_result_checkin(machine, entry);
   return 1;
 }
 
@@ -45,9 +62,9 @@ inline void um_op_clear(struct um_op *op) {
 inline struct um_op *um_op_checkout(struct um *machine) {
   machine->pending_count++;
 
-  if (machine->freelist_head) {
-    struct um_op *op = machine->freelist_head;
-    machine->freelist_head = op->next;
+  if (machine->op_freelist) {
+    struct um_op *op = machine->op_freelist;
+    machine->op_freelist = op->next;
     um_op_clear(op);
     return op;
   }
@@ -62,8 +79,8 @@ inline void um_op_checkin(struct um *machine, struct um_op *op) {
 
   machine->pending_count--;
 
-  op->next = machine->freelist_head;
-  machine->freelist_head = op;
+  op->next = machine->op_freelist;
+  machine->op_freelist = op;
 }
 
 inline struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber) {
@@ -117,11 +134,19 @@ inline struct um_op *um_runqueue_shift(struct um *machine) {
   return op;
 }
 
-inline void um_free_linked_list(struct um *machine, struct um_op *op) {
+inline void um_free_op_linked_list(struct um *machine, struct um_op *op) {
   while (op) {
     struct um_op *next = op->next;
     um_op_result_cleanup(machine, op);
     free(op);
     op = next;
+  }
+}
+
+inline void um_free_result_linked_list(struct um *machine, struct um_result_entry *entry) {
+  while (entry) {
+    struct um_result_entry *next = entry->next;
+    free(entry);
+    entry = next;
   }
 }

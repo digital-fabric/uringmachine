@@ -2,6 +2,54 @@
 #include "ruby/thread.h"
 #include <sys/mman.h>
 
+void um_setup(struct um *machine) {
+  machine->ring_initialized = 0;
+  machine->unsubmitted_count = 0;
+  machine->buffer_ring_count = 0;
+  machine->pending_count = 0;
+  machine->runqueue_head = NULL;
+  machine->runqueue_tail = NULL;
+  machine->op_freelist = NULL;
+  machine->result_freelist = NULL;
+
+  unsigned prepared_limit = 4096;
+  int flags = 0;
+  #ifdef HAVE_IORING_SETUP_SUBMIT_ALL
+  flags |= IORING_SETUP_SUBMIT_ALL;
+  #endif
+  #ifdef HAVE_IORING_SETUP_COOP_TASKRUN
+  flags |= IORING_SETUP_COOP_TASKRUN;
+  #endif
+
+  while (1) {
+    int ret = io_uring_queue_init(prepared_limit, &machine->ring, flags);
+    if (likely(!ret)) break;
+
+    // if ENOMEM is returned, try with half as much entries
+    if (unlikely(ret == -ENOMEM && prepared_limit > 64))
+      prepared_limit = prepared_limit / 2;
+    else
+      rb_syserr_fail(-ret, strerror(-ret));
+  }
+  machine->ring_initialized = 1;
+}
+
+inline void um_teardown(struct um *machine) {
+  if (!machine->ring_initialized) return;
+
+  for (unsigned i = 0; i < machine->buffer_ring_count; i++) {
+    struct buf_ring_descriptor *desc = machine->buffer_rings + i;
+    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, i);
+    free(desc->buf_base);
+  }
+  machine->buffer_ring_count = 0;
+  io_uring_queue_exit(&machine->ring);
+  machine->ring_initialized = 0;
+
+  um_free_op_linked_list(machine, machine->op_freelist);
+  um_free_op_linked_list(machine, machine->runqueue_head);
+}
+
 static inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe;
   sqe = io_uring_get_sqe(&machine->ring);
@@ -22,22 +70,6 @@ done:
   sqe->flags = 0;
   machine->unsubmitted_count++;
   return sqe;
-}
-
-inline void um_cleanup(struct um *machine) {
-  if (!machine->ring_initialized) return;
-
-  for (unsigned i = 0; i < machine->buffer_ring_count; i++) {
-    struct buf_ring_descriptor *desc = machine->buffer_rings + i;
-    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, i);
-    free(desc->buf_base);
-  }
-  machine->buffer_ring_count = 0;
-  io_uring_queue_exit(&machine->ring);
-  machine->ring_initialized = 0;
-
-  um_free_linked_list(machine, machine->freelist_head);
-  um_free_linked_list(machine, machine->runqueue_head);
 }
 
 struct wait_for_cqe_ctx {

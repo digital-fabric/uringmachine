@@ -14,7 +14,7 @@ static void UM_compact(void *ptr) {
 }
 
 static void UM_free(void *ptr) {
-  um_cleanup((struct um *)ptr);
+  um_teardown((struct um *)ptr);
   free(ptr);
 }
 
@@ -43,36 +43,7 @@ inline struct um *get_machine(VALUE self) {
 
 VALUE UM_initialize(VALUE self) {
   struct um *machine = RTYPEDDATA_DATA(self);
-
-  machine->ring_initialized = 0;
-  machine->unsubmitted_count = 0;
-  machine->buffer_ring_count = 0;
-  machine->pending_count = 0;
-  machine->runqueue_head = NULL;
-  machine->runqueue_tail = NULL;
-  machine->freelist_head = NULL;
-
-  unsigned prepared_limit = 4096;
-  int flags = 0;
-  #ifdef HAVE_IORING_SETUP_SUBMIT_ALL
-  flags |= IORING_SETUP_SUBMIT_ALL;
-  #endif
-  #ifdef HAVE_IORING_SETUP_COOP_TASKRUN
-  flags |= IORING_SETUP_COOP_TASKRUN;
-  #endif
-
-  while (1) {
-    int ret = io_uring_queue_init(prepared_limit, &machine->ring, flags);
-    if (likely(!ret)) break;
-
-    // if ENOMEM is returned, try with half as much entries
-    if (unlikely(ret == -ENOMEM && prepared_limit > 64))
-      prepared_limit = prepared_limit / 2;
-    else
-      rb_syserr_fail(-ret, strerror(-ret));
-  }
-  machine->ring_initialized = 1;
-
+  um_setup(machine);
   return self;
 }
 

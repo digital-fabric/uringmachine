@@ -63,7 +63,9 @@ struct buf_ring_descriptor {
 #define BUFFER_RING_MAX_COUNT 10
 
 struct um {
-  struct um_op *freelist_head;
+  struct um_op *op_freelist;
+  struct um_result_entry *result_freelist;
+
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
 
@@ -79,6 +81,11 @@ struct um {
 
 extern VALUE cUM;
 
+void um_setup(struct um *machine);
+void um_teardown(struct um *machine);
+void um_free_op_linked_list(struct um *machine, struct um_op *op);
+void um_free_result_linked_list(struct um *machine, struct um_result_entry *entry);
+
 struct __kernel_timespec um_double_to_timespec(double value);
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
@@ -88,9 +95,6 @@ void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, int result, int flags);
 VALUE get_string_from_buffer_ring(struct um *machine, int bgid, int result, int flags);
 
-void um_cleanup(struct um *machine);
-
-void um_free_linked_list(struct um *machine, struct um_op *op);
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 
