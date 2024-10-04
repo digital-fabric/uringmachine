@@ -111,6 +111,8 @@ inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *o
 }
 
 inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
+  printf("process_cqe result: %d\n", cqe->res);
+
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
