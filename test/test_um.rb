@@ -425,3 +425,14 @@ class AcceptEachTest < UMBaseTest
     assert_equal '3', conns[2].readpartial(3)
   end
 end
+
+class SocketTest < UMBaseTest
+  def test_socket
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_DGRAM, 0, 0);
+    assert_kind_of Integer, fd
+    assert fd > 0
+
+    assert_raises(Errno::EDESTADDRREQ) { machine.write(fd, 'foo') }
+  end
+end
+

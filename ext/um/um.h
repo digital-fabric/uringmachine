@@ -122,5 +122,6 @@ VALUE um_close(struct um *machine, int fd);
 
 VALUE um_accept(struct um *machine, int fd);
 VALUE um_accept_each(struct um *machine, int fd);
+VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags);
 
 #endif // UM_H

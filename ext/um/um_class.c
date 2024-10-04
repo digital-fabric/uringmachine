@@ -181,6 +181,11 @@ VALUE UM_accept_each(VALUE self, VALUE fd) {
   return um_accept_each(machine, NUM2INT(fd));
 }
 
+VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flags) {
+  struct um *machine = get_machine(self);
+  return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -205,8 +210,5 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);
-
-  // rb_define_method(cUM, "prep_close", UM_prep_close, 1);
-  // rb_define_method(cUM, "prep_nop", UM_prep_nop, 0);
-  // rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
+  rb_define_method(cUM, "socket", UM_socket, 4);
 }

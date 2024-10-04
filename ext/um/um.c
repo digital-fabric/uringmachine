@@ -469,3 +469,16 @@ VALUE um_accept_each(struct um *machine, int fd) {
   struct op_ensure_ctx ctx = { .machine = machine, .op = op };
   return rb_ensure(um_accept_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
+
+VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int cqe_flags = 0;
+  io_uring_prep_socket(sqe, domain, type, protocol, flags);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, &cqe_flags);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
