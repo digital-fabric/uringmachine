@@ -6,6 +6,9 @@ require 'uringmachine'
 require 'socket'
 require 'minitest/autorun'
 
+STDOUT.sync = true
+STDERR.sync = true
+
 module ::Kernel
   def debug(**h)
     k, v = h.first
