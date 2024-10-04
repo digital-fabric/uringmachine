@@ -117,4 +117,7 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_o
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, int len);
 
+VALUE um_accept(struct um *machine, int fd);
+VALUE um_accept_each(struct um *machine, int fd);
+
 #endif // UM_H

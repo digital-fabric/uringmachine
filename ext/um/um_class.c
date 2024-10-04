@@ -166,6 +166,16 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   return um_write(machine, NUM2INT(fd), buffer, bytes);
 }
 
+VALUE UM_accept(VALUE self, VALUE fd) {
+  struct um *machine = get_machine(self);
+  return um_accept(machine, NUM2INT(fd));
+}
+
+VALUE UM_accept_each(VALUE self, VALUE fd) {
+  struct um *machine = get_machine(self);
+  return um_accept_each(machine, NUM2INT(fd));
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -186,6 +196,9 @@ void Init_UM(void) {
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
   rb_define_method(cUM, "write", UM_write, -1);
+
+  rb_define_method(cUM, "accept", UM_accept, 1);
+  rb_define_method(cUM, "accept_each", UM_accept_each, 1);
 
   // rb_define_method(cUM, "emit", UM_emit, 1);
 

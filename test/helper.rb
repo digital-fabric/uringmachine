@@ -3,6 +3,7 @@
 require 'bundler/setup'
 require_relative './coverage' if ENV['COVERAGE']
 require 'uringmachine'
+require 'socket'
 require 'minitest/autorun'
 
 module ::Kernel

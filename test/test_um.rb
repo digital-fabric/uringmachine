@@ -354,3 +354,34 @@ class WriteTest < UMBaseTest
     end
   end
 end
+
+class AcceptTest < UMBaseTest
+  def setup
+    super
+    @port = 9000 + rand(1000)
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+  end
+
+  def test_accept
+    conn = nil
+    t = Thread.new do
+      sleep 0.01
+      conn = TCPSocket.new('127.0.0.1', @port)
+    end
+    
+    fd = machine.accept(@server.fileno)
+    assert_kind_of Integer, fd
+    assert fd > 0
+
+    machine.write(fd, 'foo')
+    sleep 0.01
+    buf = conn.readpartial(3)
+
+    assert_equal 'foo', buf
+  end
+end
+

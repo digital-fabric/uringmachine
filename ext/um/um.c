@@ -406,3 +406,23 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
+
+VALUE um_accept(struct um *machine, int fd) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int flags = 0;
+
+  struct sockaddr addr;
+  socklen_t len;
+  io_uring_prep_accept(sqe, fd, &addr, &len, 0);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, &flags);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_accept_each(struct um *machine, int fd) {
+  return Qnil;
+}

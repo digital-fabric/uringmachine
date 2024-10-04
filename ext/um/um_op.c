@@ -21,7 +21,6 @@ inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {
   while (entry) {
     struct um_result_entry *next = entry->next;
     um_result_checkin(machine, entry);
-    // free(entry);
     entry = next;
   }
   op->results_head = op->results_tail = NULL;
