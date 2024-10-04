@@ -337,7 +337,7 @@ end
 
 class WriteTest < UMBaseTest
   def test_write
-    _r, w = IO.pipe
+    r, w = IO.pipe
 
     machine.write(w.fileno, 'foo')
     assert_equal 'foo', r.readpartial(3)
@@ -367,21 +367,46 @@ class AcceptTest < UMBaseTest
   end
 
   def test_accept
-    conn = nil
-    t = Thread.new do
-      sleep 0.01
-      conn = TCPSocket.new('127.0.0.1', @port)
-    end
+    conn = TCPSocket.new('127.0.0.1', @port)
     
     fd = machine.accept(@server.fileno)
     assert_kind_of Integer, fd
     assert fd > 0
 
     machine.write(fd, 'foo')
-    sleep 0.01
     buf = conn.readpartial(3)
 
     assert_equal 'foo', buf
   end
 end
 
+class AcceptEachTest < UMBaseTest
+  def setup
+    super
+    @port = 9000 + rand(1000)
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+  end
+
+  def test_accept_each
+    conns = 3.times.map { TCPSocket.new('127.0.0.1', @port) }
+
+    count = 0
+    machine.accept_each(@server.fileno) do |fd|
+      machine.write(fd, (count += 1).to_s)
+      break if count == 3
+    end
+
+    assert_equal 3, count
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+
+    assert_equal '1', conns[0].readpartial(3)
+    assert_equal '2', conns[1].readpartial(3)
+    assert_equal '3', conns[2].readpartial(3)
+  end
+end

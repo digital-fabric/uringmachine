@@ -343,7 +343,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
   return INT2FIX(result);
 }
 
-VALUE um_read_each_ensure(VALUE arg) {
+VALUE um_multishot_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
   switch (ctx->op->state) {
     case OP_submitted:
@@ -390,7 +390,7 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
   op->state = OP_submitted;
 
   struct op_ensure_ctx ctx = { .machine = machine, .op = op, .bgid = bgid };
-  return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_read_each_ensure, (VALUE)&ctx);
+  return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
 
 VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
@@ -410,11 +410,10 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
 VALUE um_accept(struct um *machine, int fd) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
-  int flags = 0;
-
   struct sockaddr addr;
   socklen_t len;
+  int result = 0;
+  int flags = 0;
   io_uring_prep_accept(sqe, fd, &addr, &len, 0);
   op->state = OP_submitted;
 
@@ -423,6 +422,35 @@ VALUE um_accept(struct um *machine, int fd) {
   return INT2FIX(result);
 }
 
+VALUE um_accept_each_safe_loop(VALUE arg) {
+  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  int result = 0;
+  int flags = 0;
+
+  while (1) {
+    um_await_op(ctx->machine, ctx->op, NULL, NULL);
+    if (!ctx->op->results_head) {
+      // TODO: raise, this shouldn't happen
+      printf("no result found!\n");
+    }
+    while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
+      if (likely(result > 0))
+        rb_yield(INT2FIX(result));
+      else
+        return Qnil;
+    }
+  }
+}
+
 VALUE um_accept_each(struct um *machine, int fd) {
-  return Qnil;
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  struct sockaddr addr;
+  socklen_t len;
+  io_uring_prep_multishot_accept(sqe, fd, &addr, &len, 0);
+  op->state = OP_submitted;
+  op->is_multishot = 1;
+
+  struct op_ensure_ctx ctx = { .machine = machine, .op = op };
+  return rb_ensure(um_accept_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
