@@ -1,3 +1,5 @@
+# 2024-10-04 Version 0.3
+
 - Fix race condition affecting `#timeout` and `#sleep`.
 - Add `#accept_each`
 - Add `#accept`
