@@ -130,7 +130,7 @@ class SchedulingTest < UMBaseTest
     assert_equal 42, v
 
     assert_equal 1, machine.pending_count
-    machine.snooze
+    3.times { machine.snooze }
     assert_equal 0, machine.pending_count
   end
 
