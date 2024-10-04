@@ -115,5 +115,6 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
+VALUE um_write(struct um *machine, int fd, VALUE buffer, int len);
 
 #endif // UM_H

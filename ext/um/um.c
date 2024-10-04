@@ -392,3 +392,17 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
   struct op_ensure_ctx ctx = { .machine = machine, .op = op, .bgid = bgid };
   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_read_each_ensure, (VALUE)&ctx);
 }
+
+VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int flags = 0;
+
+  io_uring_prep_write(sqe, fd, RSTRING_PTR(buffer), len, -1);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, &flags);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}

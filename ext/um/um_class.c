@@ -97,7 +97,6 @@ VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
   return UINT2NUM(bg_id);
 }
 
-
 VALUE UM_pending_count(VALUE self) {
   struct um *machine = get_machine(self);
   return INT2FIX(machine->pending_count);
@@ -156,6 +155,17 @@ VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
 }
 
+VALUE UM_write(int argc, VALUE *argv, VALUE self) {
+  struct um *machine = get_machine(self);
+  VALUE fd;
+  VALUE buffer;
+  VALUE len;
+  rb_scan_args(argc, argv, "21", &fd, &buffer, &len);
+
+  int bytes = NIL_P(len) ? RSTRING_LEN(buffer) : NUM2INT(len);
+  return um_write(machine, NUM2INT(fd), buffer, bytes);
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -175,6 +185,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
+  rb_define_method(cUM, "write", UM_write, -1);
 
   // rb_define_method(cUM, "emit", UM_emit, 1);
 

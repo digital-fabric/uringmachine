@@ -189,7 +189,7 @@ class ReadTest < UMBaseTest
     assert_equal '', buf
   end
 
-  def test_prep_read_bad_fd
+  def test_read_bad_fd
     _r, w = IO.pipe
 
     assert_raises(Errno::EBADF) do
@@ -332,5 +332,25 @@ class ReadEachTest < UMBaseTest
     assert_equal 1, machine.pending_count
     machine.snooze
     assert_equal 0, machine.pending_count
+  end
+end
+
+class WriteTest < UMBaseTest
+  def test_write
+    _r, w = IO.pipe
+
+    machine.write(w.fileno, 'foo')
+    assert_equal 'foo', r.readpartial(3)
+
+    machine.write(w.fileno, 'bar', 2)
+    assert_equal 'ba', r.readpartial(3)
+  end
+
+  def test_write_bad_fd
+    r, _w = IO.pipe
+
+    assert_raises(Errno::EBADF) do
+      machine.write(r.fileno, 'foo')
+    end
   end
 end
