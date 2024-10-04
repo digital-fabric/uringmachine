@@ -114,7 +114,6 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
-  printf("process_cqe op: %p result: %d\n", op, cqe->res);
   switch (op->state) {
     case OP_submitted:
       if (unlikely(cqe->res == -ECANCELED)) {
@@ -286,7 +285,6 @@ struct op_ensure_ctx {
 VALUE um_timeout_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
 
-  printf("timeout_ensure op: %p state: %d\n", ctx->op, ctx->op->state);
   if (ctx->op->state == OP_submitted) {
     // A CQE has not yet been received, we cancel the timeout and abandon the op
     // (it will be checked in upon receiving the -ECANCELED CQE)
@@ -305,10 +303,10 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   if (!ID_new) ID_new = rb_intern("new");
 
   struct um_op *op = um_op_checkout(machine);
-  struct __kernel_timespec ts = um_double_to_timespec(NUM2DBL(interval));
+  op->ts = um_double_to_timespec(NUM2DBL(interval));
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  io_uring_prep_timeout(sqe, &ts, 0, 0);
+  io_uring_prep_timeout(sqe, &op->ts, 0, 0);
   op->state = OP_submitted;
   op->fiber = rb_fiber_current();
   op->resume_value = rb_funcall(class, ID_new, 0);

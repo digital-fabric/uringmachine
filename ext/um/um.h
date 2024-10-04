@@ -48,6 +48,8 @@ struct um_op {
   VALUE fiber;
   VALUE resume_value;
   int is_multishot;
+  struct __kernel_timespec ts;
+  
   int cqe_result;
   int cqe_flags;
 };
