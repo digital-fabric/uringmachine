@@ -355,6 +355,19 @@ class WriteTest < UMBaseTest
   end
 end
 
+class Closetest < UMBaseTest
+  def test_close
+    r, w = IO.pipe
+    machine.write(w.fileno, 'foo')
+    assert_equal 'foo', r.readpartial(3)
+
+    machine.close(w.fileno)
+    assert_equal '', r.read
+
+    assert_raises(Errno::EBADF) { machine.close(w.fileno) }
+  end
+end
+
 class AcceptTest < UMBaseTest
   def setup
     super

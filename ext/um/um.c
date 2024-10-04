@@ -408,6 +408,20 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
   return INT2FIX(result);
 }
 
+VALUE um_close(struct um *machine, int fd) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int flags = 0;
+
+  io_uring_prep_close(sqe, fd);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, &flags);
+  um_raise_on_system_error(result);
+  return INT2FIX(fd);
+}
+
 VALUE um_accept(struct um *machine, int fd) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);

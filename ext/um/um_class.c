@@ -166,6 +166,11 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   return um_write(machine, NUM2INT(fd), buffer, bytes);
 }
 
+VALUE UM_close(VALUE self, VALUE fd) {
+  struct um *machine = get_machine(self);
+  return um_close(machine, NUM2INT(fd));
+}
+
 VALUE UM_accept(VALUE self, VALUE fd) {
   struct um *machine = get_machine(self);
   return um_accept(machine, NUM2INT(fd));
@@ -196,47 +201,12 @@ void Init_UM(void) {
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
   rb_define_method(cUM, "write", UM_write, -1);
+  rb_define_method(cUM, "close", UM_close, 1);
 
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);
 
-  // rb_define_method(cUM, "emit", UM_emit, 1);
-
-  // rb_define_method(cUM, "prep_accept", UM_prep_accept, 1);
-  // rb_define_method(cUM, "prep_cancel", UM_prep_cancel, 1);
   // rb_define_method(cUM, "prep_close", UM_prep_close, 1);
   // rb_define_method(cUM, "prep_nop", UM_prep_nop, 0);
-  // rb_define_method(cUM, "prep_read", UM_prep_read, 1);
   // rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
-  // rb_define_method(cUM, "prep_write", UM_prep_write, 1);
-
-  // rb_define_method(cUM, "submit", UM_submit, 0);
-  // rb_define_method(cUM, "wait_for_completion", UM_wait_for_completion, 0);
-  // rb_define_method(cUM, "process_completions", UM_process_completions, -1);
-  // rb_define_method(cUM, "process_completions_loop", UM_process_completions_loop, 0);
-
-  // SYM_accept        = MAKE_SYM("accept");
-  // SYM_block         = MAKE_SYM("block");
-  // SYM_buffer        = MAKE_SYM("buffer");
-  // SYM_buffer_group  = MAKE_SYM("buffer_group");
-  // SYM_buffer_offset = MAKE_SYM("buffer_offset");
-  // SYM_close         = MAKE_SYM("close");
-  // SYM_count         = MAKE_SYM("count");
-  // SYM_emit          = MAKE_SYM("emit");
-  // SYM_fd            = MAKE_SYM("fd");
-  // SYM_id            = MAKE_SYM("id");
-  // SYM_interval      = MAKE_SYM("interval");
-  // SYM_len           = MAKE_SYM("len");
-  // SYM_link          = MAKE_SYM("link");
-  // SYM_multishot     = MAKE_SYM("multishot");
-  // SYM_op            = MAKE_SYM("op");
-  // SYM_read          = MAKE_SYM("read");
-  // SYM_result        = MAKE_SYM("result");
-  // SYM_signal        = MAKE_SYM("signal");
-  // SYM_size          = MAKE_SYM("size");
-  // SYM_spec_data     = MAKE_SYM("spec_data");
-  // SYM_stop          = MAKE_SYM("stop");
-  // SYM_timeout       = MAKE_SYM("timeout");
-  // SYM_utf8          = MAKE_SYM("utf8");
-  // SYM_write         = MAKE_SYM("write");
 }
