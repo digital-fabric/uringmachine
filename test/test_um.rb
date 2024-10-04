@@ -110,7 +110,7 @@ class SchedulingTest < UMBaseTest
   def test_timeout_with_raising_block
     e = nil
     begin
-      machine.timeout(0.01, TOError) do
+      machine.timeout(0.02, TOError) do
         raise 'hi'
       end
     rescue => e
@@ -125,7 +125,7 @@ class SchedulingTest < UMBaseTest
   end
 
   def test_timeout_with_nothing_blocking
-    v = machine.timeout(0.01, TOError) { 42 }
+    v = machine.timeout(0.02, TOError) { 42 }
 
     assert_equal 42, v
 

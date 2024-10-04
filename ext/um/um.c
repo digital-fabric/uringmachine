@@ -111,8 +111,6 @@ inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *o
 }
 
 inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
-  printf("process_cqe result: %d\n", cqe->res);
-
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
@@ -131,6 +129,7 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
       // op has been abandonned by the I/O method, so we need to cleanup (check
       // the op in to the free list).
       um_op_checkin(machine, op);
+      break;
     default:
       // TODO: invalid state, should raise!
   }
