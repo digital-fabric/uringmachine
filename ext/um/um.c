@@ -199,7 +199,7 @@ loop:
   // we need to submit events and check completions without blocking
   if (
     unlikely(
-      first_iteration && machine->unsubmitted_count && 
+      first_iteration && machine->unsubmitted_count &&
       machine->runqueue_head &&
       machine->runqueue_head->fiber == rb_fiber_current()
     )
@@ -334,7 +334,7 @@ inline VALUE um_sleep(struct um *machine, double duration) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-  
+
   discard_op_if_completed(machine, op);
   if (result != -ETIME) um_raise_on_system_error(result);
   return Qnil;
@@ -351,7 +351,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   um_update_read_buffer(machine, buffer, buffer_offset, result, flags);
@@ -368,7 +368,7 @@ VALUE um_multishot_ensure(VALUE arg) {
     case OP_completed:
       um_op_checkin(ctx->machine, ctx->op);
       break;
-    default:  
+    default:
   }
 
   if (ctx->read_buf) free(ctx->read_buf);
@@ -499,7 +499,7 @@ VALUE um_close(struct um *machine, int fd) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(fd);
@@ -517,7 +517,7 @@ VALUE um_accept(struct um *machine, int fd) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
@@ -530,7 +530,7 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, NULL, NULL);
-    
+
     if (!ctx->op->results_head)
       // this shouldn't happen!
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
@@ -566,7 +566,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
@@ -581,7 +581,7 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
@@ -596,7 +596,7 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
@@ -612,7 +612,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-  
+
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   um_update_read_buffer(machine, buffer, 0, result, flags);

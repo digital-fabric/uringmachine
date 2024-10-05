@@ -44,12 +44,12 @@ struct um_op {
   // linked list for multishot results
   struct um_result_entry *results_head;
   struct um_result_entry *results_tail;
-  
+
   VALUE fiber;
   VALUE resume_value;
   int is_multishot;
   struct __kernel_timespec ts;
-  
+
   int cqe_result;
   int cqe_flags;
 };

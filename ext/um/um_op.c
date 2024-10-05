@@ -16,7 +16,7 @@ inline void um_result_checkin(struct um *machine, struct um_result_entry *entry)
   machine->result_freelist = entry;
 }
 
-inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {  
+inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {
   struct um_result_entry *entry = op->results_head;
   while (entry) {
     struct um_result_entry *next = entry->next;
@@ -66,7 +66,7 @@ inline struct um_op *um_op_checkout(struct um *machine) {
     machine->op_freelist = op->next;
   else
     op = malloc(sizeof(struct um_op));
-  
+
   um_op_clear(op);
   return op;
 }
@@ -121,7 +121,7 @@ inline struct um_op *um_runqueue_shift(struct um *machine) {
 
   op->prev = NULL;
   if (!op->next) {
-    machine->runqueue_head = machine->runqueue_tail = NULL;    
+    machine->runqueue_head = machine->runqueue_tail = NULL;
   }
   else {
     machine->runqueue_head = op->next;
