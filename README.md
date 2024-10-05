@@ -22,7 +22,7 @@ modern Linux machines. UringMachine provides a rich API for performing I/O using
 - High performance (needs to be proved).
 - (Eventually) I/O class with buffered reads and an intuitive API.
 
-## Prior art
+## Design
 
 UringMachine is based on my experience marrying Ruby and io_uring:
 
@@ -31,6 +31,47 @@ UringMachine is based on my experience marrying Ruby and io_uring:
   for the Ruby standard library.
 - [IOU](https://github.com/digital-fabric/iou) - a low-level asynchronous API
   for using io_uring from Ruby.
+
+Some important learnings from those two projects, in no particular order:
+
+- Monkey-patching is not a good solution, long term. You need to deal with
+  changing APIs (Ruby is evolving quite rapidly these days!), and anyways you're
+  always going to get stuck with some standard Ruby API that's implemented as a
+  C extension and just won't play nice with whatever you're trying to do.
+- The design of the Polyphony io_uring backend was an evolution of something
+  that was originally based on libev as an event loop. In hindsight, adapting
+  the design for how io_uring worked led to code that was too complex and even
+  somewhat brittle.
+- IOU showed me that even if we embrace callbacks, the developer experience is
+  substantially inferior to what you can do with a sequential coding style. Even
+  just in terms of line count - with callbacks you end up with roughly double
+  the number of lines of code.
+- Implementing fiber switching on top of IOU was disappointing in terms of
+  performance. In order for a fiber-based solution to be performed it had to be
+  baked in - hence UringMachine.
+- Working with fibers has the very important benefit that you can keep stuff on
+  the stack, instead of passing around all kinds of references to the heap. In
+  addition, you mostly don't need to worry about marking Ruby objects used in
+  operations, since normally they'll already be on the stack as method call
+  parameters.
+- Polyphony was designed as an all-in-one solution that did everything: turning
+  stock APIs into fiber-aware ones, providing a solid structured-concurrency
+  implementation for controlling fiber life times, extensions providing
+  additional features such as compressing streaming data between two fds, other
+  APIs based on splicing etc. Perhaps a more cautious approach would be better.
+- Pending operation lifetime management in Polyphony was based a complex
+  reference counting scheme that proved problematic, especially for multishot
+  operations.
+
+So, based on those two projects, I wanted to design a Ruby API for io_uring
+based on the following principles:
+
+- Automatic fiber switching.
+- No monkey-patching. Instead, provide a simple custom API, as a replacement for
+  the stock Ruby `IO` and `Socket` classes.
+- Simpler management of pending operation lifetime.
+- Do not insist on structured concurrency, just provide the APIs necessary to
+  create actors and to supervise the execution of fibers.
 
 ## Example
 
