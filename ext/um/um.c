@@ -536,6 +536,7 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
 
     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
+      um_raise_on_system_error(result);
       if (likely(result > 0))
         rb_yield(INT2FIX(result));
       else
@@ -547,9 +548,7 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
 VALUE um_accept_each(struct um *machine, int fd) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  struct sockaddr addr;
-  socklen_t len;
-  io_uring_prep_multishot_accept(sqe, fd, &addr, &len, 0);
+  io_uring_prep_multishot_accept(sqe, fd, NULL, NULL, 0);
   op->state = OP_submitted;
   op->is_multishot = 1;
 
