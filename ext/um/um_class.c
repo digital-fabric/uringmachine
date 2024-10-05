@@ -1,5 +1,4 @@
 #include "um.h"
-#include <sys/mman.h>
 #include <arpa/inet.h>
 
 VALUE cUM;
@@ -50,52 +49,8 @@ VALUE UM_initialize(VALUE self) {
 
 VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
   struct um *machine = get_machine(self);
-
-  if (machine->buffer_ring_count == BUFFER_RING_MAX_COUNT)
-    rb_raise(rb_eRuntimeError, "Cannot setup more than BUFFER_RING_MAX_COUNT buffer rings");
-
-  struct buf_ring_descriptor *desc = machine->buffer_rings + machine->buffer_ring_count;
-  desc->buf_count = NUM2UINT(count);
-  desc->buf_size = NUM2UINT(size);
-
-  desc->br_size = sizeof(struct io_uring_buf) * desc->buf_count;
-	void *mapped = mmap(
-    NULL, desc->br_size, PROT_READ | PROT_WRITE,
-		MAP_ANONYMOUS | MAP_PRIVATE, 0, 0
-  );
-  if (mapped == MAP_FAILED)
-    rb_raise(rb_eRuntimeError, "Failed to allocate buffer ring");
-
-  desc->br = (struct io_uring_buf_ring *)mapped;
-  io_uring_buf_ring_init(desc->br);
-
-  unsigned bg_id = machine->buffer_ring_count;
-  struct io_uring_buf_reg reg = {
-    .ring_addr = (unsigned long)desc->br,
-		.ring_entries = desc->buf_count,
-		.bgid = bg_id
-  };
-	int ret = io_uring_register_buf_ring(&machine->ring, &reg, 0);
-	if (ret) {
-    munmap(desc->br, desc->br_size);
-    rb_syserr_fail(-ret, strerror(-ret));
-	}
-
-  desc->buf_base = malloc(desc->buf_count * desc->buf_size);
-  if (!desc->buf_base) {
-    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, bg_id);
-    rb_raise(rb_eRuntimeError, "Failed to allocate buffers");
-  }
-
-  int mask = io_uring_buf_ring_mask(desc->buf_count);
-	for (unsigned i = 0; i < desc->buf_count; i++) {
-		io_uring_buf_ring_add(
-      desc->br, desc->buf_base + i * desc->buf_size, desc->buf_size,
-      i, mask, i);
-	}
-	io_uring_buf_ring_advance(desc->br, desc->buf_count);
-  machine->buffer_ring_count++;
-  return UINT2NUM(bg_id);
+  int bgid = um_setup_buffer_ring(machine, NUM2UINT(size), NUM2UINT(count));
+  return INT2NUM(bgid);
 }
 
 VALUE UM_pending_count(VALUE self) {

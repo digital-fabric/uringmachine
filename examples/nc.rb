@@ -15,27 +15,22 @@ stdin_fd = STDIN.fileno
 stdout_fd = STDOUT.fileno
 
 f_writer = Fiber.new do
-  p :writer
-  bgid = machine.setup_buffer_ring(4096, 1024)
-  machine.read_each(stdin_fd, bgid) do |buf|
-    p writer: buf
+  bgidw = machine.setup_buffer_ring(4096, 1024)
+  machine.read_each(stdin_fd, bgidw) do |buf|
     machine.write(conn_fd, buf)
   end
 end
+machine.schedule(f_writer, nil)
 
 f_reader = Fiber.new do
-  p :reader
-  bgid = machine.setup_buffer_ring(4096, 1024)
-  machine.read_each(conn_fd, bgid) do |buf|
-    p reader: buf
+  bgidr = machine.setup_buffer_ring(4096, 1024)
+  machine.read_each(conn_fd, bgidr) do |buf|
     machine.write(stdout_fd, buf)
   end
 end
-
-machine.schedule(f_writer, nil)
 machine.schedule(f_reader, nil)
 
 trap('SIGINT') { exit! }
 loop do
-  machine.sleep(1)
+  machine.sleep(60)
 end

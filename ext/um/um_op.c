@@ -13,7 +13,7 @@ inline struct um_result_entry *um_result_checkout(struct um *machine) {
 
 inline void um_result_checkin(struct um *machine, struct um_result_entry *entry) {
   entry->next = machine->result_freelist;
-  machine->result_freelist = entry;  
+  machine->result_freelist = entry;
 }
 
 inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {  
@@ -26,7 +26,7 @@ inline void um_op_result_cleanup(struct um *machine, struct um_op *op) {
   op->results_head = op->results_tail = NULL;
 }
 
-inline void um_op_result_push(struct um *machine, struct um_op *op, int result, int flags) {
+inline void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags) {
   struct um_result_entry *entry = um_result_checkout(machine);
   entry->next = 0;
   entry->result = result;
@@ -40,7 +40,7 @@ inline void um_op_result_push(struct um *machine, struct um_op *op, int result, 
   }
 }
 
-inline int um_op_result_shift(struct um *machine, struct um_op *op, int *result, int *flags) {
+inline int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags) {
   if (!op->results_head) return 0;
 
   struct um_result_entry *entry = op->results_head;
@@ -61,23 +61,20 @@ inline void um_op_clear(struct um_op *op) {
 inline struct um_op *um_op_checkout(struct um *machine) {
   machine->pending_count++;
 
-  if (machine->op_freelist) {
-    struct um_op *op = machine->op_freelist;
+  struct um_op *op = machine->op_freelist;
+  if (op)
     machine->op_freelist = op->next;
-    um_op_clear(op);
-    return op;
-  }
-
-  struct um_op *op = malloc(sizeof(struct um_op));
+  else
+    op = malloc(sizeof(struct um_op));
+  
   um_op_clear(op);
   return op;
 }
 
 inline void um_op_checkin(struct um *machine, struct um_op *op) {
-  um_op_result_cleanup(machine, op);
-
   machine->pending_count--;
 
+  um_op_result_cleanup(machine, op);
   op->next = machine->op_freelist;
   machine->op_freelist = op;
 }

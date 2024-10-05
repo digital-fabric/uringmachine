@@ -160,7 +160,9 @@ end
 class SleepTest < UMBaseTest
   def test_sleep
     t0 = monotonic_clock
+    assert_equal 0, machine.pending_count
     res = machine.sleep(0.1)
+    assert_equal 0, machine.pending_count
     t1 = monotonic_clock
     assert_in_range 0.09..0.13, t1 - t0
     assert_equal 0.1, res
@@ -173,7 +175,9 @@ class ReadTest < UMBaseTest
     w << 'foobar'
 
     buf = +''
+    assert_equal 0, machine.pending_count
     res = machine.read(r.fileno, buf, 3)
+    assert_equal 0, machine.pending_count
     assert_equal 3, res
     assert_equal 'foo', buf
 
@@ -339,7 +343,9 @@ class WriteTest < UMBaseTest
   def test_write
     r, w = IO.pipe
 
+    assert_equal 0, machine.pending_count
     machine.write(w.fileno, 'foo')
+    assert_equal 0, machine.pending_count
     assert_equal 'foo', r.readpartial(3)
 
     machine.write(w.fileno, 'bar', 2)
@@ -349,9 +355,11 @@ class WriteTest < UMBaseTest
   def test_write_bad_fd
     r, _w = IO.pipe
 
+    assert_equal 0, machine.pending_count
     assert_raises(Errno::EBADF) do
       machine.write(r.fileno, 'foo')
     end
+    assert_equal 0, machine.pending_count
   end
 end
 
@@ -361,7 +369,9 @@ class Closetest < UMBaseTest
     machine.write(w.fileno, 'foo')
     assert_equal 'foo', r.readpartial(3)
 
+    assert_equal 0, machine.pending_count
     machine.close(w.fileno)
+    assert_equal 0, machine.pending_count
     assert_equal '', r.read
 
     assert_raises(Errno::EBADF) { machine.close(w.fileno) }
@@ -383,7 +393,9 @@ class AcceptTest < UMBaseTest
   def test_accept
     conn = TCPSocket.new('127.0.0.1', @port)
     
+    assert_equal 0, machine.pending_count
     fd = machine.accept(@server.fileno)
+    assert_equal 0, machine.pending_count
     assert_kind_of Integer, fd
     assert fd > 0
 
@@ -411,7 +423,8 @@ class AcceptEachTest < UMBaseTest
 
     count = 0
     machine.accept_each(@server.fileno) do |fd|
-      machine.write(fd, (count += 1).to_s)
+      count += 1
+      machine.write(fd, count.to_s)
       break if count == 3
     end
 
@@ -428,7 +441,9 @@ end
 
 class SocketTest < UMBaseTest
   def test_socket
+    assert_equal 0, machine.pending_count
     fd = machine.socket(Socket::AF_INET, Socket::SOCK_DGRAM, 0, 0);
+    assert_equal 0, machine.pending_count
     assert_kind_of Integer, fd
     assert fd > 0
 
@@ -456,7 +471,9 @@ class ConnectTest < UMBaseTest
     end
 
     fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    assert_equal 0, machine.pending_count
     res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, machine.pending_count
     assert_equal 0, res
 
     buf = +''
@@ -465,6 +482,13 @@ class ConnectTest < UMBaseTest
     assert_equal 'foobar', buf
   ensure
     t&.kill
+  end
+
+  def test_connect_with_bad_addr
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    assert_equal 0, machine.pending_count
+    assert_raises(Errno::ENETUNREACH) { machine.connect(fd, 'a.b.c.d', @port) }
+    assert_equal 0, machine.pending_count
   end
 end
 

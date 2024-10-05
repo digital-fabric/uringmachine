@@ -1,6 +1,5 @@
 #include "um.h"
 #include "ruby/thread.h"
-#include <sys/mman.h>
 
 void um_setup(struct um *machine) {
   machine->ring_initialized = 0;
@@ -13,7 +12,7 @@ void um_setup(struct um *machine) {
   machine->result_freelist = NULL;
 
   unsigned prepared_limit = 4096;
-  int flags = 0;
+  unsigned flags = 0;
   #ifdef HAVE_IORING_SETUP_SUBMIT_ALL
   flags |= IORING_SETUP_SUBMIT_ALL;
   #endif
@@ -98,6 +97,7 @@ inline void um_handle_submitted_op_cqe_single(struct um *machine, struct um_op *
 
 inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
   if (!op->results_head) {
+    // if no results are ready yet, schedule the corresponding fiber
     struct um_op *op2 = um_op_checkout(machine);
     op2->state = OP_schedule;
     op2->fiber = op->fiber;
@@ -114,16 +114,19 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
+  // if (op->is_multishot)
+  //   printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
+
   switch (op->state) {
     case OP_submitted:
       if (unlikely(cqe->res == -ECANCELED)) {
         um_op_checkin(machine, op);
         break;
       }
-      if (!op->is_multishot)
-        um_handle_submitted_op_cqe_single(machine, op, cqe);
-      else
+      if (op->is_multishot)
         um_handle_submitted_op_cqe_multi(machine, op, cqe);
+      else
+        um_handle_submitted_op_cqe_single(machine, op, cqe);
       break;
     case OP_abandonned:
       // op has been abandonned by the I/O method, so we need to cleanup (check
@@ -209,9 +212,9 @@ loop:
   op = um_runqueue_shift(machine);
   if (op) {
     VALUE resume_value = op->resume_value;
-    if (op->state == OP_schedule) {
+    if (op->state == OP_schedule)
       um_op_checkin(machine, op);
-    }
+
     // the resume value is disregarded, we pass the fiber itself
     VALUE v = rb_fiber_transfer(op->fiber, 1, &resume_value);
     return v;
@@ -226,7 +229,7 @@ static inline void um_cancel_op(struct um *machine, struct um_op *op) {
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
-static inline VALUE um_await_op(struct um *machine, struct um_op *op, int *result, int *flags) {
+static inline VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags) {
   op->fiber = rb_fiber_current();
   VALUE v = um_fiber_switch(machine);
   int is_exception = um_value_is_exception_p(v);
@@ -240,8 +243,6 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op, int *resul
     // checked in.
     if (result) *result = op->cqe_result;
     if (flags) *flags = op->cqe_flags;
-    if (!op->is_multishot)
-      um_op_checkin(machine, op);
   }
 
   if (unlikely(is_exception)) um_raise_exception(v);
@@ -279,7 +280,11 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
 struct op_ensure_ctx {
   struct um *machine;
   struct um_op *op;
+  int fd;
   int bgid;
+
+  void *read_buf;
+  int read_maxlen;
 };
 
 VALUE um_timeout_ensure(VALUE arg) {
@@ -291,10 +296,10 @@ VALUE um_timeout_ensure(VALUE arg) {
     um_cancel_op(ctx->machine, ctx->op);
     ctx->op->state == OP_abandonned;
   }
-  else {
+  else
     // completed, so can be checked in
     um_op_checkin(ctx->machine, ctx->op);
-  }
+
   return Qnil;
 }
 
@@ -315,30 +320,39 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
 }
 
+inline void discard_op_if_completed(struct um *machine, struct um_op *op) {
+  if (op->state == OP_completed) um_op_checkin(machine, op);
+}
+
 inline VALUE um_sleep(struct um *machine, double duration) {
   struct um_op *op = um_op_checkout(machine);
   op->ts = um_double_to_timespec(duration);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_timeout(sqe, &op->ts, 0, 0);
   op->state = OP_submitted;
 
-  return um_await_op(machine, op, &result, NULL);
+  um_await_op(machine, op, &result, NULL);
+  
+  discard_op_if_completed(machine, op);
+  if (result != -ETIME) um_raise_on_system_error(result);
+  return Qnil;
 }
 
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
-  int flags = 0;
+  __s32 result = 0;
+  __u32 flags = 0;
 
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
   io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
-
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   um_update_read_buffer(machine, buffer, buffer_offset, result, flags);
   return INT2FIX(result);
@@ -346,6 +360,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
 
 VALUE um_multishot_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+
   switch (ctx->op->state) {
     case OP_submitted:
       um_cancel_op(ctx->machine, ctx->op);
@@ -355,55 +370,121 @@ VALUE um_multishot_ensure(VALUE arg) {
       break;
     default:  
   }
+
+  if (ctx->read_buf) free(ctx->read_buf);
   return Qnil;
+}
+
+static inline void um_read_each_prepare_op(struct op_ensure_ctx *ctx, int singleshot_mode) {
+  struct um_op *op = um_op_checkout(ctx->machine);
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, op);
+
+  if (singleshot_mode)
+    io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
+  else {
+    io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
+    op->is_multishot = 1;
+  }
+
+  op->state = OP_submitted;
+  ctx->op = op;
+}
+
+int um_read_each_safe_loop_singleshot(struct op_ensure_ctx *ctx, int total) {
+  struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
+  __s32 result = 0;
+  ctx->read_maxlen = desc->buf_size;
+  ctx->read_buf = malloc(desc->buf_size);
+
+  while (1) {
+    um_read_each_prepare_op(ctx, 1);
+    um_await_op(ctx->machine, ctx->op, &result, NULL);
+    um_raise_on_system_error(result);
+    if (!result) return total;
+
+    total += result;
+    VALUE buf = rb_str_new(ctx->read_buf, result);
+    rb_yield(buf);
+    um_op_checkin(ctx->machine, ctx->op);
+  }
+}
+
+
+
+int um_read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total) {
+  __s32 result = 0;
+  __u32 flags = 0;
+  __s32 bad_result = 0;
+  int eof = 0;
+
+  while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
+    if (result < 0) {
+      bad_result = result;
+      break;
+    }
+    if (result == 0) {
+      eof = 1;
+      break;
+    }
+
+    *total += result;
+    VALUE buf = um_get_string_from_buffer_ring(ctx->machine, ctx->bgid, result, flags);
+    rb_yield(buf);
+  }
+
+  if (ctx->op->state == OP_completed) {
+    um_op_checkin(ctx->machine, ctx->op);
+
+    // TTY devices might not support multishot reads:
+    // https://github.com/axboe/liburing/issues/1185. A workaround is to
+    // fallback to singleshot mode, using the first buffer in the buffer
+    // group.
+    if (!(flags & IORING_CQE_F_BUFFER)) {
+      *total = um_read_each_safe_loop_singleshot(ctx, *total);
+      return 0;
+    }
+    else
+      um_read_each_prepare_op(ctx, 0);
+  }
+  if (bad_result)
+    um_raise_on_system_error(bad_result);
+
+  return eof ? 0 : 1;
 }
 
 VALUE um_read_each_safe_loop(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-  int result = 0;
-  int flags = 0;
   int total = 0;
+
+  um_read_each_prepare_op(ctx, 0);
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, NULL, NULL);
-    if (!ctx->op->results_head) {
-      // TODO: raise, this shouldn't happen
-      printf("no result found!\n");
-    }
-    while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-      if (likely(result > 0)) {
-        total += result;
-        VALUE buf = get_string_from_buffer_ring(ctx->machine, ctx->bgid, result, flags);
-        rb_yield(buf);
-      }
-      else
-        return INT2FIX(total);
-    }
+    if (!ctx->op->results_head)
+      rb_raise(rb_eRuntimeError, "no result found!\n");
+
+    if (!um_read_each_multishot_process_results(ctx, &total))
+      return INT2NUM(total);
   }
 }
 
 VALUE um_read_each(struct um *machine, int fd, int bgid) {
-  struct um_op *op = um_op_checkout(machine);
-  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-
-  op->is_multishot = 1;
-  io_uring_prep_read_multishot(sqe, fd, 0, -1, bgid);
-  op->state = OP_submitted;
-
-  struct op_ensure_ctx ctx = { .machine = machine, .op = op, .bgid = bgid };
+  struct op_ensure_ctx ctx = { .machine = machine, .fd = fd, .bgid = bgid, .read_buf = NULL };
   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
 
 VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
-  int flags = 0;
+  __s32 result = 0;
+  __u32 flags = 0;
 
   io_uring_prep_write(sqe, fd, RSTRING_PTR(buffer), len, -1);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
+
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
@@ -411,13 +492,15 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
 VALUE um_close(struct um *machine, int fd) {
   struct um_op *op = um_op_checkout(machine);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
-  int flags = 0;
+  __s32 result = 0;
+  __u32 flags = 0;
 
   io_uring_prep_close(sqe, fd);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(fd);
 }
@@ -427,28 +510,31 @@ VALUE um_accept(struct um *machine, int fd) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   struct sockaddr addr;
   socklen_t len;
-  int result = 0;
-  int flags = 0;
+  __s32 result = 0;
+  __u32 flags = 0;
 
   io_uring_prep_accept(sqe, fd, &addr, &len, 0);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
 
 VALUE um_accept_each_safe_loop(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-  int result = 0;
-  int flags = 0;
+  __s32 result = 0;
+  __u32 flags = 0;
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, NULL, NULL);
-    if (!ctx->op->results_head) {
-      // TODO: raise, this shouldn't happen
-      printf("no result found!\n");
-    }
+    
+    if (!ctx->op->results_head)
+      // this shouldn't happen!
+      rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
+
     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
       if (likely(result > 0))
         rb_yield(INT2FIX(result));
@@ -467,7 +553,7 @@ VALUE um_accept_each(struct um *machine, int fd) {
   op->state = OP_submitted;
   op->is_multishot = 1;
 
-  struct op_ensure_ctx ctx = { .machine = machine, .op = op };
+  struct op_ensure_ctx ctx = { .machine = machine, .op = op, .read_buf = NULL };
   return rb_ensure(um_accept_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
 
@@ -480,6 +566,8 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
@@ -493,6 +581,8 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
@@ -506,6 +596,8 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   return INT2FIX(result);
 }
@@ -520,7 +612,8 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);
-
+  
+  discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
   um_update_read_buffer(machine, buffer, 0, result, flags);
   return INT2FIX(result);

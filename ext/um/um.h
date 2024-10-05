@@ -32,8 +32,8 @@ enum op_state {
 struct um_result_entry {
   struct um_result_entry *next;
 
-  int result;
-  int flags;
+  __s32 result;
+  __u32 flags;
 };
 
 struct um_op {
@@ -59,7 +59,8 @@ struct buf_ring_descriptor {
   size_t br_size;
   unsigned buf_count;
   unsigned buf_size;
-	char *buf_base;
+  unsigned buf_mask;
+	void *buf_base;
 };
 
 #define BUFFER_RING_MAX_COUNT 10
@@ -94,16 +95,18 @@ VALUE um_raise_exception(VALUE v);
 void um_raise_on_system_error(int result);
 
 void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
-void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, int result, int flags);
-VALUE get_string_from_buffer_ring(struct um *machine, int bgid, int result, int flags);
+void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
+
+int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
+VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 
 void um_op_checkin(struct um *machine, struct um_op *op);
 struct um_op* um_op_checkout(struct um *machine);
-void um_op_result_push(struct um *machine, struct um_op *op, int result, int flags);
-int um_op_result_shift(struct um *machine, struct um_op *op, int *result, int *flags);
+void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
+int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
