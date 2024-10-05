@@ -419,7 +419,11 @@ class AcceptEachTest < UMBaseTest
   end
 
   def test_accept_each
-    conns = 3.times.map { TCPSocket.new('127.0.0.1', @port) }
+    conns = []
+    t = Thread.new do
+      sleep 0.1
+      3.times { conns << TCPSocket.new('127.0.0.1', @port) }
+    end
 
     count = 0
     machine.accept_each(@server.fileno) do |fd|
@@ -436,6 +440,8 @@ class AcceptEachTest < UMBaseTest
     assert_equal '1', conns[0].readpartial(3)
     assert_equal '2', conns[1].readpartial(3)
     assert_equal '3', conns[2].readpartial(3)
+  ensure
+    t&.kill
   end
 end
 
