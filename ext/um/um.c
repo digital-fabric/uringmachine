@@ -529,11 +529,12 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
   __u32 flags = 0;
 
   while (1) {
-    um_await_op(ctx->machine, ctx->op, NULL, NULL);
-
-    if (!ctx->op->results_head)
+    um_await_op(ctx->machine, ctx->op, &result, &flags);
+    if (!ctx->op->results_head) {
+      printf("accept_each_safe_loop - no results queued, result: %d flags: %d\n", result, flags);
       // this shouldn't happen!
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
+    }
 
     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
       um_raise_on_system_error(result);
