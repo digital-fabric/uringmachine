@@ -13,6 +13,5 @@ class UringMachine
     ensure
       self.yield
     end.tap { |f| schedule(f, value) }
-
   end
 end
