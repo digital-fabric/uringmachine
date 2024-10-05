@@ -1,3 +1,5 @@
+- Add `#spin`
+- Fix bugs in multishot read and other ops
 - Add `#recv`, `#send`
 - Add `#socket`, `#connect`
 
