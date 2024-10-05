@@ -114,8 +114,8 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
-  if (op->is_multishot)
-    printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
+  // if (op->is_multishot)
+  //   printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
 
   switch (op->state) {
     case OP_submitted:
@@ -211,7 +211,6 @@ loop:
 
   op = um_runqueue_shift(machine);
   if (op) {
-    printf("resume op: %p state: %d\n", op, op->state);
     VALUE resume_value = op->resume_value;
     if (op->state == OP_schedule)
       um_op_checkin(machine, op);
@@ -532,7 +531,6 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
   while (1) {
     um_await_op(ctx->machine, ctx->op, &result, &flags);
     if (!ctx->op->results_head) {
-      printf("accept_each_safe_loop - no results queued, result: %d flags: %d\n", result, flags);
       // this shouldn't happen!
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
     }

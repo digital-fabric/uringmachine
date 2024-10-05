@@ -428,7 +428,6 @@ class AcceptEachTest < UMBaseTest
     count = 0
     machine.accept_each(@server.fileno) do |fd|
       count += 1
-      # machine.write(fd, count.to_s)
       break if count == 3
     end
 
@@ -436,10 +435,6 @@ class AcceptEachTest < UMBaseTest
     assert_equal 1, machine.pending_count
     machine.snooze
     assert_equal 0, machine.pending_count
-
-    # assert_equal '1', conns[0].readpartial(3)
-    # assert_equal '2', conns[1].readpartial(3)
-    # assert_equal '3', conns[2].readpartial(3)
   ensure
     t&.kill
   end
