@@ -211,6 +211,7 @@ loop:
 
   op = um_runqueue_shift(machine);
   if (op) {
+    printf("resume op: %p state: %d\n", op, op->state);
     VALUE resume_value = op->resume_value;
     if (op->state == OP_schedule)
       um_op_checkin(machine, op);
