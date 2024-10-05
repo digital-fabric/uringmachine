@@ -114,8 +114,8 @@ inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
-  // if (op->is_multishot)
-  //   printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
+  if (op->is_multishot)
+    printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
 
   switch (op->state) {
     case OP_submitted:
