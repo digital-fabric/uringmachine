@@ -224,4 +224,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "recv", UM_recv, 4);
   rb_define_method(cUM, "bind", UM_bind, 3);
   rb_define_method(cUM, "listen", UM_listen, 2);
+
+  um_define_net_constants(cUM);
 }

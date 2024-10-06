@@ -132,4 +132,6 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags);
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);
 VALUE um_listen(struct um *machine, int fd, int backlog);
 
+void um_define_net_constants(VALUE mod);
+
 #endif // UM_H
