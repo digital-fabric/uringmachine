@@ -92,14 +92,15 @@ inline void um_handle_submitted_op_cqe_single(struct um *machine, struct um_op *
 }
 
 static inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
-  if (!op->results_head) {
+  if (!op->scheduled_op) {
     // if no results are ready yet, schedule the corresponding fiber
     struct um_op *op2 = um_op_checkout(machine, OP_SCHEDULE_MULTISHOT_RESULT);
+    op->scheduled_op = op2;
+
     op2->state = OP_schedule;
     printf("- schedule op %p kind %d op2 %p\n", op, op->kind, op2);
     RB_OBJ_WRITE(machine->self, &op2->fiber, op->fiber);
     RB_OBJ_WRITE(machine->self, &op2->resume_value, Qnil);
-    op->next = op2;
     um_runqueue_push(machine, op2);
   }
   um_op_result_push(machine, op, cqe->res, cqe->flags);
@@ -368,11 +369,11 @@ VALUE um_multishot_ensure(VALUE arg) {
 
   switch (ctx->op->state) {
     case OP_submitted:
-      struct um_op *op2 = ctx->op->next;
+      struct um_op *op2 = ctx->op->scheduled_op;
       if (op2) {
         // an OP_SCHEDULE_MULTISHOT op was scheduled, we need to cancel it
         um_runqueue_delete(ctx->machine, op2);
-        ctx->op->next = NULL;
+        ctx->op->scheduled_op = NULL;
       }
 
       ctx->op->state = OP_abandonned;
@@ -424,8 +425,6 @@ int um_read_each_safe_loop_singleshot(struct op_ensure_ctx *ctx, int total) {
   }
 }
 
-
-
 int um_read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total) {
   __s32 result = 0;
   __u32 flags = 0;
@@ -476,9 +475,9 @@ VALUE um_read_each_safe_loop(VALUE arg) {
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, NULL, NULL);
-    if (!ctx->op->next)
+    if (!ctx->op->scheduled_op)
       rb_raise(rb_eRuntimeError, "no associated schedule op found");
-    ctx->op->next = NULL;
+    ctx->op->scheduled_op = NULL;
     if (!ctx->op->results_head)
       rb_raise(rb_eRuntimeError, "no result found!\n");
 

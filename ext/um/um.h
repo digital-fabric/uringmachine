@@ -62,6 +62,7 @@ struct um_op {
   enum op_state state;
   struct um_op *prev;
   struct um_op *next;
+  struct um_op *scheduled_op; // used for scheduling 
 
   // linked list for multishot results
   struct um_result_entry *results_head;
