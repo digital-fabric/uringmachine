@@ -1,3 +1,5 @@
-- bind
-- listen
 - splice
+- sendto
+- recvfrom
+
+- queues

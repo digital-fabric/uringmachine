@@ -60,4 +60,12 @@ class UMBaseTest < Minitest::Test
   def teardown
     # @machine&.cleanup
   end
+
+  def assign_port
+    @@port_assign_mutex ||= Mutex.new
+    @@port_assign_mutex.synchronize do
+      @@port ||= 1024 + rand(60000)
+      @@port += 1
+    end
+  end
 end

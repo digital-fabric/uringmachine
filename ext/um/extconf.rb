@@ -21,14 +21,11 @@ def get_config
   raise "UringMachine requires kernel version 6.4 or newer!" if combined_version < 604
 
   config[:kernel_version]     = combined_version
-  config[:pidfd_open]         = combined_version > 503
-  config[:multishot_accept]   = combined_version >= 519
-  config[:multishot_recv]     = combined_version >= 600
-  config[:multishot_recvmsg]  = combined_version >= 600
-  config[:multishot_timeout]  = combined_version >= 604
   config[:submit_all_flag]    = combined_version >= 518
   config[:coop_taskrun_flag]  = combined_version >= 519
   config[:single_issuer_flag] = combined_version >= 600
+  config[:prep_bind]          = combined_version >= 611
+  config[:prep_listen]        = combined_version >= 611
 
   config
 end
@@ -54,16 +51,10 @@ if !find_library('uring', nil, File.join(liburing_path, 'src'))
   raise "Couldn't find liburing.a"
 end
 
-def define_bool(name, value)
-  $defs << "-D#{name}=#{value ? 1 : 0 }"
-end
-
-$defs << '-DHAVE_IO_URING_PREP_MULTISHOT_ACCEPT'  if config[:multishot_accept]
-$defs << '-DHAVE_IO_URING_PREP_RECV_MULTISHOT'    if config[:multishot_recv]
-$defs << '-DHAVE_IO_URING_PREP_RECVMSG_MULTISHOT' if config[:multishot_recvmsg]
-$defs << '-DHAVE_IO_URING_TIMEOUT_MULTISHOT'      if config[:multishot_timeout]
-$defs << '-DHAVE_IORING_SETUP_SUBMIT_ALL'         if config[:submit_all_flag]
-$defs << '-DHAVE_IORING_SETUP_COOP_TASKRUN'       if config[:coop_taskrun_flag]
+$defs << '-DHAVE_IORING_SETUP_SUBMIT_ALL'   if config[:submit_all_flag]
+$defs << '-DHAVE_IORING_SETUP_COOP_TASKRUN' if config[:coop_taskrun_flag]
+$defs << '-DHAVE_IO_URING_PREP_BIND'        if config[:prep_bind]
+$defs << '-DHAVE_IO_URING_PREP_LISTEN'      if config[:prep_listen]
 $CFLAGS << ' -Wno-pointer-arith'
 
 CONFIG['optflags'] << ' -fno-strict-aliasing'

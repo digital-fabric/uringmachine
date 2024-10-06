@@ -164,6 +164,36 @@ VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
   return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
 }
 
+VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = inet_addr(StringValueCStr(host));
+  addr.sin_port = htons(NUM2INT(port));
+
+#ifdef HAVE_IO_URING_PREP_BIND
+  struct um *machine = get_machine(self);
+  return um_bind(machine, NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
+#else
+  int res = bind(NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  return INT2NUM(0);
+#endif
+}
+
+VALUE UM_listen(VALUE self, VALUE fd, VALUE backlog) {
+#ifdef HAVE_IO_URING_PREP_LISTEN
+  struct um *machine = get_machine(self);
+  return um_listen(machine, NUM2INT(fd), NUM2INT(backlog));
+#else
+  int res = listen(NUM2INT(fd), NUM2INT(backlog));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  return INT2NUM(0);
+#endif
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -192,4 +222,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "connect", UM_connect, 3);
   rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "recv", UM_recv, 4);
+  rb_define_method(cUM, "bind", UM_bind, 3);
+  rb_define_method(cUM, "listen", UM_listen, 2);
 }

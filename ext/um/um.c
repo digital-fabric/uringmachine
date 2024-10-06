@@ -617,3 +617,33 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   um_update_read_buffer(machine, buffer, 0, result, flags);
   return INT2FIX(result);
 }
+
+VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  io_uring_prep_bind(sqe, fd, addr, addrlen);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+
+  discard_op_if_completed(machine, op);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_listen(struct um *machine, int fd, int backlog) {
+  struct um_op *op = um_op_checkout(machine);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  io_uring_prep_listen(sqe, fd, backlog);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+
+  discard_op_if_completed(machine, op);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}

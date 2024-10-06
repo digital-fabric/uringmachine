@@ -381,7 +381,7 @@ end
 class AcceptTest < UMBaseTest
   def setup
     super
-    @port = 9000 + rand(1000)
+    @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
   end
 
@@ -409,7 +409,7 @@ end
 class AcceptEachTest < UMBaseTest
   def setup
     super
-    @port = 9000 + rand(1000)
+    @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
   end
 
@@ -455,7 +455,7 @@ end
 class ConnectTest < UMBaseTest
   def setup
     super
-    @port = 9000 + rand(1000)
+    @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
   end
 
@@ -496,7 +496,7 @@ end
 class SendTest < UMBaseTest
   def setup
     super
-    @port = 9000 + rand(1000)
+    @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
   end
 
@@ -532,7 +532,7 @@ end
 class RecvTest < UMBaseTest
   def setup
     super
-    @port = 9000 + rand(1000)
+    @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
   end
 
@@ -556,6 +556,72 @@ class RecvTest < UMBaseTest
     res = machine.recv(fd, buf, 42, 0)
     assert_equal 6, res
     assert_equal 'foobar', buf
+  ensure
+    t&.kill
+  end
+end
+
+class BindTest < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+  end
+
+  def test_bind
+    assert_equal 0, machine.pending_count
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_DGRAM, 0, 0);
+    res = machine.bind(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+    assert_equal 0, machine.pending_count
+
+    peer = UDPSocket.new
+    peer.connect('127.0.0.1', @port)
+    peer.send 'foo', 0
+
+    buf = +''
+    res = machine.recv(fd, buf, 8192, 0)
+    assert_equal 3, res
+    assert_equal 'foo', buf
+  end
+
+  def test_bind_invalid_args
+    assert_equal 0, machine.pending_count
+
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_DGRAM, 0, 0);
+    assert_raises(Errno::EACCES) { machine.bind(fd, 'foo.bar.baz', 3) }
+    assert_raises(Errno::EBADF) { machine.bind(-3, '127.0.01', 1234) }
+
+    assert_equal 0, machine.pending_count
+  end
+end
+
+class ListenTest < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+  end
+
+  def test_listen
+    fd = machine.socket(Socket::AF_INET, Socket::SOCK_STREAM, 0, 0);
+    machine.bind(fd, '127.0.0.1', @port)
+    res = machine.listen(fd, 5)
+    assert_equal 0, res
+    assert_equal 0, machine.pending_count
+
+    conn = nil
+    t = Thread.new do
+      sleep 0.01
+      conn = TCPSocket.new('127.0.0.1', @port)
+    end
+
+    conn_fd = machine.accept(fd)
+    t.join
+    assert_kind_of TCPSocket, conn
+
+    machine.send(conn_fd, 'foo', 3, 0)
+
+    buf = conn.readpartial(42)
+    assert_equal 'foo', buf
   ensure
     t&.kill
   end

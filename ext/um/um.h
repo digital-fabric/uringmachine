@@ -129,5 +129,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags);
+VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);
+VALUE um_listen(struct um *machine, int fd, int backlog);
 
 #endif // UM_H
