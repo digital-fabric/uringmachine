@@ -91,13 +91,14 @@ inline void um_handle_submitted_op_cqe_single(struct um *machine, struct um_op *
   um_runqueue_push(machine, op);
 }
 
-inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
+static inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
   if (!op->results_head) {
     // if no results are ready yet, schedule the corresponding fiber
     struct um_op *op2 = um_op_checkout(machine, OP_SCHEDULE_MULTISHOT_RESULT);
     op2->state = OP_schedule;
-    op2->fiber = op->fiber;
-    op2->resume_value = Qnil;
+    printf("- schedule op %p kind %d op2 %p\n", op, op->kind, op2);
+    RB_OBJ_WRITE(machine->self, &op2->fiber, op->fiber);
+    RB_OBJ_WRITE(machine->self, &op2->resume_value, Qnil);
     op->next = op2;
     um_runqueue_push(machine, op2);
   }
@@ -208,12 +209,16 @@ loop:
 
   op = um_runqueue_shift(machine);
   if (op) {
+    printf("!resume op %p kind %d state %d\n", op, op->kind, op->state);
+    INSPECT("  fiber", op->fiber);
+    INSPECT("  value", op->resume_value);
     VALUE resume_value = op->resume_value;
     if (op->state == OP_schedule)
       um_op_checkin(machine, op);
 
     // the resume value is disregarded, we pass the fiber itself
     VALUE v = rb_fiber_transfer(op->fiber, 1, &resume_value);
+    RB_GC_GUARD(resume_value);
     return v;
   }
 
@@ -243,6 +248,9 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *res
   }
 
   if (unlikely(is_exception)) um_raise_exception(v);
+  RB_GC_GUARD(v);
+  RB_GC_GUARD(op->fiber);
+  RB_GC_GUARD(op->resume_value);
   return v;
 }
 
@@ -411,6 +419,7 @@ int um_read_each_safe_loop_singleshot(struct op_ensure_ctx *ctx, int total) {
     total += result;
     VALUE buf = rb_str_new(ctx->read_buf, result);
     rb_yield(buf);
+    RB_GC_GUARD(buf);
     um_op_checkin(ctx->machine, ctx->op);
   }
 }
@@ -436,6 +445,7 @@ int um_read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total
     *total += result;
     VALUE buf = um_get_string_from_buffer_ring(ctx->machine, ctx->bgid, result, flags);
     rb_yield(buf);
+    RB_GC_GUARD(buf);
   }
 
   if (ctx->op->state == OP_completed) {

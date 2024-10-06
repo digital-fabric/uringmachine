@@ -4,13 +4,13 @@
 VALUE cUM;
 
 static void UM_mark(void *ptr) {
-  // struct um *machine = ptr;
-  // um_runqueue_mark(machine);
+  struct um *machine = ptr;
+  um_runqueue_mark(machine);
 }
 
 static void UM_compact(void *ptr) {
-  // struct um *machine = ptr;
-  // um_runqueue_compact(machine);
+  struct um *machine = ptr;
+  um_runqueue_compact(machine);
 }
 
 static void UM_free(void *ptr) {

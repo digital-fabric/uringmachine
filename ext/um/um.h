@@ -149,6 +149,8 @@ void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
 void um_runqueue_unshift(struct um *machine, struct um_op *op);
 void um_runqueue_delete(struct um *machine, struct um_op *op);
+void um_runqueue_mark(struct um *machine);
+void um_runqueue_compact(struct um *machine);
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
