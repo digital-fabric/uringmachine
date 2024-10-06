@@ -43,7 +43,7 @@ inline struct um *get_machine(VALUE self) {
 
 VALUE UM_initialize(VALUE self) {
   struct um *machine = RTYPEDDATA_DATA(self);
-  um_setup(machine);
+  um_setup(self, machine);
   return self;
 }
 

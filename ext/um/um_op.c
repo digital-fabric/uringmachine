@@ -53,9 +53,10 @@ inline int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *resul
   return 1;
 }
 
-inline void um_op_clear(struct um_op *op) {
+static inline void um_op_clear(struct um *machine, struct um_op *op) {
   memset(op, 0, sizeof(struct um_op));
-  op->fiber = op->resume_value = Qnil;
+  RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
+  RB_OBJ_WRITE(machine->self, &op->resume_value, Qnil);
 }
 
 inline struct um_op *um_op_checkout(struct um *machine, enum op_kind kind) {
@@ -67,7 +68,7 @@ inline struct um_op *um_op_checkout(struct um *machine, enum op_kind kind) {
   else
     op = malloc(sizeof(struct um_op));
 
-  um_op_clear(op);
+  um_op_clear(machine, op);
   op->kind = kind;
   return op;
 }

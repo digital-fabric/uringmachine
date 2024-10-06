@@ -88,6 +88,8 @@ struct buf_ring_descriptor {
 #define BUFFER_RING_MAX_COUNT 10
 
 struct um {
+  VALUE self;
+
   struct um_op *op_freelist;
   struct um_result_entry *result_freelist;
 
@@ -106,7 +108,7 @@ struct um {
 
 extern VALUE cUM;
 
-void um_setup(struct um *machine);
+void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
 void um_free_op_linked_list(struct um *machine, struct um_op *op);
 void um_free_result_linked_list(struct um *machine, struct um_result_entry *entry);

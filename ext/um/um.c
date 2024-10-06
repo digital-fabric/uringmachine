@@ -1,15 +1,10 @@
 #include "um.h"
 #include "ruby/thread.h"
 
-void um_setup(struct um *machine) {
-  machine->ring_initialized = 0;
-  machine->unsubmitted_count = 0;
-  machine->buffer_ring_count = 0;
-  machine->pending_count = 0;
-  machine->runqueue_head = NULL;
-  machine->runqueue_tail = NULL;
-  machine->op_freelist = NULL;
-  machine->result_freelist = NULL;
+void um_setup(VALUE self, struct um *machine) {
+  memset(machine, 0, sizeof(struct um));
+
+  RB_OBJ_WRITE(self, &machine->self, self);
 
   unsigned prepared_limit = 4096;
   unsigned flags = 0;
@@ -231,7 +226,7 @@ static inline void um_cancel_op(struct um *machine, struct um_op *op) {
 }
 
 static inline VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags) {
-  op->fiber = rb_fiber_current();
+  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
   VALUE v = um_fiber_switch(machine);
   int is_exception = um_value_is_exception_p(v);
 
@@ -258,8 +253,8 @@ inline VALUE um_await(struct um *machine) {
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = um_op_checkout(machine, OP_SCHEDULE);
   op->state = OP_schedule;
-  op->fiber = fiber;
-  op->resume_value = value;
+  RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
+  RB_OBJ_WRITE(machine->self, &op->resume_value, value);
   um_runqueue_push(machine, op);
 }
 
@@ -267,13 +262,13 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = um_runqueue_find_by_fiber(machine, fiber);
   if (op) {
     op->state = OP_cancelled;
-    op->resume_value = value;
+    RB_OBJ_WRITE(machine->self, &op->resume_value, value);
   }
   else {
     op = um_op_checkout(machine, OP_INTERRUPT);
     op->state = OP_schedule;
-    op->fiber = fiber;
-    op->resume_value = value;
+    RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
+    RB_OBJ_WRITE(machine->self, &op->resume_value, value);
     um_runqueue_unshift(machine, op);
   }
 }
@@ -314,8 +309,8 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_timeout(sqe, &op->ts, 0, 0);
   op->state = OP_submitted;
-  op->fiber = rb_fiber_current();
-  op->resume_value = rb_funcall(class, ID_new, 0);
+  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
+  RB_OBJ_WRITE(machine->self, &op->resume_value, rb_funcall(class, ID_new, 0));
 
   struct op_ensure_ctx ctx = { .machine = machine, .op = op };
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
