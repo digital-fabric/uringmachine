@@ -194,6 +194,43 @@ VALUE UM_listen(VALUE self, VALUE fd, VALUE backlog) {
 #endif
 }
 
+static inline int numeric_value(VALUE value) {
+  switch (TYPE(value)) {
+    case T_TRUE:
+      return 1;
+    case T_FALSE:
+      return 0;
+    default:
+      return NUM2INT(value);
+  }
+}
+
+VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  struct um *machine = get_machine(self);
+  return um_getsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt));
+#else
+  int value;
+  int res = getsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, sizeof(value));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  return INT2NUM(0);
+#endif
+}
+
+VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  struct um *machine = get_machine(self);
+  return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
+#else
+  int value = numeric_value(opt);
+  int res = setsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, sizeof(value));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  return INT2NUM(0);
+#endif
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -224,6 +261,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "recv", UM_recv, 4);
   rb_define_method(cUM, "bind", UM_bind, 3);
   rb_define_method(cUM, "listen", UM_listen, 2);
+  rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
+  rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
 
   um_define_net_constants(cUM);
 }

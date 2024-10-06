@@ -9,8 +9,11 @@ class UringMachine
     Fiber.new do |resume_value| 
       block.(resume_value)
     rescue Exception => e
-      raise RuntimeError, "Unhandled fiber exception: #{e.inspect}"
+      STDERR.puts "Unhandled fiber exception: #{e.inspect}"
+      STDERR.puts e.backtrace.join("\n")
+      exit
     ensure
+      # yield control
       self.yield
     end.tap { |f| schedule(f, value) }
   end

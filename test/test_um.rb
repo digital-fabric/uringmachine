@@ -337,6 +337,32 @@ class ReadEachTest < UMBaseTest
     machine.snooze
     assert_equal 0, machine.pending_count
   end
+
+  def test_read_each_break
+    r, w = IO.pipe
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+
+    t = Thread.new do
+      sleep 0.1
+      w << 'foo'
+      sleep 0.1
+      w.close
+    end
+    
+    bufs = []
+    machine.read_each(r.fileno, bgid) do |b|
+      bufs << b
+      break
+    end
+
+    assert_equal ['foo'], bufs
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+  ensure
+    t&.kill
+  end
 end
 
 class WriteTest < UMBaseTest
@@ -471,7 +497,7 @@ class ConnectTest < UMBaseTest
       sleep
     end
 
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     assert_equal 0, machine.pending_count
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, machine.pending_count
@@ -513,7 +539,7 @@ class SendTest < UMBaseTest
       sleep
     end
 
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
@@ -548,7 +574,7 @@ class RecvTest < UMBaseTest
       sleep
     end
 
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
@@ -569,7 +595,7 @@ class BindTest < UMBaseTest
 
   def test_bind
     assert_equal 0, machine.pending_count
-    fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0)
     res = machine.bind(fd, '127.0.0.1', @port)
     assert_equal 0, res
     assert_equal 0, machine.pending_count
@@ -587,7 +613,7 @@ class BindTest < UMBaseTest
   def test_bind_invalid_args
     assert_equal 0, machine.pending_count
 
-    fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0)
     assert_raises(Errno::EACCES) { machine.bind(fd, 'foo.bar.baz', 3) }
     assert_raises(Errno::EBADF) { machine.bind(-3, '127.0.01', 1234) }
 
@@ -602,7 +628,7 @@ class ListenTest < UMBaseTest
   end
 
   def test_listen
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0);
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     machine.bind(fd, '127.0.0.1', @port)
     res = machine.listen(fd, 5)
     assert_equal 0, res
@@ -630,5 +656,19 @@ end
 class ConstTest < UMBaseTest
   def test_constants
     assert_equal UM::SOCK_STREAM, UM::SOCK_STREAM
+  end
+end
+
+class GetSetSockOpt < UMBaseTest
+  def test_getsockopt_setsockopt
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
+    assert_equal 0, reuseaddr
+
+    res = machine.setsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
+    assert_equal 0, res
+
+    reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
+    assert_equal 1, reuseaddr
   end
 end

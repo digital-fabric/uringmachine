@@ -58,7 +58,7 @@ inline void um_op_clear(struct um_op *op) {
   op->fiber = op->resume_value = Qnil;
 }
 
-inline struct um_op *um_op_checkout(struct um *machine) {
+inline struct um_op *um_op_checkout(struct um *machine, enum op_kind kind) {
   machine->pending_count++;
 
   struct um_op *op = machine->op_freelist;
@@ -68,6 +68,7 @@ inline struct um_op *um_op_checkout(struct um *machine) {
     op = malloc(sizeof(struct um_op));
 
   um_op_clear(op);
+  op->kind = kind;
   return op;
 }
 
@@ -128,6 +129,17 @@ inline struct um_op *um_runqueue_shift(struct um *machine) {
     op->next = NULL;
   }
   return op;
+}
+
+inline void um_runqueue_delete(struct um *machine, struct um_op *op) {
+  struct um_op *prev = op->prev;
+  struct um_op *next = op->next;
+  if (prev) prev->next = next;
+  if (next) next->prev = prev;
+  if (machine->runqueue_head == op)
+    machine->runqueue_head = next;
+  if (machine->runqueue_tail == op)
+    machine->runqueue_tail = prev;
 }
 
 inline void um_free_op_linked_list(struct um *machine, struct um_op *op) {

@@ -98,10 +98,11 @@ inline void um_handle_submitted_op_cqe_single(struct um *machine, struct um_op *
 inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *op, struct io_uring_cqe *cqe) {
   if (!op->results_head) {
     // if no results are ready yet, schedule the corresponding fiber
-    struct um_op *op2 = um_op_checkout(machine);
+    struct um_op *op2 = um_op_checkout(machine, OP_SCHEDULE_MULTISHOT_RESULT);
     op2->state = OP_schedule;
     op2->fiber = op->fiber;
     op2->resume_value = Qnil;
+    op->next = op2;
     um_runqueue_push(machine, op2);
   }
   um_op_result_push(machine, op, cqe->res, cqe->flags);
@@ -110,12 +111,12 @@ inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct um_op *o
     op->state = OP_completed;
 }
 
-inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
+static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
-  // if (op->is_multishot)
-  //   printf("process_cqe %p state: %d result: %d flags: %d (%d)\n", op, op->state, cqe->res, cqe->flags, (cqe->flags & IORING_CQE_F_MORE));
+  // if (op->is_multishot && op->kind == OP_READ_MULTISHOT)
+    // printf("process_cqe %p kind: %d state: %d result: %d flags: %d\n", op, op->kind, op->state, cqe->res, cqe->flags);
 
   switch (op->state) {
     case OP_submitted:
@@ -255,7 +256,7 @@ inline VALUE um_await(struct um *machine) {
 }
 
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_SCHEDULE);
   op->state = OP_schedule;
   op->fiber = fiber;
   op->resume_value = value;
@@ -269,7 +270,7 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
     op->resume_value = value;
   }
   else {
-    op = um_op_checkout(machine);
+    op = um_op_checkout(machine, OP_INTERRUPT);
     op->state = OP_schedule;
     op->fiber = fiber;
     op->resume_value = value;
@@ -307,7 +308,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_TIMEOUT);
   op->ts = um_double_to_timespec(NUM2DBL(interval));
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
@@ -325,7 +326,7 @@ inline void discard_op_if_completed(struct um *machine, struct um_op *op) {
 }
 
 inline VALUE um_sleep(struct um *machine, double duration) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_SLEEP);
   op->ts = um_double_to_timespec(duration);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
@@ -341,7 +342,7 @@ inline VALUE um_sleep(struct um *machine, double duration) {
 }
 
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_READ);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
   __u32 flags = 0;
@@ -363,6 +364,15 @@ VALUE um_multishot_ensure(VALUE arg) {
 
   switch (ctx->op->state) {
     case OP_submitted:
+      struct um_op *op2 = ctx->op->next;
+      if (op2) {
+        // an OP_SCHEDULE_MULTISHOT op was scheduled, we need to cancel it
+        um_runqueue_delete(ctx->machine, op2);
+        ctx->op->next = NULL;
+      }
+
+      ctx->op->state = OP_abandonned;
+      um_op_result_cleanup(ctx->machine, ctx->op);
       um_cancel_op(ctx->machine, ctx->op);
       break;
     case OP_completed:
@@ -376,7 +386,7 @@ VALUE um_multishot_ensure(VALUE arg) {
 }
 
 static inline void um_read_each_prepare_op(struct op_ensure_ctx *ctx, int singleshot_mode) {
-  struct um_op *op = um_op_checkout(ctx->machine);
+  struct um_op *op = um_op_checkout(ctx->machine, singleshot_mode ? OP_READ : OP_READ_MULTISHOT);
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, op);
 
   if (singleshot_mode)
@@ -460,6 +470,9 @@ VALUE um_read_each_safe_loop(VALUE arg) {
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, NULL, NULL);
+    if (!ctx->op->next)
+      rb_raise(rb_eRuntimeError, "no associated schedule op found");
+    ctx->op->next = NULL;
     if (!ctx->op->results_head)
       rb_raise(rb_eRuntimeError, "no result found!\n");
 
@@ -474,7 +487,7 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
 }
 
 VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_WRITE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
   __u32 flags = 0;
@@ -490,7 +503,7 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
 }
 
 VALUE um_close(struct um *machine, int fd) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_CLOSE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
   __u32 flags = 0;
@@ -506,7 +519,7 @@ VALUE um_close(struct um *machine, int fd) {
 }
 
 VALUE um_accept(struct um *machine, int fd) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_ACCEPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   struct sockaddr addr;
   socklen_t len;
@@ -530,6 +543,9 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, &result, &flags);
+    // if (!ctx->op->next)
+    //   rb_raise(rb_eRuntimeError, "no associated schedule op found");
+    ctx->op->next = NULL;
     if (!ctx->op->results_head) {
       // this shouldn't happen!
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
@@ -546,7 +562,7 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
 }
 
 VALUE um_accept_each(struct um *machine, int fd) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_ACCEPT_MULTISHOT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_multishot_accept(sqe, fd, NULL, NULL, 0);
   op->state = OP_submitted;
@@ -557,7 +573,7 @@ VALUE um_accept_each(struct um *machine, int fd) {
 }
 
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_SOCKET);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
@@ -572,7 +588,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
 }
 
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_CONNECT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
@@ -587,7 +603,7 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
 }
 
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_SEND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
@@ -602,7 +618,7 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
 }
 
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_RECV);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
@@ -619,7 +635,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
 }
 
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_BIND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
@@ -634,11 +650,42 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 }
 
 VALUE um_listen(struct um *machine, int fd, int backlog) {
-  struct um_op *op = um_op_checkout(machine);
+  struct um_op *op = um_op_checkout(machine, OP_LISTEN);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
   io_uring_prep_listen(sqe, fd, backlog);
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+
+  discard_op_if_completed(machine, op);
+  um_raise_on_system_error(result);
+  return INT2FIX(result);
+}
+
+VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
+  struct um_op *op = um_op_checkout(machine, OP_LISTEN);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+  int value;
+
+  io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
+  op->state = OP_submitted;
+
+  um_await_op(machine, op, &result, NULL);
+
+  discard_op_if_completed(machine, op);
+  um_raise_on_system_error(result);
+  return INT2FIX(value);
+}
+
+VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
+  struct um_op *op = um_op_checkout(machine, OP_LISTEN);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  int result = 0;
+
+  io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, NULL);

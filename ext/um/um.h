@@ -29,6 +29,27 @@ enum op_state {
   OP_schedule,    // the corresponding fiber is scheduled
 };
 
+enum op_kind {
+  OP_TIMEOUT,
+  OP_SCHEDULE,
+  OP_INTERRUPT,
+  OP_SCHEDULE_MULTISHOT_RESULT,
+  OP_SLEEP,
+  OP_READ,
+  OP_READ_MULTISHOT,
+  OP_WRITE,
+  OP_CLOSE,
+  OP_ACCEPT,
+  OP_ACCEPT_MULTISHOT,
+  OP_RECV,
+  OP_RECV_MULTISHOT,
+  OP_SEND,
+  OP_SOCKET,
+  OP_CONNECT,
+  OP_BIND,
+  OP_LISTEN
+};
+
 struct um_result_entry {
   struct um_result_entry *next;
 
@@ -37,6 +58,7 @@ struct um_result_entry {
 };
 
 struct um_op {
+  enum op_kind kind;
   enum op_state state;
   struct um_op *prev;
   struct um_op *next;
@@ -104,14 +126,16 @@ VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 
 void um_op_checkin(struct um *machine, struct um_op *op);
-struct um_op* um_op_checkout(struct um *machine);
+struct um_op* um_op_checkout(struct um *machine, enum op_kind kind);
 void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
 int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
+void um_op_result_cleanup(struct um *machine, struct um_op *op);
 
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
 void um_runqueue_unshift(struct um *machine, struct um_op *op);
+void um_runqueue_delete(struct um *machine, struct um_op *op);
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
@@ -131,6 +155,8 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags);
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);
 VALUE um_listen(struct um *machine, int fd, int backlog);
+VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
+VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
 
 void um_define_net_constants(VALUE mod);
 
