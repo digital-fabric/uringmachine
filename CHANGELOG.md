@@ -1,3 +1,7 @@
+# 2024-10-06 Version 0.4
+
+- Add socket constants
+- Add `#bind`, `#listen`
 - Add `#spin`
 - Fix bugs in multishot read and other ops
 - Add `#recv`, `#send`
