@@ -524,12 +524,10 @@ VALUE um_close(struct um *machine, int fd) {
 VALUE um_accept(struct um *machine, int fd) {
   struct um_op *op = um_op_checkout(machine, OP_ACCEPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  struct sockaddr addr;
-  socklen_t len;
   __s32 result = 0;
   __u32 flags = 0;
 
-  io_uring_prep_accept(sqe, fd, &addr, &len, 0);
+  io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
