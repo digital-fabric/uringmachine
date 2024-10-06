@@ -76,6 +76,12 @@ struct um_op {
   int cqe_flags;
 };
 
+struct um_buffer {
+  struct um_buffer *next;
+  void *ptr;
+  long len;
+};
+
 struct buf_ring_descriptor {
   struct io_uring_buf_ring *br;
   size_t br_size;
@@ -92,6 +98,7 @@ struct um {
 
   struct um_op *op_freelist;
   struct um_result_entry *result_freelist;
+  struct um_buffer *buffer_freelist;
 
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
@@ -133,6 +140,10 @@ void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32
 int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 void um_op_result_cleanup(struct um *machine, struct um_op *op);
 
+struct um_buffer *um_buffer_checkout(struct um *machine, int len);
+void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
+void um_free_buffer_linked_list(struct um *machine);
+
 struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
@@ -146,7 +157,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
-VALUE um_write(struct um *machine, int fd, VALUE buffer, int len);
+VALUE um_write(struct um *machine, int fd, VALUE str, int len);
 VALUE um_close(struct um *machine, int fd);
 
 VALUE um_accept(struct um *machine, int fd);

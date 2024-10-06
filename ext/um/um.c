@@ -41,6 +41,7 @@ inline void um_teardown(struct um *machine) {
   machine->ring_initialized = 0;
 
   um_free_op_linked_list(machine, machine->op_freelist);
+  um_free_buffer_linked_list(machine);
   um_free_op_linked_list(machine, machine->runqueue_head);
 }
 
@@ -481,16 +482,23 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
 
-VALUE um_write(struct um *machine, int fd, VALUE buffer, int len) {
+VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   struct um_op *op = um_op_checkout(machine, OP_WRITE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
   __u32 flags = 0;
-
-  io_uring_prep_write(sqe, fd, RSTRING_PTR(buffer), len, -1);
+  const int str_len = RSTRING_LEN(str);
+  if (len > str_len) len = str_len;
+  struct um_buffer *buffer = um_buffer_checkout(machine, len);
+  
+  memcpy(buffer->ptr, RSTRING_PTR(str), len);
+  io_uring_prep_write(sqe, fd, buffer->ptr, len, -1);
   op->state = OP_submitted;
 
   um_await_op(machine, op, &result, &flags);
+  um_buffer_checkin(machine, buffer);
+
+  // rb_str_tmp_frozen_release(buffer, tmp);
 
   discard_op_if_completed(machine, op);
   um_raise_on_system_error(result);
