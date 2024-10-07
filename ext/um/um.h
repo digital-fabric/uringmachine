@@ -62,7 +62,7 @@ struct um_op {
   enum op_state state;
   struct um_op *prev;
   struct um_op *next;
-  struct um_op *scheduled_op; // used for scheduling 
+  struct um_op *scheduled_op; // used for scheduling
 
   // linked list for multishot results
   struct um_result_entry *results_head;
@@ -103,6 +103,7 @@ struct um {
 
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
+  struct um_op *cancelled_head;
 
   struct io_uring ring;
 
@@ -140,6 +141,11 @@ struct um_op* um_op_checkout(struct um *machine, enum op_kind kind);
 void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
 int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 void um_op_result_cleanup(struct um *machine, struct um_op *op);
+void um_mark_op_linked_list(struct um_op *head);
+void um_compact_op_linked_list(struct um_op *head);
+
+void um_abandonned_add(struct um *machine, struct um_op *op);
+void um_abandonned_remove(struct um *machine, struct um_op *op);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
 void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);

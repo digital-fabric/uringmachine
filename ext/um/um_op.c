@@ -71,12 +71,14 @@ inline struct um_op *um_op_checkout(struct um *machine, enum op_kind kind) {
   um_op_clear(machine, op);
   op->kind = kind;
   printf(">> checkout op %p kind %d\n", op, op->kind);
+  // um_abandonned_add(machine, op);
   return op;
 }
 
 inline void um_op_checkin(struct um *machine, struct um_op *op) {
   machine->pending_count--;
 
+  // um_abandonned_remove(machine, op);
   printf("<< checkin op %p kind %d\n", op, op->kind);
   um_op_result_cleanup(machine, op);
   op->next = machine->op_freelist;
@@ -98,4 +100,36 @@ inline void um_free_result_linked_list(struct um *machine, struct um_result_entr
     free(entry);
     entry = next;
   }
+}
+
+inline void um_mark_op_linked_list(struct um_op *head) {
+  while (head) {
+    rb_gc_mark_movable(head->fiber);
+    rb_gc_mark_movable(head->resume_value);
+    head = head->next;
+  }
+}
+
+inline void um_compact_op_linked_list(struct um_op *head) {
+  while (head) {
+    head->fiber = rb_gc_location(head->fiber);
+    head->resume_value = rb_gc_location(head->resume_value);
+    head = head->next;
+  }
+}
+
+inline void um_abandonned_add(struct um *machine, struct um_op *op) {
+  op->next = machine->cancelled_head;
+  if (machine->cancelled_head)
+    machine->cancelled_head->prev = op;
+  machine->cancelled_head = op;
+}
+
+inline void um_abandonned_remove(struct um *machine, struct um_op *op) {
+  if (machine->cancelled_head == op)
+    machine->cancelled_head = op->next;
+  if (op->next)
+    op->next->prev = op->prev;
+  if (op->prev)
+    op->prev->next = op->next;
 }

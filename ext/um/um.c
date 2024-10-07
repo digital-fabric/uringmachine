@@ -98,7 +98,6 @@ static inline void um_handle_submitted_op_cqe_multi(struct um *machine, struct u
     op->scheduled_op = op2;
 
     op2->state = OP_schedule;
-    printf("- schedule op %p kind %d op2 %p\n", op, op->kind, op2);
     RB_OBJ_WRITE(machine->self, &op2->fiber, op->fiber);
     RB_OBJ_WRITE(machine->self, &op2->resume_value, Qnil);
     um_runqueue_push(machine, op2);
@@ -130,6 +129,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     case OP_abandonned:
       // op has been abandonned by the I/O method, so we need to cleanup (check
       // the op in to the free list).
+      um_abandonned_remove(machine, op);
       um_op_checkin(machine, op);
       break;
     default:
@@ -240,6 +240,7 @@ static inline VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *res
   if (unlikely(is_exception && op->state == OP_submitted)) {
     um_cancel_op(machine, op);
     op->state = OP_abandonned;
+    um_abandonned_add(machine, op);
   }
   else {
     // We copy over the CQE result and flags, since the op is immediately
@@ -301,6 +302,7 @@ VALUE um_timeout_ensure(VALUE arg) {
     // (it will be checked in upon receiving the -ECANCELED CQE)
     um_cancel_op(ctx->machine, ctx->op);
     ctx->op->state == OP_abandonned;
+    um_abandonned_add(ctx->machine, ctx->op);
   }
   else
     // completed, so can be checked in
@@ -379,6 +381,7 @@ VALUE um_multishot_ensure(VALUE arg) {
       ctx->op->state = OP_abandonned;
       um_op_result_cleanup(ctx->machine, ctx->op);
       um_cancel_op(ctx->machine, ctx->op);
+      um_abandonned_add(ctx->machine, ctx->op);
       break;
     case OP_completed:
       um_op_checkin(ctx->machine, ctx->op);
@@ -553,9 +556,9 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
 
   while (1) {
     um_await_op(ctx->machine, ctx->op, &result, &flags);
-    // if (!ctx->op->next)
+    // if (!ctx->op->scheduled_op)
     //   rb_raise(rb_eRuntimeError, "no associated schedule op found");
-    ctx->op->next = NULL;
+    ctx->op->scheduled_op = NULL;
     if (!ctx->op->results_head) {
       // this shouldn't happen!
       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");

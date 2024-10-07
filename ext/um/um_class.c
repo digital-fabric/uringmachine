@@ -5,12 +5,14 @@ VALUE cUM;
 
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
-  um_runqueue_mark(machine);
+  um_mark_op_linked_list(machine->runqueue_head);
+  um_mark_op_linked_list(machine->cancelled_head);
 }
 
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
-  um_runqueue_compact(machine);
+  um_compact_op_linked_list(machine->runqueue_head);
+  um_compact_op_linked_list(machine->cancelled_head);
 }
 
 static void UM_free(void *ptr) {

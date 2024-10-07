@@ -454,8 +454,10 @@ class AcceptEachTest < UMBaseTest
     count = 0
     machine.accept_each(@server.fileno) do |fd|
       count += 1
+      p count: count
       break if count == 3
     end
+    p :accept_each_done
 
     assert_equal 3, count
     assert_equal 1, machine.pending_count
