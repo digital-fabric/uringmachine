@@ -213,7 +213,8 @@ VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
   return um_getsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt));
 #else
   int value;
-  int res = getsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, sizeof(value));
+  socklen_t nvalue;
+  int res = getsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, &nvalue);
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   return INT2NUM(0);
@@ -227,6 +228,7 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 #else
   int value = numeric_value(opt);
   int res = setsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, sizeof(value));
+  printf("getsockopt value %d nvalue %d\n", value, nvalue);
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   return INT2NUM(0);
