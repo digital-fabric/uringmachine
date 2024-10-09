@@ -226,9 +226,8 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
   struct um *machine = get_machine(self);
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
 #else
-  int value = numeric_value(opt);
-  int res = setsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, sizeof(value));
-  printf("getsockopt value %d nvalue %d\n", value, nvalue);
+  int value_i = numeric_value(opt);
+  int res = setsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value_i, sizeof(value_i));
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   return INT2NUM(0);
