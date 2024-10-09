@@ -5,14 +5,14 @@ VALUE cUM;
 
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
-  um_mark_op_linked_list(machine->runqueue_head);
-  um_mark_op_linked_list(machine->cancelled_head);
+  um_mark_op_linked_list(&machine->list_pending);
+  um_mark_op_linked_list(&machine->list_scheduled);
 }
 
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
-  um_compact_op_linked_list(machine->runqueue_head);
-  um_compact_op_linked_list(machine->cancelled_head);
+  um_compact_op_linked_list(&machine->list_pending);
+  um_compact_op_linked_list(&machine->list_scheduled);
 }
 
 static void UM_free(void *ptr) {
@@ -233,6 +233,11 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 #endif
 }
 
+VALUE UM_debug(VALUE self) {
+  struct um *machine = get_machine(self);
+  return um_debug(machine);
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -265,6 +270,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "listen", UM_listen, 2);
   rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
+
+  rb_define_method(cUM, "debug", UM_debug, 0);
 
   um_define_net_constants(cUM);
 }

@@ -54,7 +54,7 @@ class SchedulingTest < UMBaseTest
     e = CustomError.new
     f = Fiber.new do
       machine.interrupt(cur, e)
-      assert_equal 2, machine.pending_count
+      assert_equal 1, machine.pending_count
       machine.yield
     end
     
@@ -67,12 +67,6 @@ class SchedulingTest < UMBaseTest
       machine.sleep(1)
     rescue Exception => e2
     end
-    # the sleep op has been cancelled, but we still need to process the
-    # cancellation. Calling snooze should take care of that.
-    assert_equal 1, machine.pending_count
-    machine.snooze
-
-    # CQE should have been received, and the op checked in
     assert_equal 0, machine.pending_count
     t1 = monotonic_clock
 
@@ -96,13 +90,7 @@ class SchedulingTest < UMBaseTest
       buf << 5
     end
 
-    # at this point, the sleep cancelled CQE should not yet have been received.
-    # So we still have a pending operation. Snooze should have let the CQE be
-    # received.
-    assert_equal 1, machine.pending_count
-    machine.snooze
     assert_equal 0, machine.pending_count
-
     assert_equal [1, 2, 5], buf
     assert_kind_of TOError, e
   end
@@ -152,6 +140,10 @@ class SchedulingTest < UMBaseTest
     rescue => e
     end
 
+    assert_equal 2, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+
     assert_kind_of TO2Error, e
     assert_equal [3], buf
   end
@@ -199,6 +191,7 @@ class ReadTest < UMBaseTest
     assert_raises(Errno::EBADF) do
       machine.read(w.fileno, +'', 8192)
     end
+    assert_equal 0, machine.pending_count
   end
 
   def test_read_with_buffer_offset
@@ -250,6 +243,7 @@ class ReadEachTest < UMBaseTest
       w.close
       machine.yield
     end
+    
     machine.schedule(f, nil)
 
     machine.read_each(r.fileno, bgid) do |buf|
@@ -454,10 +448,8 @@ class AcceptEachTest < UMBaseTest
     count = 0
     machine.accept_each(@server.fileno) do |fd|
       count += 1
-      p count: count
       break if count == 3
     end
-    p :accept_each_done
 
     assert_equal 3, count
     assert_equal 1, machine.pending_count

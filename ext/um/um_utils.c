@@ -24,7 +24,7 @@ inline VALUE um_raise_exception(VALUE e) {
   return rb_funcall(rb_mKernel, ID_raise, 1, e);
 }
 
-inline void um_raise_on_system_error(int result) {
+inline void um_raise_on_error_result(int result) {
   if (unlikely(result < 0)) rb_syserr_fail(-result, strerror(-result));
 }
 

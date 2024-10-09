@@ -21,19 +21,17 @@
 #endif
 
 enum op_state {
-  OP_initial,     // initial state
-  OP_submitted,   // op has been submitted (SQE prepared)
-  OP_completed,   // op has been completed (CQE processed)
-  OP_cancelled,   // op is cancelled (after CQE is processed)
-  OP_abandonned,  // op is abandonned by fiber (before CQE is processed)
-  OP_schedule,    // the corresponding fiber is scheduled
+  OP_IDLE,
+  OP_PENDING,
+  OP_SCHEDULED,
+  OP_DONE
 };
 
 enum op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
   OP_INTERRUPT,
-  OP_SCHEDULE_MULTISHOT_RESULT,
+  OP_MULTISHOT_AUX,
   OP_SLEEP,
   OP_READ,
   OP_READ_MULTISHOT,
@@ -57,24 +55,40 @@ struct um_result_entry {
   __u32 flags;
 };
 
+struct um_result_list {
+  struct um_result_entry *head;
+  struct um_result_entry *tail;
+};
+
+#define OP_F_MULTISHOT    (1U << 0)
+#define OP_F_CANCELLED    (1U << 1)
+#define OP_F_DISCARD      (1U << 2)
+#define OP_F_AUTO_CHECKIN (1U << 3)
+
 struct um_op {
   enum op_kind kind;
   enum op_state state;
+  unsigned flags;
+
   struct um_op *prev;
   struct um_op *next;
-  struct um_op *scheduled_op; // used for scheduling
-
-  // linked list for multishot results
-  struct um_result_entry *results_head;
-  struct um_result_entry *results_tail;
+  
+  union {
+    struct __kernel_timespec ts;
+    struct {
+      struct um_op *aux;
+      struct um_result_list list_results;
+    };
+    struct um_result_entry cqe;
+  };
 
   VALUE fiber;
-  VALUE resume_value;
-  int is_multishot;
-  struct __kernel_timespec ts;
+  VALUE value;
+};
 
-  int cqe_result;
-  int cqe_flags;
+struct um_op_linked_list {
+  struct um_op *head;
+  struct um_op *tail;
 };
 
 struct um_buffer {
@@ -97,13 +111,12 @@ struct buf_ring_descriptor {
 struct um {
   VALUE self;
 
-  struct um_op *op_freelist;
+  struct um_op_linked_list list_idle;
+  struct um_op_linked_list list_pending;
+  struct um_op_linked_list list_scheduled;
+
   struct um_result_entry *result_freelist;
   struct um_buffer *buffer_freelist;
-
-  struct um_op *runqueue_head;
-  struct um_op *runqueue_tail;
-  struct um_op *cancelled_head;
 
   struct io_uring ring;
 
@@ -119,46 +132,36 @@ extern VALUE cUM;
 
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
-void um_free_op_linked_list(struct um *machine, struct um_op *op);
-void um_free_result_linked_list(struct um *machine, struct um_result_entry *entry);
 
-struct __kernel_timespec um_double_to_timespec(double value);
-int um_value_is_exception_p(VALUE v);
-VALUE um_raise_exception(VALUE v);
-void um_raise_on_system_error(int result);
+struct um_op*  um_op_idle_checkout(struct um *machine, enum op_kind kind);
+void um_op_state_transition(struct um *machine, struct um_op *op, enum op_state new_state);
+void um_op_push_multishot_result(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
+struct um_op *um_op_list_shift(struct um_op_linked_list *list);
+struct um_op *um_op_search_by_fiber(struct um_op_linked_list *list, VALUE fiber);
 
-void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
-void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
+void um_op_free_list(struct um *machine, struct um_op_linked_list *list);
+void um_mark_op_linked_list(struct um_op_linked_list *list);
+void um_compact_op_linked_list(struct um_op_linked_list *list);
 
-int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
-VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
-
-VALUE um_fiber_switch(struct um *machine);
-VALUE um_await(struct um *machine);
-
-void um_op_checkin(struct um *machine, struct um_op *op);
-struct um_op* um_op_checkout(struct um *machine, enum op_kind kind);
 void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
 int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 void um_op_result_cleanup(struct um *machine, struct um_op *op);
-void um_mark_op_linked_list(struct um_op *head);
-void um_compact_op_linked_list(struct um_op *head);
-
-void um_abandonned_add(struct um *machine, struct um_op *op);
-void um_abandonned_remove(struct um *machine, struct um_op *op);
+void um_op_result_list_free(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
 void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
 void um_free_buffer_linked_list(struct um *machine);
 
-struct um_op *um_runqueue_find_by_fiber(struct um *machine, VALUE fiber);
-void um_runqueue_push(struct um *machine, struct um_op *op);
-struct um_op *um_runqueue_shift(struct um *machine);
-void um_runqueue_unshift(struct um *machine, struct um_op *op);
-void um_runqueue_delete(struct um *machine, struct um_op *op);
-void um_runqueue_mark(struct um *machine);
-void um_runqueue_compact(struct um *machine);
+struct __kernel_timespec um_double_to_timespec(double value);
+int um_value_is_exception_p(VALUE v);
+VALUE um_raise_exception(VALUE v);
+void um_raise_on_error_result(int result);
+void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
+void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
+int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
+VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
+VALUE um_await(struct um *machine);
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
@@ -179,6 +182,7 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
+VALUE um_debug(struct um *machine);
 
 void um_define_net_constants(VALUE mod);
 
