@@ -166,6 +166,11 @@ VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
   return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
 }
 
+VALUE UM_recv_each(VALUE self, VALUE fd, VALUE bgid, VALUE flags) {
+  struct um *machine = get_machine(self);
+  return um_recv_each(machine, NUM2INT(fd), NUM2INT(bgid), NUM2INT(flags));
+}
+
 VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
@@ -250,6 +255,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "connect", UM_connect, 3);
   rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "recv", UM_recv, 4);
+  rb_define_method(cUM, "recv_each", UM_recv_each, 3);
   rb_define_method(cUM, "bind", UM_bind, 3);
   rb_define_method(cUM, "listen", UM_listen, 2);
   rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);

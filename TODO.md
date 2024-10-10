@@ -1,5 +1,20 @@
+- send_bundle / recv_bundle (kernel >= 6.10)
 - splice
 - sendto
 - recvfrom
+- poll
+- tee
+- open / openat
+- fsync
+- mkdir / mkdirat
+- statx
+- link / linkat / unlink / unlinkat / symlink
+- rename / renameat
+- waitid
+- fadvise
+- madvise
+- getxattr / setxattr
+- shutdown
+- futex wait wake
 
 - queues

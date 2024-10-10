@@ -574,6 +574,49 @@ class RecvTest < UMBaseTest
   end
 end
 
+class RecvEachTest < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+  end
+
+  def teardown
+    @server&.close
+    super
+  end
+
+  def test_recv_each
+    t = Thread.new do
+      conn = @server.accept
+      conn.write('abc')
+      sleep 0.01
+      conn.write('def')
+      sleep 0.01
+      conn.write('ghi')
+      sleep 0.01
+      conn.close
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    bufs = []
+
+    machine.recv_each(fd, bgid, 0) do |buf|
+      bufs << buf
+    end
+    assert_equal ['abc', 'def', 'ghi'], bufs
+  ensure
+    t&.kill
+  end
+end
+
 class BindTest < UMBaseTest
   def setup
     super

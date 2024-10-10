@@ -1,3 +1,7 @@
+- Add `#recv_each`
+- Add `#getsockopt`, `#setsockopt`
+- Simplify and improve op management
+
 # 2024-10-06 Version 0.4
 
 - Add socket constants

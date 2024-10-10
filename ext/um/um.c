@@ -268,6 +268,7 @@ struct op_ensure_ctx {
   void *read_buf;
   int read_maxlen;
   struct __kernel_timespec ts;
+  int flags;
 };
 
 VALUE um_timeout_ensure(VALUE arg) {
@@ -390,7 +391,7 @@ int um_read_each_safe_loop_singleshot(struct op_ensure_ctx *ctx, int total) {
   }
 }
 
-int um_read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total) {
+int read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total) {
   __s32 result = 0;
   __u32 flags = 0;
   __s32 bad_result = 0;
@@ -441,7 +442,7 @@ VALUE um_read_each_safe_loop(VALUE arg) {
     if (!ctx->op->list_results.head)
       rb_raise(rb_eRuntimeError, "no result found!\n");
 
-    if (!um_read_each_multishot_process_results(ctx, &total))
+    if (!read_each_multishot_process_results(ctx, &total))
       return INT2NUM(total);
   }
 }
@@ -539,7 +540,6 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   int result = 0;
 
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
@@ -552,7 +552,6 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   int result = 0;
 
   io_uring_prep_connect(sqe, fd, addr, addrlen);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
@@ -565,7 +564,6 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   int result = 0;
 
   io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
@@ -579,12 +577,44 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
 
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
   um_update_read_buffer(machine, buffer, 0, result, flags);
   return INT2NUM(result);
+}
+
+static inline void recv_each_prepare_op(struct op_ensure_ctx *ctx) {
+  struct um_op *op = um_op_idle_checkout(ctx->machine, OP_RECV_MULTISHOT);
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, op);
+  io_uring_prep_recv_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
+	sqe->buf_group = ctx->bgid;
+	sqe->flags |= IOSQE_BUFFER_SELECT;
+  op->flags |= OP_F_MULTISHOT;
+  ctx->op = op;
+}
+
+VALUE recv_each_safe_loop(VALUE arg) {
+  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  int total = 0;
+  recv_each_prepare_op(ctx);
+
+  while (1) {
+    um_await_op(ctx->machine, ctx->op, NULL, NULL);
+    if (!ctx->op->aux)
+      rb_raise(rb_eRuntimeError, "no associated schedule op found");
+    ctx->op->aux = NULL;
+    if (!ctx->op->list_results.head)
+      rb_raise(rb_eRuntimeError, "no result found!\n");
+
+    if (!read_each_multishot_process_results(ctx, &total))
+      return INT2NUM(total);
+  }
+}
+
+VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
+  struct op_ensure_ctx ctx = { .machine = machine, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
+  return rb_ensure(recv_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 }
 
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
@@ -593,7 +623,6 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
   int result = 0;
 
   io_uring_prep_bind(sqe, fd, addr, addrlen);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
@@ -606,7 +635,6 @@ VALUE um_listen(struct um *machine, int fd, int backlog) {
   int result = 0;
 
   io_uring_prep_listen(sqe, fd, backlog);
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
