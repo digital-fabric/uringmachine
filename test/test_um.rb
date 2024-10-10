@@ -236,13 +236,10 @@ class ReadEachTest < UMBaseTest
     f = Fiber.new do
       w << 'foo'
       machine.sleep 0.02
-      # machine.snooze
       w << 'bar'
       machine.sleep 0.02
-      # machine.snooze
       w << 'baz'
       machine.sleep 0.02
-      # machine.snooze
       w.close
       machine.yield
     end
