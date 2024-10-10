@@ -646,8 +646,7 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   um_raise_on_error_result(result);
   return INT2NUM(result);
 #else
-  int value_i = numeric_value(opt);
-  int res = setsockopt(fd, level, opt, &value_i, sizeof(value_i));
+  int res = setsockopt(fd, level, opt, &value, sizeof(value));
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   return INT2NUM(0);
