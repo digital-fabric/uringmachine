@@ -7,6 +7,8 @@ struct sync_ctx {
   uint32_t *futex;
 };
 
+#define FUTEX2_SIZE_U32		0x02
+
 void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
   struct um_op *op = um_op_idle_checkout(machine, OP_SYNCHRONIZE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
