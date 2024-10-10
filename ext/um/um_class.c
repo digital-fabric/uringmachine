@@ -217,7 +217,7 @@ VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
   int res = getsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, &nvalue);
   if (res)
     rb_syserr_fail(errno, strerror(errno));
-  return INT2NUM(0);
+  return INT2NUM(value);
 #endif
 }
 
