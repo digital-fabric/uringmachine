@@ -45,7 +45,10 @@ enum op_kind {
   OP_SOCKET,
   OP_CONNECT,
   OP_BIND,
-  OP_LISTEN
+  OP_LISTEN,
+  OP_GETSOCKOPT,
+  OP_SETSOCKOPT,
+  OP_SYNCHRONIZE
 };
 
 struct um_result_entry {
@@ -128,7 +131,13 @@ struct um {
   unsigned int buffer_ring_count;
 };
 
+struct um_futex {
+  uint32_t value;
+  VALUE self;
+};
+
 extern VALUE cUM;
+extern VALUE cMutex;
 
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
@@ -161,6 +170,11 @@ void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, 
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
+struct um_futex *Mutex_data(VALUE self);
+
+struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
+VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
+
 VALUE um_await(struct um *machine);
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
@@ -183,6 +197,9 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
+
+VALUE um_mutex_synchronize(struct um *machine, uint32_t *mutex);
+
 VALUE um_debug(struct um *machine);
 
 void um_define_net_constants(VALUE mod);

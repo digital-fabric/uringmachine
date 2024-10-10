@@ -689,7 +689,7 @@ class ConstTest < UMBaseTest
   end
 end
 
-class GetSetSockOpt < UMBaseTest
+class GetSetSockOptTest < UMBaseTest
   def test_getsockopt_setsockopt
     fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
@@ -700,5 +700,58 @@ class GetSetSockOpt < UMBaseTest
 
     reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
     assert_equal 1, reuseaddr
+  end
+end
+
+class SynchronizeTest < UMBaseTest
+  def test_synchronize_single
+    skip if !machine.respond_to?(:synchronize)
+
+    m = UM::Mutex.new
+
+    buf = []
+    machine.synchronize(m) do
+      buf << 1
+    end
+    machine.synchronize(m) do
+      buf << 2
+    end
+
+    assert_equal [1, 2], buf
+    assert_equal 0, machine.pending_count
+  end
+
+  def test_synchronize_pair
+    skip if !machine.respond_to?(:synchronize)
+    m = UM::Mutex.new
+
+    buf = []
+
+    f1 = Fiber.new do
+      machine.synchronize(m) do
+        buf << 11
+        machine.sleep(0.01)
+        buf << 12
+      end
+      buf << 13
+      machine.yield
+    end
+
+    f2 = Fiber.new do
+      machine.synchronize(m) do
+        buf << 21
+        machine.sleep(0.01)
+        buf << 22
+      end
+      buf << 23
+      machine.yield
+    end
+
+    machine.schedule(f1, nil)
+    machine.schedule(f2, nil)
+
+    machine.sleep(0.03)
+    assert_equal [11, 12, 13, 21, 22, 23], buf
+    assert_equal 0, machine.pending_count
   end
 end

@@ -28,7 +28,9 @@ def get_config
     single_issuer_flag: combined_version >= 600,
     prep_bind:          combined_version >= 611,
     prep_listen:        combined_version >= 611,
-    prep_cmd_sock:      combined_version >= 608  
+    prep_cmd_sock:      combined_version >= 607,
+    prep_futex:         combined_version >= 607,
+    prep_waitid:        combined_version >= 607
   }
 end
 
@@ -58,6 +60,8 @@ $defs << '-DHAVE_IORING_SETUP_COOP_TASKRUN' if config[:coop_taskrun_flag]
 $defs << '-DHAVE_IO_URING_PREP_BIND'        if config[:prep_bind]
 $defs << '-DHAVE_IO_URING_PREP_LISTEN'      if config[:prep_listen]
 $defs << '-DHAVE_IO_URING_PREP_CMD_SOCK'    if config[:prep_cmd_sock]
+$defs << '-DHAVE_IO_URING_PREP_FUTEX'       if config[:prep_futex]
+$defs << '-DHAVE_IO_URING_PREP_WAITID'      if config[:prep_waitid]
 $CFLAGS << ' -Wno-pointer-arith'
 
 CONFIG['optflags'] << ' -fno-strict-aliasing'

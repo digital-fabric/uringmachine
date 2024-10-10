@@ -48,7 +48,7 @@ inline void um_teardown(struct um *machine) {
   um_free_buffer_linked_list(machine);
 }
 
-static inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
+struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe;
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
@@ -209,7 +209,7 @@ static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
-static inline VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags) {
+VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags) {
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
   
   VALUE value = um_fiber_switch(machine);
@@ -537,7 +537,7 @@ VALUE um_accept_each(struct um *machine, int fd) {
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
   struct um_op *op = um_op_idle_checkout(machine, OP_SOCKET);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
   um_await_op(machine, op, &result, NULL);
@@ -549,7 +549,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
   struct um_op *op = um_op_idle_checkout(machine, OP_CONNECT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_connect(sqe, fd, addr, addrlen);
   um_await_op(machine, op, &result, NULL);
@@ -561,7 +561,7 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   struct um_op *op = um_op_idle_checkout(machine, OP_SEND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
   um_await_op(machine, op, &result, NULL);
@@ -573,7 +573,7 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   struct um_op *op = um_op_idle_checkout(machine, OP_RECV);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
@@ -620,7 +620,7 @@ VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
   struct um_op *op = um_op_idle_checkout(machine, OP_BIND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_bind(sqe, fd, addr, addrlen);
   um_await_op(machine, op, &result, NULL);
@@ -632,7 +632,7 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 VALUE um_listen(struct um *machine, int fd, int backlog) {
   struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_listen(sqe, fd, backlog);
   um_await_op(machine, op, &result, NULL);
@@ -645,9 +645,9 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   int value;
 
 #ifdef HAVE_IO_URING_PREP_CMD_SOCK
-  struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
+  struct um_op *op = um_op_idle_checkout(machine, OP_GETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
   um_await_op(machine, op, &result, NULL);
@@ -664,9 +664,9 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
 
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 #ifdef HAVE_IO_URING_PREP_CMD_SOCK
-  struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
+  struct um_op *op = um_op_idle_checkout(machine, OP_SETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  int result = 0;
+  __s32 result = 0;
 
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
   um_await_op(machine, op, &result, NULL);

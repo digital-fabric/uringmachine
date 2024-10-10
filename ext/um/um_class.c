@@ -5,12 +5,14 @@ VALUE cUM;
 
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
+  rb_gc_mark_movable(machine->self);
   um_mark_op_linked_list(&machine->list_pending);
   um_mark_op_linked_list(&machine->list_scheduled);
 }
 
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
+  machine->self = rb_gc_location(machine->self);
   um_compact_op_linked_list(&machine->list_pending);
   um_compact_op_linked_list(&machine->list_scheduled);
 }
@@ -222,6 +224,14 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
 }
 
+#ifdef HAVE_IO_URING_PREP_FUTEX
+VALUE UM_synchronize(VALUE self, VALUE futex) {
+  struct um *machine = get_machine(self);
+  struct um_futex *futex_data = Mutex_data(futex);
+  return um_mutex_synchronize(machine, &futex_data->value);
+}
+#endif
+
 VALUE UM_debug(VALUE self) {
   struct um *machine = get_machine(self);
   return um_debug(machine);
@@ -260,6 +270,10 @@ void Init_UM(void) {
   rb_define_method(cUM, "listen", UM_listen, 2);
   rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
+
+  #ifdef HAVE_IO_URING_PREP_FUTEX
+  rb_define_method(cUM, "synchronize", UM_synchronize, 1);
+  #endif
 
   rb_define_method(cUM, "debug", UM_debug, 0);
 
