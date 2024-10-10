@@ -284,23 +284,32 @@ class ReadEachTest < UMBaseTest
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
+    p 11
     w << 'foo'
+    p 12
 
     e = nil
     begin
+      p 13
       machine.read_each(r.fileno, bgid) do |buf|
+        p [14, buf]
         raise 'hi'
       end
     rescue => e
+      p [15, e]
     end
 
+    p 16
     assert_kind_of RuntimeError, e
     assert_equal 'hi', e.message
 
+    p 17
     # since the write fd is still open, the read_each impl is supposed to cancel
     # the op, which is done asynchronously.
     assert_equal 1, machine.pending_count
+    p 18
     machine.snooze
+    p 19
     assert_equal 0, machine.pending_count
   end
 
