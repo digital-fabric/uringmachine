@@ -325,7 +325,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
 
   um_raise_on_error_result(result);
   um_update_read_buffer(machine, buffer, buffer_offset, result, flags);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_multishot_ensure(VALUE arg) {
@@ -467,7 +467,7 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   um_buffer_checkin(machine, buffer);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_close(struct um *machine, int fd) {
@@ -481,7 +481,7 @@ VALUE um_close(struct um *machine, int fd) {
   um_await_op(machine, op, &result, &flags);
 
   um_raise_on_error_result(result);
-  return INT2FIX(fd);
+  return INT2NUM(fd);
 }
 
 VALUE um_accept(struct um *machine, int fd) {
@@ -495,7 +495,7 @@ VALUE um_accept(struct um *machine, int fd) {
   um_await_op(machine, op, &result, &flags);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_accept_each_safe_loop(VALUE arg) {
@@ -516,7 +516,7 @@ VALUE um_accept_each_safe_loop(VALUE arg) {
     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
       um_raise_on_error_result(result);
       if (likely(result > 0))
-        rb_yield(INT2FIX(result));
+        rb_yield(INT2NUM(result));
       else
         return Qnil;
     }
@@ -543,7 +543,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
@@ -556,7 +556,7 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
@@ -569,7 +569,7 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
@@ -584,7 +584,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
 
   um_raise_on_error_result(result);
   um_update_read_buffer(machine, buffer, 0, result, flags);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
@@ -597,7 +597,7 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_listen(struct um *machine, int fd, int backlog) {
@@ -610,34 +610,48 @@ VALUE um_listen(struct um *machine, int fd, int backlog) {
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
 }
 
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
+  int value;
+
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
-  int value;
 
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
-
   um_await_op(machine, op, &result, NULL);
-
   um_raise_on_error_result(result);
-  return INT2FIX(value);
+#else
+  socklen_t nvalue = sizeof(value);
+  int res = getsockopt(fd, level, opt, &value, &nvalue);
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+#endif
+
+  return INT2NUM(value);
 }
 
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   int result = 0;
 
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
-
   um_await_op(machine, op, &result, NULL);
 
   um_raise_on_error_result(result);
-  return INT2FIX(result);
+  return INT2NUM(result);
+#else
+  int value_i = numeric_value(opt);
+  int res = setsockopt(fd, level, opt, &value_i, sizeof(value_i));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  return INT2NUM(0);
+#endif
 }
 
 VALUE um_debug(struct um *machine) {

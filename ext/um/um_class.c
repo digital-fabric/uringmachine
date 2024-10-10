@@ -57,7 +57,7 @@ VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
 
 VALUE UM_pending_count(VALUE self) {
   struct um *machine = get_machine(self);
-  return INT2FIX(machine->pending_count);
+  return INT2NUM(machine->pending_count);
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -208,30 +208,13 @@ static inline int numeric_value(VALUE value) {
 }
 
 VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um *machine = get_machine(self);
   return um_getsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt));
-#else
-  int value;
-  socklen_t nvalue = sizeof(value);
-  int res = getsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value, &nvalue);
-  if (res)
-    rb_syserr_fail(errno, strerror(errno));
-  return INT2NUM(value);
-#endif
 }
 
 VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um *machine = get_machine(self);
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
-#else
-  int value_i = numeric_value(opt);
-  int res = setsockopt(NUM2INT(fd), NUM2INT(level), NUM2INT(opt), &value_i, sizeof(value_i));
-  if (res)
-    rb_syserr_fail(errno, strerror(errno));
-  return INT2NUM(0);
-#endif
 }
 
 VALUE UM_debug(VALUE self) {
