@@ -758,6 +758,8 @@ end
 
 class QueueTest < UMBaseTest
   def test_push_pop_1
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
     assert_equal 0, q.count
     machine.push(q, :foo)
@@ -771,6 +773,8 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_2
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
     buf = []
 
@@ -802,6 +806,8 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_3
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
     buf = []
 
@@ -828,6 +834,8 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_4
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
     buf = []
 
@@ -855,6 +863,8 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_shift_1
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
 
     machine.push(q, :foo)
@@ -867,6 +877,8 @@ class QueueTest < UMBaseTest
   end
 
   def test_shift_shift_1
+    skip if !machine.respond_to?(:synchronize)
+
     q = UM::Queue.new
 
     machine.unshift(q, :foo)
