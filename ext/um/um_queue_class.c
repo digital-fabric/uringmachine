@@ -46,9 +46,15 @@ VALUE Queue_initialize(VALUE self) {
   return self;
 }
 
+VALUE Queue_count(VALUE self) {
+  struct um_queue *queue = Queue_data(self);
+  return UINT2NUM(queue->count);
+}
+
 void Init_Queue(void) {
   cQueue = rb_define_class_under(cUM, "Queue", rb_cObject);
   rb_define_alloc_func(cQueue, Queue_allocate);
 
   rb_define_method(cQueue, "initialize", Queue_initialize, 0);
+  rb_define_method(cQueue, "count", Queue_count, 0);
 }

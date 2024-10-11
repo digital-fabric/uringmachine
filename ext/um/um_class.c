@@ -244,6 +244,18 @@ VALUE UM_queue_pop(VALUE self, VALUE queue) {
   return um_queue_pop(machine, que);
 }
 
+VALUE UM_queue_unshift(VALUE self, VALUE queue, VALUE value) {
+  struct um *machine = get_machine(self);
+  struct um_queue *que = Queue_data(queue);
+  return um_queue_unshift(machine, que, value);
+}
+
+VALUE UM_queue_shift(VALUE self, VALUE queue) {
+  struct um *machine = get_machine(self);
+  struct um_queue *que = Queue_data(queue);
+  return um_queue_shift(machine, que);
+}
+
 #endif
 
 VALUE UM_debug(VALUE self) {
@@ -289,6 +301,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
   rb_define_method(cUM, "push", UM_queue_push, 2);
   rb_define_method(cUM, "pop", UM_queue_pop, 1);
+  rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
+  rb_define_method(cUM, "shift", UM_queue_shift, 1);
   #endif
 
   rb_define_method(cUM, "debug", UM_debug, 0);

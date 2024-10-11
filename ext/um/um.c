@@ -176,8 +176,12 @@ loop:
   // in the case where:
   // - first time through loop
   // - there are SQEs waiting to be submitted
-  // - the runqueue head references the current fiber
-  // we need to submit events and check completions without blocking
+  // - the runqueue head references the current fiber we need to submit events
+  //   and check completions without blocking.
+  //
+  // Bear in mind that if there's no activity, and the e.g. main fiber does a
+  // snooze, this only submits new SQE's. In a test condition, for any CQEs to
+  // arrive, the test code should do a second snooze.
   if (
     unlikely(
       first_iteration && machine->unsubmitted_count &&

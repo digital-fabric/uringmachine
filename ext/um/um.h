@@ -151,6 +151,7 @@ struct um_queue {
   
   uint32_t num_waiters;
   uint32_t state;
+  uint32_t count;
 };
 
 extern VALUE cUM;
@@ -225,6 +226,8 @@ void um_queue_mark(struct um_queue *queue);
 void um_queue_compact(struct um_queue *queue);
 VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
+VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
+VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
 VALUE um_debug(struct um *machine);
 

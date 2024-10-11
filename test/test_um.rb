@@ -759,11 +759,15 @@ end
 class QueueTest < UMBaseTest
   def test_push_pop_1
     q = UM::Queue.new
+    assert_equal 0, q.count
     machine.push(q, :foo)
     machine.push(q, :bar)
+    assert_equal 2, q.count
 
     assert_equal :bar, machine.pop(q)
+    assert_equal 1, q.count
     assert_equal :foo, machine.pop(q)
+    assert_equal 0, q.count
   end
 
   def test_push_pop_2
@@ -786,9 +790,15 @@ class QueueTest < UMBaseTest
     assert_equal [], buf
 
     machine.push(q, :foo)
+    assert_equal 1, q.count
+    2.times { machine.snooze }
     assert_equal [[1, :foo]], buf
+
     machine.push(q, :bar)
+    assert_equal 1, q.count
+    2.times { machine.snooze }
     assert_equal [[1, :foo], [2, :bar]], buf
+    assert_equal 0, q.count
   end
 
   def test_push_pop_3
@@ -797,6 +807,7 @@ class QueueTest < UMBaseTest
 
     machine.push(q, :foo)
     machine.push(q, :bar)
+    assert_equal 2, q.count
 
     f1 = Fiber.new do
       buf << [1, machine.pop(q)]
@@ -813,6 +824,7 @@ class QueueTest < UMBaseTest
     3.times { machine.snooze }
 
     assert_equal [[1, :bar], [2, :foo]], buf.sort
+    assert_equal 0, q.count
   end
 
   def test_push_pop_4
@@ -820,6 +832,7 @@ class QueueTest < UMBaseTest
     buf = []
 
     machine.push(q, :foo)
+    assert_equal 1, q.count
 
     f1 = Fiber.new do
       buf << [1, machine.pop(q)]
@@ -837,7 +850,31 @@ class QueueTest < UMBaseTest
 
     assert_equal [[1, :foo]], buf
     machine.push(q, :bar)
-    machine.snooze
+    2.times { machine.snooze }
     assert_equal [[1, :foo], [2, :bar]], buf
+  end
+
+  def test_push_shift_1
+    q = UM::Queue.new
+
+    machine.push(q, :foo)
+    machine.push(q, :bar)
+    machine.push(q, :baz)
+
+    assert_equal :foo, machine.shift(q)
+    assert_equal :bar, machine.shift(q)
+    assert_equal :baz, machine.shift(q)
+  end
+
+  def test_shift_shift_1
+    q = UM::Queue.new
+
+    machine.unshift(q, :foo)
+    machine.unshift(q, :bar)
+    machine.unshift(q, :baz)
+
+    assert_equal :baz, machine.shift(q)
+    assert_equal :bar, machine.shift(q)
+    assert_equal :foo, machine.shift(q)
   end
 end

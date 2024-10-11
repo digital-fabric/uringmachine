@@ -24,7 +24,7 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
     um_raise_on_error_result(result);
 }
 
-void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
+void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters, int wait) {
   struct um_op *op = um_op_idle_checkout(machine, OP_SYNCHRONIZE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   __s32 result = 0;
@@ -34,8 +34,12 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
     sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY,
 		FUTEX2_SIZE_U32, 0
   );
-  um_await_op(machine, op, &result, NULL);
-  um_raise_on_error_result(result);
+  if (wait) {
+    um_await_op(machine, op, &result, NULL);
+    um_raise_on_error_result(result);
+  }
+  else
+    op->flags |= OP_F_DISCARD;
 }
 
 #define MUTEX_LOCKED    1
@@ -55,7 +59,7 @@ void um_mutex_lock(struct um *machine, uint32_t *futex) {
 void um_mutex_unlock(struct um *machine, uint32_t *futex) {
   *futex = MUTEX_UNLOCKED;
   // Wake up 1 waiting fiber
-  um_futex_wake(machine, futex, 1);
+  um_futex_wake(machine, futex, 1, 1);
 }
 
 VALUE synchronize_begin(VALUE arg) {
@@ -81,6 +85,7 @@ VALUE um_mutex_synchronize(struct um *machine, uint32_t *futex) {
 void um_queue_init(struct um_queue *queue) {
   queue->head = queue->tail = queue->free_head = NULL;
   queue->state = QUEUE_EMPTY;
+  queue->count = 0;
 }
 
 void um_queue_free(struct um_queue *queue) {
@@ -134,7 +139,21 @@ void um_queue_entry_checkin(struct um_queue *queue, struct um_queue_entry *entry
   queue->free_head = entry;
 }
 
-VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value) {
+void queue_add_head(struct um_queue *queue, VALUE value) {
+  struct um_queue_entry *entry = um_queue_entry_checkout(queue);
+
+  entry->next = queue->head;
+  if (queue->head) { 
+    queue->head->prev = entry;
+    queue->head = entry;
+  }
+  else
+    queue->head = queue->tail = entry;
+  entry->prev = NULL;
+  RB_OBJ_WRITE(queue->self, &entry->value, value);
+}
+
+void queue_add_tail(struct um_queue *queue, VALUE value) {
   struct um_queue_entry *entry = um_queue_entry_checkout(queue);
 
   entry->prev = queue->tail;
@@ -146,19 +165,61 @@ VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value) {
     queue->head = queue->tail = entry;
   entry->next = NULL;
   RB_OBJ_WRITE(queue->self, &entry->value, value);
+}
+
+VALUE queue_remove_head(struct um_queue *queue) {
+  struct um_queue_entry *entry = queue->head;
+  queue->head = entry->next;
+  if (!queue->head) queue->tail = NULL;
+
+  VALUE v = entry->value;
+  um_queue_entry_checkin(queue, entry);
+  return v;
+
+}
+
+VALUE queue_remove_tail(struct um_queue *queue) {
+  struct um_queue_entry *entry = queue->tail;
+  queue->tail = entry->prev;
+  if (!queue->tail) queue->head = NULL;
+
+  VALUE v = entry->value;
+  um_queue_entry_checkin(queue, entry);
+  return v;
+}
+
+VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value) {
+  queue_add_tail(queue, value);
+  queue->count++;
 
   queue->state = QUEUE_READY;
   if (queue->num_waiters)
-    um_futex_wake(machine, &queue->state, 1);
+    um_futex_wake(machine, &queue->state, 1, 0);
   return queue->self;
 }
+
+VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value) {
+  queue_add_head(queue, value);
+  queue->count++;
+
+  queue->state = QUEUE_READY;
+  if (queue->num_waiters)
+    um_futex_wake(machine, &queue->state, 1, 0);
+  return queue->self;
+}
+
+enum queue_op {
+  QUEUE_POP,
+  QUEUE_SHIFT
+};
 
 struct queue_wait_ctx {
   struct um *machine;
   struct um_queue *queue;
+  enum queue_op op;
 };
 
-VALUE um_queue_wait_begin(VALUE arg) {
+VALUE um_queue_remove_begin(VALUE arg) {
   struct queue_wait_ctx *ctx = (struct queue_wait_ctx *)arg;
   
   ctx->queue->num_waiters++;
@@ -171,22 +232,17 @@ VALUE um_queue_wait_begin(VALUE arg) {
   if (!ctx->queue->tail)
     rb_raise(rb_eRuntimeError, "Internal error: queue should be in ready state!");
 
-  struct um_queue_entry *entry = ctx->queue->tail;
-  ctx->queue->tail = entry->prev;
-  if (!ctx->queue->tail) ctx->queue->head = NULL;
-
-  VALUE v = entry->value;
-  um_queue_entry_checkin(ctx->queue, entry);
-  return v;
+  ctx->queue->count--;
+  return (ctx->op == QUEUE_POP ? queue_remove_tail : queue_remove_head)(ctx->queue);
 }
 
-VALUE um_queue_wait_ensure(VALUE arg) {
+VALUE um_queue_remove_ensure(VALUE arg) {
   struct queue_wait_ctx *ctx = (struct queue_wait_ctx *)arg;
 
   ctx->queue->num_waiters--;
 
   if (ctx->queue->num_waiters && ctx->queue->tail) {
-    um_futex_wake(ctx->machine, &ctx->queue->state, 1);
+    um_futex_wake(ctx->machine, &ctx->queue->state, 1, 0);
   }
   else if (!ctx->queue->tail) {
     ctx->queue->state = QUEUE_EMPTY;
@@ -196,9 +252,11 @@ VALUE um_queue_wait_ensure(VALUE arg) {
 }
 
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue) {
-  struct queue_wait_ctx ctx = {
-    .machine = machine, 
-    .queue = queue
-  };
-  return rb_ensure(um_queue_wait_begin, (VALUE)&ctx, um_queue_wait_ensure, (VALUE)&ctx);
+  struct queue_wait_ctx ctx = { .machine = machine, .queue = queue, .op = QUEUE_POP };
+  return rb_ensure(um_queue_remove_begin, (VALUE)&ctx, um_queue_remove_ensure, (VALUE)&ctx);
+}
+
+VALUE um_queue_shift(struct um *machine, struct um_queue *queue) {
+  struct queue_wait_ctx ctx = { .machine = machine, .queue = queue, .op = QUEUE_SHIFT };
+  return rb_ensure(um_queue_remove_begin, (VALUE)&ctx, um_queue_remove_ensure, (VALUE)&ctx);
 }
