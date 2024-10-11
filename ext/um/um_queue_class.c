@@ -37,8 +37,6 @@ inline struct um_queue *Queue_data(VALUE self) {
   return RTYPEDDATA_DATA(self);
 }
 
-void um_mutex_init(uint32_t *queue);
-
 VALUE Queue_initialize(VALUE self) {
   struct um_queue *queue = Queue_data(self);
   RB_OBJ_WRITE(self, &queue->self, self);

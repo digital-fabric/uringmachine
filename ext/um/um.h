@@ -131,9 +131,9 @@ struct um {
   unsigned int buffer_ring_count;
 };
 
-struct um_futex {
-  uint32_t value;
+struct um_mutex {
   VALUE self;
+  uint32_t state;
 };
 
 struct um_queue_entry {
@@ -215,10 +215,11 @@ VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
 
-struct um_futex *Mutex_data(VALUE self);
+struct um_mutex *Mutex_data(VALUE self);
 struct um_queue *Queue_data(VALUE self);
 
-VALUE um_mutex_synchronize(struct um *machine, uint32_t *mutex);
+void um_mutex_init(struct um_mutex *mutex);
+VALUE um_mutex_synchronize(struct um *machine, uint32_t *state);
 
 void um_queue_init(struct um_queue *queue);
 void um_queue_free(struct um_queue *queue);

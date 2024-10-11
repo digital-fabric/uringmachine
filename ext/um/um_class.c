@@ -226,10 +226,10 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 
 #ifdef HAVE_IO_URING_PREP_FUTEX
 
-VALUE UM_mutex_synchronize(VALUE self, VALUE futex) {
+VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
   struct um *machine = get_machine(self);
-  struct um_futex *futex_data = Mutex_data(futex);
-  return um_mutex_synchronize(machine, &futex_data->value);
+  struct um_mutex *mutex_data = Mutex_data(mutex);
+  return um_mutex_synchronize(machine, &mutex_data->state);
 }
 
 VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {

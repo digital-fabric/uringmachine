@@ -2,11 +2,6 @@
 #include <stdatomic.h>
 #include <linux/futex.h>
 
-struct sync_ctx {
-  struct um *machine;
-  uint32_t *futex;
-};
-
 #define FUTEX2_SIZE_U32		0x02
 
 void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
@@ -45,37 +40,42 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters, in
 #define MUTEX_LOCKED    1
 #define MUTEX_UNLOCKED  0
 
-void um_mutex_init(uint32_t *futex) {
-  *futex = MUTEX_UNLOCKED;
+void um_mutex_init(struct um_mutex *mutex) {
+  mutex->state = MUTEX_UNLOCKED;
 }
 
-void um_mutex_lock(struct um *machine, uint32_t *futex) {
-  while (*futex == MUTEX_LOCKED) {
-    um_futex_wait(machine, futex, MUTEX_LOCKED);
+void um_mutex_lock(struct um *machine, uint32_t *state) {
+  while (*state == MUTEX_LOCKED) {
+    um_futex_wait(machine, state, MUTEX_LOCKED);
   }
-  *futex = MUTEX_LOCKED;
+  *state = MUTEX_LOCKED;
 }
 
-void um_mutex_unlock(struct um *machine, uint32_t *futex) {
-  *futex = MUTEX_UNLOCKED;
+void um_mutex_unlock(struct um *machine, uint32_t *state) {
+  *state = MUTEX_UNLOCKED;
   // Wake up 1 waiting fiber
-  um_futex_wake(machine, futex, 1, 1);
+  um_futex_wake(machine, state, 1, 1);
 }
+
+struct sync_ctx {
+  struct um *machine;
+  uint32_t *state;
+};
 
 VALUE synchronize_begin(VALUE arg) {
   struct sync_ctx *ctx = (struct sync_ctx *)arg;
-  um_mutex_lock(ctx->machine, ctx->futex);
+  um_mutex_lock(ctx->machine, ctx->state);
   return rb_yield(Qnil);
 }
 
 VALUE synchronize_ensure(VALUE arg) {
   struct sync_ctx *ctx = (struct sync_ctx *)arg;
-  um_mutex_unlock(ctx->machine, ctx->futex);
+  um_mutex_unlock(ctx->machine, ctx->state);
   return Qnil;
 }
 
-VALUE um_mutex_synchronize(struct um *machine, uint32_t *futex) {
-  struct sync_ctx ctx = { .machine = machine, .futex = futex };
+VALUE um_mutex_synchronize(struct um *machine, uint32_t *state) {
+  struct sync_ctx ctx = { .machine = machine, .state = state };
   return rb_ensure(synchronize_begin, (VALUE)&ctx, synchronize_ensure, (VALUE)&ctx);
 }
 
