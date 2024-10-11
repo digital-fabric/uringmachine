@@ -225,11 +225,25 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 }
 
 #ifdef HAVE_IO_URING_PREP_FUTEX
-VALUE UM_synchronize(VALUE self, VALUE futex) {
+
+VALUE UM_mutex_synchronize(VALUE self, VALUE futex) {
   struct um *machine = get_machine(self);
   struct um_futex *futex_data = Mutex_data(futex);
   return um_mutex_synchronize(machine, &futex_data->value);
 }
+
+VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {
+  struct um *machine = get_machine(self);
+  struct um_queue *que = Queue_data(queue);
+  return um_queue_push(machine, que, value);
+}
+
+VALUE UM_queue_pop(VALUE self, VALUE queue) {
+  struct um *machine = get_machine(self);
+  struct um_queue *que = Queue_data(queue);
+  return um_queue_pop(machine, que);
+}
+
 #endif
 
 VALUE UM_debug(VALUE self) {
@@ -272,7 +286,9 @@ void Init_UM(void) {
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
 
   #ifdef HAVE_IO_URING_PREP_FUTEX
-  rb_define_method(cUM, "synchronize", UM_synchronize, 1);
+  rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
+  rb_define_method(cUM, "push", UM_queue_push, 2);
+  rb_define_method(cUM, "pop", UM_queue_pop, 1);
   #endif
 
   rb_define_method(cUM, "debug", UM_debug, 0);

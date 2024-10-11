@@ -36,6 +36,7 @@ void um_mutex_init(uint32_t *futex);
 
 VALUE Mutex_initialize(VALUE self) {
   struct um_futex *futex = Mutex_data(self);
+  futex->self = self;
   um_mutex_init(&futex->value);
   return self;
 }

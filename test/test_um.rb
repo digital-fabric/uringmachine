@@ -755,3 +755,89 @@ class SynchronizeTest < UMBaseTest
     assert_equal 0, machine.pending_count
   end
 end
+
+class QueueTest < UMBaseTest
+  def test_push_pop_1
+    q = UM::Queue.new
+    machine.push(q, :foo)
+    machine.push(q, :bar)
+
+    assert_equal :bar, machine.pop(q)
+    assert_equal :foo, machine.pop(q)
+  end
+
+  def test_push_pop_2
+    q = UM::Queue.new
+    buf = []
+
+    f1 = Fiber.new do
+      buf << [1, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f1, nil)
+
+    f2 = Fiber.new do
+      buf << [2, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f2, nil)
+
+    machine.snooze
+    assert_equal [], buf
+
+    machine.push(q, :foo)
+    assert_equal [[1, :foo]], buf
+    machine.push(q, :bar)
+    assert_equal [[1, :foo], [2, :bar]], buf
+  end
+
+  def test_push_pop_3
+    q = UM::Queue.new
+    buf = []
+
+    machine.push(q, :foo)
+    machine.push(q, :bar)
+
+    f1 = Fiber.new do
+      buf << [1, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f1, nil)
+
+    f2 = Fiber.new do
+      buf << [2, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f2, nil)
+
+    3.times { machine.snooze }
+
+    assert_equal [[1, :bar], [2, :foo]], buf.sort
+  end
+
+  def test_push_pop_4
+    q = UM::Queue.new
+    buf = []
+
+    machine.push(q, :foo)
+
+    f1 = Fiber.new do
+      buf << [1, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f1, nil)
+
+    f2 = Fiber.new do
+      buf << [2, machine.pop(q)]
+      machine.yield
+    end
+    machine.schedule(f2, nil)
+
+    machine.snooze
+
+    assert_equal [[1, :foo]], buf
+    machine.push(q, :bar)
+    machine.snooze
+    assert_equal [[1, :foo], [2, :bar]], buf
+  end
+end

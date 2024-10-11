@@ -136,8 +136,26 @@ struct um_futex {
   VALUE self;
 };
 
+struct um_queue_entry {
+  struct um_queue_entry *prev;
+  struct um_queue_entry *next;
+  VALUE value;
+};
+
+struct um_queue {
+  VALUE self;
+
+  struct um_queue_entry *head;
+  struct um_queue_entry *tail;
+  struct um_queue_entry *free_head;
+  
+  uint32_t num_waiters;
+  uint32_t state;
+};
+
 extern VALUE cUM;
 extern VALUE cMutex;
+extern VALUE cQueue;
 
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
@@ -170,8 +188,6 @@ void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, 
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
-struct um_futex *Mutex_data(VALUE self);
-
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 
@@ -198,7 +214,17 @@ VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
 
+struct um_futex *Mutex_data(VALUE self);
+struct um_queue *Queue_data(VALUE self);
+
 VALUE um_mutex_synchronize(struct um *machine, uint32_t *mutex);
+
+void um_queue_init(struct um_queue *queue);
+void um_queue_free(struct um_queue *queue);
+void um_queue_mark(struct um_queue *queue);
+void um_queue_compact(struct um_queue *queue);
+VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value);
+VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 
 VALUE um_debug(struct um *machine);
 
