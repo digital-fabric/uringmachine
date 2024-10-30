@@ -6,10 +6,10 @@ require 'socket'
 class SchedulingTest < UMBaseTest
   def test_schedule_and_yield
     buf = []
-    cur = Fiber.current
+    main = Fiber.current
     f = Fiber.new do |x|
       buf << [21, x]
-      machine.schedule(cur, 21)
+      machine.schedule(main, 21)
       buf << 22
       x = machine.yield
       buf << [23, x]
@@ -50,11 +50,12 @@ class SchedulingTest < UMBaseTest
   end
 
   def test_interrupt
-    cur = Fiber.current
+    main = Fiber.current
     e = CustomError.new
     f = Fiber.new do
-      machine.interrupt(cur, e)
       assert_equal 1, machine.pending_count
+      machine.interrupt(main, e)
+      assert_equal 2, machine.pending_count
       machine.yield
     end
     
@@ -103,6 +104,7 @@ class SchedulingTest < UMBaseTest
       end
     rescue => e
     end
+    p e: e
 
     assert_equal 1, machine.pending_count
     machine.snooze
@@ -158,6 +160,34 @@ class SleepTest < UMBaseTest
     t1 = monotonic_clock
     assert_in_range 0.09..0.13, t1 - t0
     assert_equal 0.1, res
+  end
+
+  class C; end
+
+  def test_sleep_interrupted
+    t0 = monotonic_clock
+    ret = machine.timeout(0.03, C) do
+      machine.sleep 1
+    end
+    t1 = monotonic_clock
+    assert_in_range 0.02..0.04, t1 - t0
+    assert_kind_of C, ret
+  end
+
+  class D < RuntimeError; end
+
+  def test_sleep_with_timeout
+    t0 = monotonic_clock
+    ret = begin
+      machine.timeout(0.03, D) do
+        machine.sleep 1
+      end
+    rescue => e
+      e
+    end
+    t1 = monotonic_clock
+    assert_in_range 0.02..0.04, t1 - t0
+    assert_kind_of D, ret
   end
 end
 

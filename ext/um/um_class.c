@@ -6,15 +6,12 @@ VALUE cUM;
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
   rb_gc_mark_movable(machine->self);
-  um_mark_op_linked_list(&machine->list_pending);
-  um_mark_op_linked_list(&machine->list_scheduled);
 }
 
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
   machine->self = rb_gc_location(machine->self);
-  um_compact_op_linked_list(&machine->list_pending);
-  um_compact_op_linked_list(&machine->list_scheduled);
+  machine->poll_fiber = rb_gc_location(machine->poll_fiber);
 }
 
 static void UM_free(void *ptr) {
@@ -92,8 +89,7 @@ VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
 
 VALUE UM_sleep(VALUE self, VALUE duration) {
   struct um *machine = get_machine(self);
-  um_sleep(machine, NUM2DBL(duration));
-  return duration;
+  return um_sleep(machine, NUM2DBL(duration));
 }
 
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
