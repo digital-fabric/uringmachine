@@ -95,8 +95,10 @@ static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe)
   VALUE value   = op->value;
   int inhibit_fiber_transfer = unlikely((cqe->res == -ECANCELED) && (op->flags & OP_F_IGNORE_CANCELED));
 
-  if (unlikely(op->flags & OP_F_FREE_ON_COMPLETED))
+  if (unlikely(op->flags & OP_F_TRANSIENT)) {
+    um_op_transient_remove(machine, op);
     free(op);
+  }
   else {
     op->cqe_res   = cqe->res;
     op->cqe_flags = cqe->flags;
@@ -197,9 +199,10 @@ inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = malloc(sizeof(struct um_op));
   memset(op, 0, sizeof(struct um_op));
   op->kind = OP_SCHEDULE;
-  op->flags = OP_F_FREE_ON_COMPLETED;
+  op->flags = OP_F_TRANSIENT;
   RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
   RB_OBJ_WRITE(machine->self, &op->value, value);
+  um_op_transient_add(machine, op);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_nop(sqe);
@@ -228,7 +231,8 @@ VALUE um_timeout_ensure(VALUE arg) {
 
   if (!um_op_completed_p(ctx->op)) {
     um_submit_cancel_op(ctx->machine, ctx->op);
-    ctx->op->flags |= OP_F_FREE_ON_COMPLETED | OP_F_IGNORE_CANCELED;
+    ctx->op->flags |= OP_F_TRANSIENT | OP_F_IGNORE_CANCELED;
+    um_op_transient_add(ctx->machine, ctx->op);
   }
 
   return Qnil;
@@ -271,6 +275,9 @@ inline VALUE um_sleep(struct um *machine, double duration) {
       if (um_op_completed_p(&op)) break;
     }
   }
+
+  RB_GC_GUARD(op.fiber);
+  RB_GC_GUARD(op.value);
 
   // if (result != -ETIME) um_raise_on_error_result(result);
   return raise_if_exception(ret);

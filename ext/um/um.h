@@ -44,9 +44,9 @@ enum op_kind {
   OP_SYNCHRONIZE
 };
 
-#define OP_F_COMPLETED          (1U << 0)
-#define OP_F_FREE_ON_COMPLETED  (1U << 1)
-#define OP_F_IGNORE_CANCELED    (1U << 2)
+#define OP_F_COMPLETED        (1U << 0)
+#define OP_F_TRANSIENT        (1U << 1)
+#define OP_F_IGNORE_CANCELED  (1U << 2)
 
 struct um_op {
   enum op_kind kind;
@@ -57,6 +57,9 @@ struct um_op {
 
   __s32 cqe_res;
   __u32 cqe_flags;
+
+  struct um_op *transient_prev;
+  struct um_op *transient_next;
 
   struct __kernel_timespec ts; // used for timeout operation
 };
@@ -92,6 +95,8 @@ struct um {
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
   unsigned int buffer_ring_count;
+
+  struct um_op *transient_head;
 };
 
 struct um_mutex {
@@ -125,6 +130,10 @@ void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
 
 void um_op_clear(struct um *machine, struct um_op *op);
+void um_op_transient_add(struct um *machine, struct um_op *op);
+void um_op_transient_remove(struct um *machine, struct um_op *op);
+void um_op_transient_mark(struct um *machine);
+void um_op_transient_compact(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
 void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
