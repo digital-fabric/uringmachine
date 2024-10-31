@@ -152,7 +152,6 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
-VALUE um_await_op(struct um *machine, struct um_op *op);
 
 VALUE um_await(struct um *machine);
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
@@ -191,8 +190,6 @@ VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
-
-VALUE um_debug(struct um *machine);
 
 void um_define_net_constants(VALUE mod);
 

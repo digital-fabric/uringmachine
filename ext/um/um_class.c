@@ -258,11 +258,6 @@ VALUE UM_queue_shift(VALUE self, VALUE queue) {
 
 #endif
 
-VALUE UM_debug(VALUE self) {
-  struct um *machine = get_machine(self);
-  return um_debug(machine);
-}
-
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -304,8 +299,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   #endif
-
-  rb_define_method(cUM, "debug", UM_debug, 0);
 
   um_define_net_constants(cUM);
 }

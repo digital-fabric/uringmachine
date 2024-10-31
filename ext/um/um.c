@@ -184,10 +184,14 @@ static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
-VALUE um_await_op(struct um *machine, struct um_op *op) {
-  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
-  
-  return um_fiber_switch(machine);
+#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
+
+void um_cancel_and_wait(struct um *machine, struct um_op *op) {
+  um_submit_cancel_op(machine, op);
+  while (true) {
+    um_fiber_switch(machine);
+    if (um_op_completed_p(op)) break;
+  }
 }
 
 inline VALUE um_await(struct um *machine) {
@@ -224,8 +228,6 @@ struct op_ensure_ctx {
   int flags;
 };
 
-#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
-
 VALUE um_timeout_ensure(VALUE arg) {
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
 
@@ -256,48 +258,297 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
 }
 
-inline VALUE um_sleep(struct um *machine, double duration) {
+/*
+*/
+
+static inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
+  memset(op, 0, sizeof(struct um_op));
+  op->kind = OP_SLEEP;
+  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
+  op->value = Qnil;
+}
+
+VALUE um_sleep(struct um *machine, double duration) {
   struct um_op op;
-  memset(&op, 0, sizeof(struct um_op));
-  op.kind = OP_SLEEP;
+  um_prep_op(machine, &op, OP_SLEEP);
   op.ts = um_double_to_timespec(duration);
-  RB_OBJ_WRITE(machine->self, &op.value, DBL2NUM(duration));
- 
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_timeout(sqe, &op.ts, 0, 0);
+  VALUE ret = um_fiber_switch(machine);
 
-  VALUE ret = um_await_op(machine, &op);
-
-  if (!um_op_completed_p(&op)) {
-    um_submit_cancel_op(machine, &op);
-    for (;;) {
-      um_await_op(machine, &op);
-      if (um_op_completed_p(&op)) break;
-    }
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    if (op.cqe_res != -ETIME) um_raise_on_error_result(op.cqe_res);
+    ret = DBL2NUM(duration);
   }
 
-  RB_GC_GUARD(op.fiber);
-  RB_GC_GUARD(op.value);
-
-  // if (result != -ETIME) um_raise_on_error_result(result);
+  RB_GC_GUARD(ret);
   return raise_if_exception(ret);
 }
 
-// inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_READ);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-//   __u32 flags = 0;
+inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_READ);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
+  io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
+  VALUE ret = um_fiber_switch(machine);
 
-//   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
-//   io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    um_update_read_buffer(machine, buffer, buffer_offset, op.cqe_res, op.cqe_flags);
+    ret = INT2NUM(op.cqe_res);
+  }
 
-//   um_await_op(machine, op, &result, &flags);
+  RB_GC_GUARD(buffer);
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
 
-//   um_raise_on_error_result(result);
-//   um_update_read_buffer(machine, buffer, buffer_offset, result, flags);
-//   return INT2NUM(result);
-// }
+VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_WRITE);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  const int str_len = RSTRING_LEN(str);
+  if (len > str_len) len = str_len;
+  struct um_buffer *buffer = um_buffer_checkout(machine, len);  
+  memcpy(buffer->ptr, RSTRING_PTR(str), len);
+  io_uring_prep_write(sqe, fd, buffer->ptr, len, -1);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  um_buffer_checkin(machine, buffer);
+
+  RB_GC_GUARD(str);
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_close(struct um *machine, int fd) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_CLOSE);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_close(sqe, fd);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(fd);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_accept(struct um *machine, int fd) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_ACCEPT);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_SOCKET);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_socket(sqe, domain, type, protocol, flags);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_CONNECT);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_connect(sqe, fd, addr, addrlen);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_SEND);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(buffer);
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_RECV);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
+  io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    um_update_read_buffer(machine, buffer, 0, op.cqe_res, op.cqe_flags);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(buffer);
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_BIND);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_bind(sqe, fd, addr, addrlen);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_listen(struct um *machine, int fd, int backlog) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_BIND);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_listen(sqe, fd, backlog);
+  VALUE ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
+  VALUE ret = Qnil;
+  int value;
+
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  struct um_op op;
+  um_prep_op(machine, &op, OP_GETSOCKOPT);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
+  ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(value);
+  }
+#else
+  socklen_t nvalue = sizeof(value);
+  int res = getsockopt(fd, level, opt, &value, &nvalue);
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  ret = INT2NUM(value);
+#endif
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
+  VALUE ret = Qnil;
+
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  struct um_op op;
+  um_prep_op(machine, &op, OP_GETSOCKOPT);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
+  ret = um_fiber_switch(machine);
+
+  if (!um_op_completed_p(&op))
+    um_cancel_and_wait(machine, &op);
+  else {
+    um_raise_on_error_result(op.cqe_res);
+    ret = INT2NUM(op.cqe_res);
+  }
+#else
+  int res = setsockopt(fd, level, opt, &value, sizeof(value));
+  if (res)
+    rb_syserr_fail(errno, strerror(errno));
+  ret = INT2NUM(0);
+#endif
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // VALUE um_multishot_ensure(VALUE arg) {
 //   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
@@ -422,53 +673,6 @@ inline VALUE um_sleep(struct um *machine, double duration) {
 //   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 // }
 
-// VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_WRITE);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-//   __u32 flags = 0;
-//   const int str_len = RSTRING_LEN(str);
-//   if (len > str_len) len = str_len;
-//   struct um_buffer *buffer = um_buffer_checkout(machine, len);
-  
-//   memcpy(buffer->ptr, RSTRING_PTR(str), len);
-//   io_uring_prep_write(sqe, fd, buffer->ptr, len, -1);
-
-//   um_await_op(machine, op, &result, &flags);
-//   um_buffer_checkin(machine, buffer);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_close(struct um *machine, int fd) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_CLOSE);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-//   __u32 flags = 0;
-
-//   io_uring_prep_close(sqe, fd);
-
-//   um_await_op(machine, op, &result, &flags);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(fd);
-// }
-
-// VALUE um_accept(struct um *machine, int fd) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_ACCEPT);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-//   __u32 flags = 0;
-
-//   io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
-
-//   um_await_op(machine, op, &result, &flags);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
 // VALUE um_accept_each_safe_loop(VALUE arg) {
 //   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
 //   __s32 result = 0;
@@ -504,55 +708,6 @@ inline VALUE um_sleep(struct um *machine, double duration) {
 //   return rb_ensure(um_accept_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 // }
 
-// VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_SOCKET);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_socket(sqe, domain, type, protocol, flags);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_CONNECT);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_connect(sqe, fd, addr, addrlen);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_SEND);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_RECV);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
-//   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   um_update_read_buffer(machine, buffer, 0, result, flags);
-//   return INT2NUM(result);
-// }
 
 // static inline void recv_each_prepare_op(struct op_ensure_ctx *ctx) {
 //   struct um_op *op = um_op_idle_checkout(ctx->machine, OP_RECV_MULTISHOT);
@@ -587,75 +742,3 @@ inline VALUE um_sleep(struct um *machine, double duration) {
 //   return rb_ensure(recv_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 // }
 
-// VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_BIND);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_bind(sqe, fd, addr, addrlen);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_listen(struct um *machine, int fd, int backlog) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_LISTEN);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_listen(sqe, fd, backlog);
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// }
-
-// VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
-//   int value;
-
-// #ifdef HAVE_IO_URING_PREP_CMD_SOCK
-//   struct um_op *op = um_op_idle_checkout(machine, OP_GETSOCKOPT);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
-//   um_await_op(machine, op, &result, NULL);
-//   um_raise_on_error_result(result);
-// #else
-//   socklen_t nvalue = sizeof(value);
-//   int res = getsockopt(fd, level, opt, &value, &nvalue);
-//   if (res)
-//     rb_syserr_fail(errno, strerror(errno));
-// #endif
-
-//   return INT2NUM(value);
-// }
-
-// VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
-// #ifdef HAVE_IO_URING_PREP_CMD_SOCK
-//   struct um_op *op = um_op_idle_checkout(machine, OP_SETSOCKOPT);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   __s32 result = 0;
-
-//   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
-//   um_await_op(machine, op, &result, NULL);
-
-//   um_raise_on_error_result(result);
-//   return INT2NUM(result);
-// #else
-//   int res = setsockopt(fd, level, opt, &value, sizeof(value));
-//   if (res)
-//     rb_syserr_fail(errno, strerror(errno));
-//   return INT2NUM(0);
-// #endif
-// }
-
-// VALUE um_debug(struct um *machine) {
-//   printf("::::::::::::::::::::::::::::::\n");
-//   printf("idle      head %p tail %p\n", machine->list_idle.head, machine->list_idle.tail);
-//   printf("pending   head %p tail %p\n", machine->list_pending.head, machine->list_pending.tail);
-//   printf("scheduled head %p tail %p\n", machine->list_scheduled.head, machine->list_scheduled.tail);
-//   printf("\n");
-//   return machine->self;
-// }
