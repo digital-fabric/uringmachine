@@ -634,6 +634,9 @@ class RecvEachTest < UMBaseTest
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
+    bgid2 = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 1, bgid2
+
     bufs = []
 
     machine.recv_each(fd, bgid, 0) do |buf|
