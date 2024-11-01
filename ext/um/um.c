@@ -177,7 +177,6 @@ VALUE um_poll(struct um *machine) {
 
 VALUE um_fiber_switch(struct um *machine) {
   static VALUE nil = Qnil;
-  INSPECT("um_fiber_switch poll_fiber", machine->poll_fiber);
   if (machine->poll_fiber != Qnil)
     return rb_fiber_transfer(machine->poll_fiber, 1, &nil);
   else
@@ -484,7 +483,7 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   VALUE ret = Qnil;
   int value;
 
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  #ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_GETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -497,13 +496,13 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
     um_raise_on_error_result(op.cqe_res);
     ret = INT2NUM(value);
   }
-#else
+  #else
   socklen_t nvalue = sizeof(value);
   int res = getsockopt(fd, level, opt, &value, &nvalue);
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   ret = INT2NUM(value);
-#endif
+  #endif
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -512,7 +511,7 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   VALUE ret = Qnil;
 
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
+  #ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_GETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -525,18 +524,109 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
     um_raise_on_error_result(op.cqe_res);
     ret = INT2NUM(op.cqe_res);
   }
-#else
+  #else
   int res = setsockopt(fd, level, opt, &value, sizeof(value));
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   ret = INT2NUM(0);
-#endif
+  #endif
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// VALUE um_accept_each_safe_loop(VALUE arg) {
+//   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+//   __s32 result = 0;
+//   __u32 flags = 0;
+
+//   while (1) {
+//     um_await_op(ctx->machine, ctx->op, &result, &flags);
+//     if (!ctx->op->aux)
+//       rb_raise(rb_eRuntimeError, "no associated schedule op found");
+//     ctx->op->aux = NULL;
+//     if (!ctx->op->list_results.head) {
+//       // this shouldn't happen!
+//       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
+//     }
+
+//     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
+//       um_raise_on_error_result(result);
+//       if (likely(result > 0))
+//         rb_yield(INT2NUM(result));
+//       else
+//         return Qnil;
+//     }
+//   }
+// }
+
+
+VALUE um_accept_each_begin(VALUE arg) {
+  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
+  io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
+
+  while (true) {
+    VALUE ret = um_fiber_switch(ctx->machine);
+    INSPECT("* ret", ret);
+    printf("cqe res %d flags %d\n", ctx->op->cqe_res, ctx->op->cqe_flags);
+    if (!um_op_completed_p(ctx->op))
+      return raise_if_exception(ret);
+    else {
+      um_raise_on_error_result(ctx->op->cqe_res);
+      rb_yield(INT2NUM(ctx->op->cqe_res));
+      if (!(ctx->op->cqe_flags & IORING_CQE_F_MORE))
+        break;
+      else
+        ctx->op->flags &= ~ OP_F_COMPLETED;
+    }
+  }
+
+  return Qnil;
+}
+
+VALUE um_accept_each_ensure(VALUE arg) {
+  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  if (!um_op_completed_p(ctx->op))
+    um_cancel_and_wait(ctx->machine, ctx->op);
+  return Qnil;
+}
+
+VALUE um_accept_each(struct um *machine, int fd) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT);
+  
+  struct op_ensure_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
+  return rb_ensure(um_accept_each_begin, (VALUE)&ctx, um_accept_each_ensure, (VALUE)&ctx);
+}
 
 
 
@@ -670,41 +760,6 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 // VALUE um_read_each(struct um *machine, int fd, int bgid) {
 //   struct op_ensure_ctx ctx = { .machine = machine, .fd = fd, .bgid = bgid, .read_buf = NULL };
 //   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
-// }
-
-// VALUE um_accept_each_safe_loop(VALUE arg) {
-//   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-//   __s32 result = 0;
-//   __u32 flags = 0;
-
-//   while (1) {
-//     um_await_op(ctx->machine, ctx->op, &result, &flags);
-//     if (!ctx->op->aux)
-//       rb_raise(rb_eRuntimeError, "no associated schedule op found");
-//     ctx->op->aux = NULL;
-//     if (!ctx->op->list_results.head) {
-//       // this shouldn't happen!
-//       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
-//     }
-
-//     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-//       um_raise_on_error_result(result);
-//       if (likely(result > 0))
-//         rb_yield(INT2NUM(result));
-//       else
-//         return Qnil;
-//     }
-//   }
-// }
-
-// VALUE um_accept_each(struct um *machine, int fd) {
-//   struct um_op *op = um_op_idle_checkout(machine, OP_ACCEPT_MULTISHOT);
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-//   io_uring_prep_multishot_accept(sqe, fd, NULL, NULL, 0);
-//   op->flags |= OP_F_MULTISHOT;
-
-//   struct op_ensure_ctx ctx = { .machine = machine, .op = op, .read_buf = NULL };
-//   return rb_ensure(um_accept_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
 // }
 
 
