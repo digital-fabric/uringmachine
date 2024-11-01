@@ -82,11 +82,13 @@ static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe)
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return Qnil;
 
-  machine->pending_count--;
+  if (!(cqe->flags & IORING_CQE_F_MORE))
+    machine->pending_count--;
 
+  int more = (cqe->flags & IORING_CQE_F_MORE);
   printf(
-    ": process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d\n",
-    op, op->kind, op->flags, cqe->res, cqe->flags
+    ": process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d pending %d more %d\n",
+    op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count, more
   );
   INSPECT("  fiber", op->fiber);
   INSPECT("  value", op->value);
@@ -115,6 +117,7 @@ static inline VALUE um_wait_for_and_process_cqe(struct um *machine) {
   };
 
   rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  printf("um_wait_for_cqe_without_gvl result: %d\n", ctx.result);
   if (unlikely(ctx.result < 0)) {
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
   }
@@ -127,8 +130,41 @@ static inline bool cq_ring_needs_flush(struct io_uring *ring) {
   return IO_URING_READ_ONCE(*ring->sq.kflags) & IORING_SQ_CQ_OVERFLOW;
 }
 
-static inline unsigned um_process_ready_cqes(struct um *machine, VALUE *ret) {
-  unsigned total_count = 0;
+// static inline unsigned um_process_ready_cqes(struct um *machine, VALUE *ret) {
+//   unsigned total_count = 0;
+// iterate:
+//   bool overflow_checked = false;
+//   struct io_uring_cqe *cqe;
+//   unsigned head;
+//   unsigned count = 0;
+//   io_uring_for_each_cqe(&machine->ring, head, cqe) {
+//     ++count;
+//     *ret = um_process_cqe(machine, cqe);
+//   }
+//   io_uring_cq_advance(&machine->ring, count);
+//   total_count += count;
+
+//   if (overflow_checked) goto done;
+
+//   if (cq_ring_needs_flush(&machine->ring)) {
+//     io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
+//     overflow_checked = true;
+//     goto iterate;
+//   }
+
+// done:
+//   return total_count;
+// }
+
+// static inline VALUE um_wait_for_and_process_ready_cqes(struct um *machine) {
+//   VALUE ret = um_wait_for_and_process_cqe(machine);
+//   um_process_ready_cqes(machine, &ret);
+//   RB_GC_GUARD(ret);
+//   return ret;
+// }
+
+// returns true if a cqe was processed
+static inline int um_process_next_ready_cqe(struct um *machine, VALUE *ret) {
 iterate:
   bool overflow_checked = false;
   struct io_uring_cqe *cqe;
@@ -137,9 +173,10 @@ iterate:
   io_uring_for_each_cqe(&machine->ring, head, cqe) {
     ++count;
     *ret = um_process_cqe(machine, cqe);
+    break;
   }
   io_uring_cq_advance(&machine->ring, count);
-  total_count += count;
+  if (count > 0) return true;
 
   if (overflow_checked) goto done;
 
@@ -150,37 +187,36 @@ iterate:
   }
 
 done:
-  return total_count;
+  return false;
 }
 
-static inline VALUE um_wait_for_and_process_ready_cqes(struct um *machine) {
-  VALUE ret = um_wait_for_and_process_cqe(machine);
-  um_process_ready_cqes(machine, &ret);
-  RB_GC_GUARD(ret);
-  return ret;
-}
+// VALUE um_poll(struct um *machine) {
+//   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, rb_fiber_current());
+//   INSPECT("um_poll >>", machine->poll_fiber);
+// // await:
+//   VALUE ret = um_wait_for_and_process_ready_cqes(machine);
+//   // INSPECT("um_poll ret", ret);
+//   // printf("unsubmitted_count: %d\n", machine->unsubmitted_count);
+//   // if (machine->unsubmitted_count && (ret == Qnil))
+//   //   goto await;
+//   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, Qnil);
 
-VALUE um_poll(struct um *machine) {
-  RB_OBJ_WRITE(machine->self, &machine->poll_fiber, rb_fiber_current());
-  INSPECT("um_poll >>", machine->poll_fiber);
-// await:
-  VALUE ret = um_wait_for_and_process_ready_cqes(machine);
-  // INSPECT("um_poll ret", ret);
-  // printf("unsubmitted_count: %d\n", machine->unsubmitted_count);
-  // if (machine->unsubmitted_count && (ret == Qnil))
-  //   goto await;
-  RB_OBJ_WRITE(machine->self, &machine->poll_fiber, Qnil);
-
-  INSPECT("um_poll <<", ret);
-  return ret;
-}
+//   INSPECT("um_poll <<", ret);
+//   return ret;
+// }
 
 VALUE um_fiber_switch(struct um *machine) {
-  static VALUE nil = Qnil;
-  if (machine->poll_fiber != Qnil)
-    return rb_fiber_transfer(machine->poll_fiber, 1, &nil);
-  else
-    return um_poll(machine);
+  VALUE ret = Qnil;
+  if (!um_process_next_ready_cqe(machine, &ret))
+    ret = um_wait_for_and_process_cqe(machine);
+  
+  return ret;
+
+  // static VALUE nil = Qnil;
+  // if (machine->poll_fiber != Qnil)
+  //   return rb_fiber_transfer(machine->poll_fiber, 1, &nil);
+  // else
+  //   return um_poll(machine);
 }
 
 static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
@@ -590,6 +626,7 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 
 
 VALUE um_accept_each_begin(VALUE arg) {
+  printf("== um_accept_each_begin\n");
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
@@ -601,12 +638,11 @@ VALUE um_accept_each_begin(VALUE arg) {
     if (!um_op_completed_p(ctx->op))
       return raise_if_exception(ret);
     else {
+      int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
+      if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
       um_raise_on_error_result(ctx->op->cqe_res);
       rb_yield(INT2NUM(ctx->op->cqe_res));
-      if (!(ctx->op->cqe_flags & IORING_CQE_F_MORE))
-        break;
-      else
-        ctx->op->flags &= ~ OP_F_COMPLETED;
+      if (!more) break;
     }
   }
 
@@ -614,6 +650,7 @@ VALUE um_accept_each_begin(VALUE arg) {
 }
 
 VALUE um_accept_each_ensure(VALUE arg) {
+  printf("== um_accept_each_ensure\n");
   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
   if (!um_op_completed_p(ctx->op))
     um_cancel_and_wait(ctx->machine, ctx->op);
