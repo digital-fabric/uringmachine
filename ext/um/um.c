@@ -162,12 +162,16 @@ static inline VALUE um_wait_for_and_process_ready_cqes(struct um *machine) {
 
 VALUE um_poll(struct um *machine) {
   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, rb_fiber_current());
-await:
+  INSPECT("um_poll >>", machine->poll_fiber);
+// await:
   VALUE ret = um_wait_for_and_process_ready_cqes(machine);
-  if (machine->unsubmitted_count && (ret == Qnil))
-    goto await;
+  // INSPECT("um_poll ret", ret);
+  // printf("unsubmitted_count: %d\n", machine->unsubmitted_count);
+  // if (machine->unsubmitted_count && (ret == Qnil))
+  //   goto await;
   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, Qnil);
 
+  INSPECT("um_poll <<", ret);
   return ret;
 }
 
