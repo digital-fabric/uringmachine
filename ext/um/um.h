@@ -23,7 +23,6 @@
 enum op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
-  OP_INTERRUPT,
   OP_MULTISHOT_AUX,
   OP_SLEEP,
   OP_READ,
@@ -41,7 +40,8 @@ enum op_kind {
   OP_LISTEN,
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
-  OP_SYNCHRONIZE
+  OP_FUTEX_WAIT,
+  OP_FUTEX_WAKE
 };
 
 #define OP_F_COMPLETED        (1U << 0)
@@ -145,6 +145,7 @@ VALUE um_raise_exception(VALUE v);
 
 #define raise_if_exception(v) (um_value_is_exception_p(v) ? um_raise_exception(v) : v)
 
+void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind);
 void um_raise_on_error_result(int result);
 void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
@@ -153,7 +154,11 @@ VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result,
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
+VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
+#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
+void um_cancel_and_wait(struct um *machine, struct um_op *op);
+
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);

@@ -177,6 +177,7 @@ VALUE um_poll(struct um *machine) {
 
 VALUE um_fiber_switch(struct um *machine) {
   static VALUE nil = Qnil;
+  INSPECT("um_fiber_switch poll_fiber", machine->poll_fiber);
   if (machine->poll_fiber != Qnil)
     return rb_fiber_transfer(machine->poll_fiber, 1, &nil);
   else
@@ -187,8 +188,6 @@ static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
-
-#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
 
 void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   um_submit_cancel_op(machine, op);
@@ -244,13 +243,19 @@ VALUE um_timeout_ensure(VALUE arg) {
   return Qnil;
 }
 
+void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
+  memset(op, 0, sizeof(struct um_op));
+  op->kind = OP_SLEEP;
+  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
+  op->value = Qnil;
+}
+
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
   struct um_op *op = malloc(sizeof(struct um_op));
-  memset(op, 0, sizeof(struct um_op));
-  op->kind = OP_TIMEOUT;
+  um_prep_op(machine, op, OP_TIMEOUT);
   op->ts = um_double_to_timespec(NUM2DBL(interval));
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
   RB_OBJ_WRITE(machine->self, &op->value, rb_funcall(class, ID_new, 0));
@@ -260,16 +265,6 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
 
   struct op_ensure_ctx ctx = { .machine = machine, .op = op };
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
-}
-
-/*
-*/
-
-static inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
-  memset(op, 0, sizeof(struct um_op));
-  op->kind = OP_SLEEP;
-  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
-  op->value = Qnil;
 }
 
 VALUE um_sleep(struct um *machine, double duration) {

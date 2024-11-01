@@ -809,27 +809,41 @@ class QueueTest < UMBaseTest
     buf = []
 
     f1 = Fiber.new do
+      p 11
       buf << [1, machine.pop(q)]
+      p 12
       machine.yield
     end
+
+    p 1
     machine.schedule(f1, nil)
 
     f2 = Fiber.new do
+      p 21
       buf << [2, machine.pop(q)]
+      p 22
       machine.yield
     end
+
+    p 2
     machine.schedule(f2, nil)
 
+    p 3
     machine.snooze
     assert_equal [], buf
 
+    p 4
     machine.push(q, :foo)
     assert_equal 1, q.count
+    p 5
     2.times { machine.snooze }
     assert_equal [[1, :foo]], buf
 
+    p 6
     machine.push(q, :bar)
     assert_equal 1, q.count
+
+    p 7
     2.times { machine.snooze }
     assert_equal [[1, :foo], [2, :bar]], buf
     assert_equal 0, q.count

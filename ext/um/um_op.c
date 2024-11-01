@@ -7,9 +7,9 @@ void um_op_clear(struct um *machine, struct um_op *op) {
 }
 
 void um_op_transient_add(struct um *machine, struct um_op *op) {
-  printf("transient_add %p transient_head %p\n", op, machine->transient_head);
-  INSPECT("  fiber", op->fiber);
-  INSPECT("  value", op->fiber);
+  // printf("transient_add %p kind %d transient_head %p\n", op, op->kind, machine->transient_head);
+  // INSPECT("  fiber", op->fiber);
+  // INSPECT("  value", op->fiber);
   if (machine->transient_head) {
     op->transient_next = machine->transient_head;
     machine->transient_head->transient_prev = op;
@@ -18,10 +18,10 @@ void um_op_transient_add(struct um *machine, struct um_op *op) {
 }
 
 void um_op_transient_remove(struct um *machine, struct um_op *op) {
-  printf("transient_remove %p transient_head %p\n", op, machine->transient_head);
-  INSPECT("  fiber", op->fiber);
-  INSPECT("  value", op->fiber);
-  printf("  prev %p next %p\n", op->transient_prev, op->transient_next);
+  // printf("transient_remove %p transient_head %p\n", op, machine->transient_head);
+  // INSPECT("  fiber", op->fiber);
+  // INSPECT("  value", op->fiber);
+  // printf("  prev %p next %p\n", op->transient_prev, op->transient_next);
   if (op->transient_prev)
     op->transient_prev->transient_next = op->transient_next;
   if (op->transient_next)
