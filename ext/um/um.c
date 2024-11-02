@@ -253,7 +253,7 @@ inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
   um_schedule(machine, fiber, value);
 }
 
-struct op_ensure_ctx {
+struct op_ctx {
   struct um *machine;
   struct um_op *op;
   int fd;
@@ -266,7 +266,7 @@ struct op_ensure_ctx {
 };
 
 VALUE um_timeout_ensure(VALUE arg) {
-  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  struct op_ctx *ctx = (struct op_ctx *)arg;
 
   if (!um_op_completed_p(ctx->op)) {
     um_submit_cancel_op(ctx->machine, ctx->op);
@@ -297,7 +297,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_timeout(sqe, &op->ts, 0, 0);
 
-  struct op_ensure_ctx ctx = { .machine = machine, .op = op };
+  struct op_ctx ctx = { .machine = machine, .op = op };
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
 }
 
@@ -598,34 +598,8 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 
 
 
-// VALUE um_accept_each_safe_loop(VALUE arg) {
-//   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-//   __s32 result = 0;
-//   __u32 flags = 0;
-
-//   while (1) {
-//     um_await_op(ctx->machine, ctx->op, &result, &flags);
-//     if (!ctx->op->aux)
-//       rb_raise(rb_eRuntimeError, "no associated schedule op found");
-//     ctx->op->aux = NULL;
-//     if (!ctx->op->list_results.head) {
-//       // this shouldn't happen!
-//       rb_raise(rb_eRuntimeError, "no result found for accept_each loop");
-//     }
-
-//     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-//       um_raise_on_error_result(result);
-//       if (likely(result > 0))
-//         rb_yield(INT2NUM(result));
-//       else
-//         return Qnil;
-//     }
-//   }
-// }
-
-
 VALUE accept_each_begin(VALUE arg) {
-  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  struct op_ctx *ctx = (struct op_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
 
@@ -646,9 +620,13 @@ VALUE accept_each_begin(VALUE arg) {
 }
 
 VALUE multishot_ensure(VALUE arg) {
-  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  struct op_ctx *ctx = (struct op_ctx *)arg;
   if (!um_op_completed_p(ctx->op))
     um_cancel_and_wait(ctx->machine, ctx->op);
+
+  if (ctx->read_buf)
+    free(ctx->read_buf);
+
   return Qnil;
 }
 
@@ -656,12 +634,39 @@ VALUE um_accept_each(struct um *machine, int fd) {
   struct um_op op;
   um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT);
   
-  struct op_ensure_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
+  struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
   return rb_ensure(accept_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }
 
+int um_read_each_singleshot_loop(struct op_ctx *ctx) {
+  struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
+  ctx->read_maxlen = desc->buf_size;
+  ctx->read_buf = malloc(desc->buf_size);
+  int total = 0;
+
+  while (1) {
+    um_prep_op(ctx->machine, ctx->op, OP_READ);
+    struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
+    io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
+    VALUE ret = um_fiber_switch(ctx->machine);
+
+    if (um_op_completed_p(ctx->op)) {
+      um_raise_on_error_result(ctx->op->cqe_res);
+      if (!ctx->op->cqe_res) return total;
+
+      VALUE buf = rb_str_new(ctx->read_buf, ctx->op->cqe_res);
+      total += ctx->op->cqe_res;
+      rb_yield(buf);
+      RB_GC_GUARD(buf);
+    }
+    else
+      return raise_if_exception(ret);
+  }
+}
+
 // returns true if more results are expected
-int read_each_multishot_yield_result(struct op_ensure_ctx *ctx, int *total) {
+int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
+  printf("!!! read_each_multishot_process_result op %p res %d flags %d\n", ctx->op, ctx->op->cqe_res, ctx->op->cqe_flags);
   if (ctx->op->cqe_res == 0)
     return false;
 
@@ -674,17 +679,49 @@ int read_each_multishot_yield_result(struct op_ensure_ctx *ctx, int *total) {
   // https://github.com/axboe/liburing/issues/1185. We detect this by checking
   // if the F_MORE flag is absent, then switch to single shot mode.
 
-  // if (!eof && !(ctx->op->cqe_flags & IORING_CQE_F_MORE)) {
-  //   um_op_state_transition(ctx->machine, ctx->op, OP_IDLE);
-  //   *total = um_read_each_safe_loop_singleshot(ctx, *total);
-  //   return 0;
-  // }
+  if (unlikely(!(ctx->op->cqe_flags & IORING_CQE_F_MORE))) {
+    *total += um_read_each_singleshot_loop(ctx);
+    return false;
+  }
 
   return true;
 }
 
+VALUE read_each_begin(VALUE arg) {
+  struct op_ctx *ctx = (struct op_ctx *)arg;
+
+  printf("read_each_begin op %p fd %d bgid %d\n", ctx->op, ctx->fd, ctx->bgid);
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
+  io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
+	sqe->flags |= IOSQE_BUFFER_SELECT;
+  int total = 0;
+
+  while (true) {
+    VALUE ret = um_fiber_switch(ctx->machine);
+    if (!um_op_completed_p(ctx->op))
+      return raise_if_exception(ret);
+    else {
+      int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
+      if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
+      um_raise_on_error_result(ctx->op->cqe_res);
+      if (!read_each_multishot_process_result(ctx, &total))
+        return INT2NUM(total);
+    }
+  }
+
+  return Qnil;
+}
+
+VALUE um_read_each(struct um *machine, int fd, int bgid) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_READ_MULTISHOT);
+
+  struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL };
+  return rb_ensure(read_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+}
+
 VALUE recv_each_begin(VALUE arg) {
-  struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
+  struct op_ctx *ctx = (struct op_ctx *)arg;
 
   printf("recv_each_begin op %p fd %d bgid %d\n", ctx->op, ctx->fd, ctx->bgid);
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
@@ -701,7 +738,7 @@ VALUE recv_each_begin(VALUE arg) {
       int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
       if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
       um_raise_on_error_result(ctx->op->cqe_res);
-      if (!read_each_multishot_yield_result(ctx, &total))
+      if (!read_each_multishot_process_result(ctx, &total))
         return INT2NUM(total);
     }
   }
@@ -713,142 +750,6 @@ VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
   struct um_op op;
   um_prep_op(machine, &op, OP_RECV_MULTISHOT);
 
-  struct op_ensure_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
+  struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
   return rb_ensure(recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-// VALUE um_multishot_ensure(VALUE arg) {
-//   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-//   if (!ctx->op) return Qnil;
-
-//   if (ctx->op->aux) {
-//     um_op_state_transition(ctx->machine, ctx->op->aux, OP_IDLE);
-//     ctx->op->aux = NULL;
-//   }
-
-//   if (ctx->op->flags & OP_F_MULTISHOT) {
-//   __s32 result = 0;
-//   __u32 flags = 0;
-//     while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-//       if (!(flags & IORING_CQE_F_MORE)) {
-//         um_op_state_transition(ctx->machine, ctx->op, OP_IDLE);
-//         return Qnil;
-//       }
-//     }
-//   }
-
-//   if (ctx->op->state == OP_PENDING) {
-//     um_submit_cancel_op(ctx->machine, ctx->op);
-//     ctx->op->flags |= OP_F_DISCARD;
-//   }
-//   else
-//     um_op_state_transition(ctx->machine, ctx->op, OP_IDLE);
-//   return Qnil;
-// }
-
-// static inline void um_read_each_prepare_op(struct op_ensure_ctx *ctx, int singleshot_mode) {
-//   struct um_op *op = um_op_idle_checkout(ctx->machine, singleshot_mode ? OP_READ : OP_READ_MULTISHOT);
-//   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, op);
-
-//   if (singleshot_mode)
-//     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
-//   else {
-//     io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
-//     op->flags |= OP_F_MULTISHOT;
-//   }
-//   ctx->op = op;
-// }
-
-// int um_read_each_safe_loop_singleshot(struct op_ensure_ctx *ctx, int total) {
-//   struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
-//   __s32 result = 0;
-//   ctx->read_maxlen = desc->buf_size;
-//   ctx->read_buf = malloc(desc->buf_size);
-
-//   while (1) {
-//     um_read_each_prepare_op(ctx, 1);
-//     um_await_op(ctx->machine, ctx->op, &result, NULL);
-//     ctx->op = NULL;
-//     um_raise_on_error_result(result);
-//     if (!result) return total;
-
-//     total += result;
-//     VALUE buf = rb_str_new(ctx->read_buf, result);
-//     rb_yield(buf);
-//     RB_GC_GUARD(buf);
-//   }
-// }
-
-// int read_each_multishot_process_results(struct op_ensure_ctx *ctx, int *total) {
-//   __s32 result = 0;
-//   __u32 flags = 0;
-//   __s32 bad_result = 0;
-//   int eof = 0;
-
-//   while (um_op_result_shift(ctx->machine, ctx->op, &result, &flags)) {
-//     if (result < 0) {
-//       bad_result = result;
-//     }
-//     else if (result == 0) {
-//       eof = 1;
-//     }
-//     else {
-//       *total += result;
-//       VALUE buf = um_get_string_from_buffer_ring(ctx->machine, ctx->bgid, result, flags);
-//       rb_yield(buf);
-//       RB_GC_GUARD(buf);
-//     }
-
-//     // TTY devices might not support multishot reads:
-//     // https://github.com/axboe/liburing/issues/1185. We detect this by checking
-//     // if the F_MORE flag is absent, then switch to single shot mode.
-//     if (!(flags & IORING_CQE_F_MORE)) {
-//       um_op_state_transition(ctx->machine, ctx->op, OP_IDLE);
-//       *total = um_read_each_safe_loop_singleshot(ctx, *total);
-//       return 0;
-//     }
-//     if (bad_result || eof) break;
-//   }
-
-//   if (bad_result)
-//     um_raise_on_error_result(bad_result);
-
-//   return eof ? 0 : 1;
-// }
-
-// VALUE um_read_each_safe_loop(VALUE arg) {
-//   struct op_ensure_ctx *ctx = (struct op_ensure_ctx *)arg;
-//   int total = 0;
-
-//   um_read_each_prepare_op(ctx, 0);
-
-//   while (1) {
-//     um_await_op(ctx->machine, ctx->op, NULL, NULL);
-//     if (!ctx->op->aux)
-//       rb_raise(rb_eRuntimeError, "no associated schedule op found");
-//     ctx->op->aux = NULL;
-//     if (!ctx->op->list_results.head)
-//       rb_raise(rb_eRuntimeError, "no result found!\n");
-
-//     if (!read_each_multishot_process_results(ctx, &total))
-//       return INT2NUM(total);
-//   }
-// }
-
-// VALUE um_read_each(struct um *machine, int fd, int bgid) {
-//   struct op_ensure_ctx ctx = { .machine = machine, .fd = fd, .bgid = bgid, .read_buf = NULL };
-//   return rb_ensure(um_read_each_safe_loop, (VALUE)&ctx, um_multishot_ensure, (VALUE)&ctx);
-// }
-
-
