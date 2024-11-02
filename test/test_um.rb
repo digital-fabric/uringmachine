@@ -49,12 +49,12 @@ class SchedulingTest < UMBaseTest
     assert_equal [e], buf
   end
 
-  def test_interrupt
+  def test_schedule_exception
     main = Fiber.current
     e = CustomError.new
     f = Fiber.new do
       assert_equal 1, machine.pending_count
-      machine.interrupt(main, e)
+      machine.schedule(main, e)
       assert_equal 2, machine.pending_count
       machine.yield
     end

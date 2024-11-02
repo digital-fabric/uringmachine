@@ -80,12 +80,6 @@ VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   return self;
 }
 
-VALUE UM_interrupt(VALUE self, VALUE fiber, VALUE value) {
-  struct um *machine = get_machine(self);
-  um_interrupt(machine, fiber, value);
-  return self;
-}
-
 VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
   struct um *machine = get_machine(self);
   return um_timeout(machine, interval, class);
@@ -271,7 +265,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "yield", UM_yield, 0);
   rb_define_method(cUM, "schedule", UM_schedule, 2);
-  rb_define_method(cUM, "interrupt", UM_interrupt, 2);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
 
   rb_define_method(cUM, "sleep", UM_sleep, 1);

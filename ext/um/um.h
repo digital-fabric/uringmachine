@@ -23,7 +23,6 @@
 enum op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
-  OP_MULTISHOT_AUX,
   OP_SLEEP,
   OP_READ,
   OP_READ_MULTISHOT,
@@ -162,7 +161,6 @@ int um_check_completion(struct um *machine, struct um_op *op);
 #define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
-void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);

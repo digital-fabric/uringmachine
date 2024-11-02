@@ -199,10 +199,6 @@ inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   io_uring_prep_nop(sqe);
 }
 
-inline void um_interrupt(struct um *machine, VALUE fiber, VALUE value) {
-  um_schedule(machine, fiber, value);
-}
-
 struct op_ctx {
   struct um *machine;
   struct um_op *op;
