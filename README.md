@@ -32,6 +32,8 @@ UringMachine is based on my experience marrying Ruby and io_uring:
 - [IOU](https://github.com/digital-fabric/iou) - a low-level asynchronous API
   for using io_uring from Ruby.
 
+### Learnings
+
 Some important learnings from those two projects, in no particular order:
 
 - Monkey-patching is not a good solution, long term. You need to deal with
@@ -72,6 +74,30 @@ based on the following principles:
 - Simpler management of pending operation lifetime.
 - Do not insist on structured concurrency, just provide the APIs necessary to
   create actors and to supervise the execution of fibers.
+
+### Cancellation
+
+When working with io_uring, managing the life cycle of asynchronous operations
+is quite tricky, especially with regards to cancellation. This is due to the
+fact each operation lives on both sides of the userspace-kernel divide. This
+means that when cancelling an operation, we cannot free, or dispose of any
+resources associated with the operation, until we know for sure that the kernel
+side is also done with the operation.
+
+As stated above, working with fibers allows us to keep operation metadata and
+associated data (such as buffers etc) on the stack, which can greatly simplify
+the managing of the operation's lifetime, as well as significantly reduce heap
+allocations.
+
+When a cancellation does occur, UringMachine issues a cancellation (using
+`io_uring_prep_cancel64`), and then waits for the corresponding CQE (with a
+`-ECANCELED` result).
+
+### No scheduler, no runqueue
+
+UringMachine manages the scheduling of fibers by relying solely on io_uring
+CQE's. There's no list of ready fibers, no runqueue. Manually scheduling fibers
+is done by issuing `NOP` operations and then processing CQE's one by one.
 
 ## Example
 
