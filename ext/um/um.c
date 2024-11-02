@@ -639,6 +639,8 @@ VALUE um_accept_each(struct um *machine, int fd) {
 }
 
 int um_read_each_singleshot_loop(struct op_ctx *ctx) {
+  printf("!!!um_read_each_singleshot_loop\n");
+
   struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
   ctx->read_maxlen = desc->buf_size;
   ctx->read_buf = malloc(desc->buf_size);
