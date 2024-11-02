@@ -18,6 +18,7 @@ class UringMachine
       @@fiber_map.delete(f)
       # yield control
       self.yield
+      p :bad_bad_bad
     end
     schedule(f, value)
     @@fiber_map[f] = true

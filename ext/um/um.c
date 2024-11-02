@@ -78,11 +78,11 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   return NULL;
 }
 
-static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
+static inline int um_process_cqe(struct um *machine, struct io_uring_cqe *cqe, VALUE *ret) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) {
     io_uring_cq_advance(&machine->ring, 1);
-    return Qnil;
+    return false;
   }
 
   if (!(cqe->flags & IORING_CQE_F_MORE))
@@ -92,8 +92,6 @@ static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe)
   //   ": process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d pending %d\n",
   //   op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count
   // );
-  // INSPECT("  fiber", op->fiber);
-  // INSPECT("  value", op->value);
 
   VALUE fiber   = op->fiber;
   VALUE value   = op->value;
@@ -110,10 +108,14 @@ static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe)
   }
   io_uring_cq_advance(&machine->ring, 1);
 
-  return inhibit_fiber_transfer ? Qnil : rb_fiber_transfer(fiber, 1, &value);
+  if (inhibit_fiber_transfer)
+    return false;
+
+  *ret = rb_fiber_transfer(fiber, 1, &value);
+  return true;
 }
 
-static inline VALUE um_wait_for_and_process_cqe(struct um *machine) {
+static inline int um_wait_for_and_process_cqe(struct um *machine, VALUE *ret) {
   struct wait_for_cqe_ctx ctx = {
     .machine = machine,
     .cqe = NULL
@@ -123,31 +125,22 @@ static inline VALUE um_wait_for_and_process_cqe(struct um *machine) {
   if (unlikely(ctx.result < 0)) {
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
   }
-  return um_process_cqe(machine, ctx.cqe);
-}
-
-// copied from liburing/queue.c
-static inline bool cq_ring_needs_flush(struct io_uring *ring) {
-  return IO_URING_READ_ONCE(*ring->sq.kflags) & IORING_SQ_CQ_OVERFLOW;
+  return um_process_cqe(machine, ctx.cqe, ret);
 }
 
 // returns true if a cqe was processed
 static inline int um_process_next_ready_cqe(struct um *machine, VALUE *ret) {
   struct io_uring_cqe *cqe;
   int err = io_uring_peek_cqe(&machine->ring, &cqe);
-  if (!err) {
-    *ret = um_process_cqe(machine, cqe);
-    return 1;
-  }
-
-  return 0;
+  return err ? false : um_process_cqe(machine, cqe, ret);
 }
 
 VALUE um_fiber_switch(struct um *machine) {
   VALUE ret = Qnil;
-  if (!um_process_next_ready_cqe(machine, &ret))
-    ret = um_wait_for_and_process_cqe(machine);
-  
+  while (true) {
+    if (um_process_next_ready_cqe(machine, &ret) || um_wait_for_and_process_cqe(machine, &ret))
+      break;
+  }
   return ret;
 }
 
@@ -156,7 +149,7 @@ static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
-void um_cancel_and_wait(struct um *machine, struct um_op *op) {
+inline void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   um_submit_cancel_op(machine, op);
   while (true) {
     um_fiber_switch(machine);
@@ -164,7 +157,7 @@ void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   }
 }
 
-int um_check_completion(struct um *machine, struct um_op *op) {
+inline int um_check_completion(struct um *machine, struct um_op *op) {
   if (!um_op_completed_p(op)) {
     um_cancel_and_wait(machine, op);
     return 0;
@@ -179,8 +172,7 @@ inline VALUE um_await(struct um *machine) {
   return raise_if_exception(v);
 }
 
-void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
-  // printf("um_prep_op %p kind %d\n", op, kind);
+inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
   memset(op, 0, sizeof(struct um_op));
   op->kind = kind;
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
@@ -189,7 +181,8 @@ void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
 
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = malloc(sizeof(struct um_op));
-  um_prep_op(machine, op, OP_SCHEDULE);
+  memset(op, 0, sizeof(struct um_op));
+  op->kind = OP_SCHEDULE;
   op->flags = OP_F_TRANSIENT;
   RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
   RB_OBJ_WRITE(machine->self, &op->value, value);
@@ -482,13 +475,13 @@ VALUE accept_each_begin(VALUE arg) {
     VALUE ret = um_fiber_switch(ctx->machine);
     if (!um_op_completed_p(ctx->op))
       return raise_if_exception(ret);
-    else {
-      int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
-      if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
-      um_raise_on_error_result(ctx->op->cqe_res);
-      rb_yield(INT2NUM(ctx->op->cqe_res));
-      if (!more) break;
-    }
+    
+    int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
+    if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
+    um_raise_on_error_result(ctx->op->cqe_res);
+    rb_yield(INT2NUM(ctx->op->cqe_res));
+    if (!more)
+      break;
   }
 
   return Qnil;

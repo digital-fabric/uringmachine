@@ -34,7 +34,7 @@ void um_op_transient_remove(struct um *machine, struct um_op *op) {
 void um_op_transient_mark(struct um *machine) {
   struct um_op *op = machine->transient_head;
   while (op) {
-    printf("mark %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
+    // printf("mark %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
     struct um_op *next = op->transient_next;
     rb_gc_mark_movable(op->fiber);
     rb_gc_mark_movable(op->value);
@@ -45,7 +45,7 @@ void um_op_transient_mark(struct um *machine) {
 void um_op_transient_compact(struct um *machine) {
   struct um_op *op = machine->transient_head;
   while (op) {
-    printf("compact %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
+    // printf("compact %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
     struct um_op *next = op->transient_next;
     op->fiber = rb_gc_location(op->fiber);
     op->value = rb_gc_location(op->value);

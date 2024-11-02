@@ -16,13 +16,13 @@ def http_handle_connection(fd)
   end
 
   buf = +''
-  while !done && @machine.read(fd, buf, 8192) > 0
-    parser << buf
-  end
-  # @machine.read_each(fd, @bgid) do
-  #   parser << _1
-  #   break if done
+  # while !done && @machine.read(fd, buf, 8192) > 0
+  #   parser << buf
   # end
+  @machine.read_each(fd, @bgid) do
+    parser << _1
+    break if done
+  end
   # puts "Connection closed on fd #{fd}"
 rescue => e
   puts "Error while handling connection on fd #{fd}: #{e.inspect}"
@@ -36,15 +36,21 @@ def http_send_response(fd, body)
   @machine.write(fd, msg)
 end
 
-trap('SIGINT') { exit! }
+trap('SIGINT') { exit }
 
 server_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+@machine.setsockopt(server_fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
 @machine.bind(server_fd, '127.0.0.1', 1234)
 @machine.listen(server_fd, UM::SOMAXCONN)
 puts 'Listening on port 1234'
 
-at_exit { @machine.close(server_fd) rescue nil }
+at_exit do
+  puts "Closing server FD"
+  @machine.close(server_fd) rescue nil
+  puts "done!"
+end
 
 @machine.accept_each(server_fd) do |fd|
   @machine.spin(fd) { http_handle_connection _1 }
 end
+p :post_accept_each
