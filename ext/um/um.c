@@ -80,18 +80,20 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
 
 static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
-  if (unlikely(!op)) return Qnil;
+  if (unlikely(!op)) {
+    io_uring_cq_advance(&machine->ring, 1);
+    return Qnil;
+  }
 
   if (!(cqe->flags & IORING_CQE_F_MORE))
     machine->pending_count--;
 
-  int more = (cqe->flags & IORING_CQE_F_MORE);
-  printf(
-    ": process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d pending %d more %d\n",
-    op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count, more
-  );
-  INSPECT("  fiber", op->fiber);
-  INSPECT("  value", op->value);
+  // printf(
+  //   ": process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d pending %d\n",
+  //   op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count
+  // );
+  // INSPECT("  fiber", op->fiber);
+  // INSPECT("  value", op->value);
 
   VALUE fiber   = op->fiber;
   VALUE value   = op->value;
@@ -106,6 +108,7 @@ static inline VALUE um_process_cqe(struct um *machine, struct io_uring_cqe *cqe)
     op->cqe_flags = cqe->flags;
     op->flags |= OP_F_COMPLETED;
   }
+  io_uring_cq_advance(&machine->ring, 1);
 
   return inhibit_fiber_transfer ? Qnil : rb_fiber_transfer(fiber, 1, &value);
 }
@@ -120,7 +123,6 @@ static inline VALUE um_wait_for_and_process_cqe(struct um *machine) {
   if (unlikely(ctx.result < 0)) {
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
   }
-  io_uring_cqe_seen(&machine->ring, ctx.cqe);
   return um_process_cqe(machine, ctx.cqe);
 }
 
@@ -129,80 +131,17 @@ static inline bool cq_ring_needs_flush(struct io_uring *ring) {
   return IO_URING_READ_ONCE(*ring->sq.kflags) & IORING_SQ_CQ_OVERFLOW;
 }
 
-// static inline unsigned um_process_ready_cqes(struct um *machine, VALUE *ret) {
-//   unsigned total_count = 0;
-// iterate:
-//   bool overflow_checked = false;
-//   struct io_uring_cqe *cqe;
-//   unsigned head;
-//   unsigned count = 0;
-//   io_uring_for_each_cqe(&machine->ring, head, cqe) {
-//     ++count;
-//     *ret = um_process_cqe(machine, cqe);
-//   }
-//   io_uring_cq_advance(&machine->ring, count);
-//   total_count += count;
-
-//   if (overflow_checked) goto done;
-
-//   if (cq_ring_needs_flush(&machine->ring)) {
-//     io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
-//     overflow_checked = true;
-//     goto iterate;
-//   }
-
-// done:
-//   return total_count;
-// }
-
-// static inline VALUE um_wait_for_and_process_ready_cqes(struct um *machine) {
-//   VALUE ret = um_wait_for_and_process_cqe(machine);
-//   um_process_ready_cqes(machine, &ret);
-//   RB_GC_GUARD(ret);
-//   return ret;
-// }
-
 // returns true if a cqe was processed
 static inline int um_process_next_ready_cqe(struct um *machine, VALUE *ret) {
-iterate:
-  bool overflow_checked = false;
   struct io_uring_cqe *cqe;
-  unsigned head;
-  unsigned count = 0;
-  io_uring_for_each_cqe(&machine->ring, head, cqe) {
-    ++count;
+  int err = io_uring_peek_cqe(&machine->ring, &cqe);
+  if (!err) {
     *ret = um_process_cqe(machine, cqe);
-    break;
-  }
-  io_uring_cq_advance(&machine->ring, count);
-  if (count > 0) return true;
-
-  if (overflow_checked) goto done;
-
-  if (cq_ring_needs_flush(&machine->ring)) {
-    io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
-    overflow_checked = true;
-    goto iterate;
+    return 1;
   }
 
-done:
-  return false;
+  return 0;
 }
-
-// VALUE um_poll(struct um *machine) {
-//   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, rb_fiber_current());
-//   INSPECT("um_poll >>", machine->poll_fiber);
-// // await:
-//   VALUE ret = um_wait_for_and_process_ready_cqes(machine);
-//   // INSPECT("um_poll ret", ret);
-//   // printf("unsubmitted_count: %d\n", machine->unsubmitted_count);
-//   // if (machine->unsubmitted_count && (ret == Qnil))
-//   //   goto await;
-//   RB_OBJ_WRITE(machine->self, &machine->poll_fiber, Qnil);
-
-//   INSPECT("um_poll <<", ret);
-//   return ret;
-// }
 
 VALUE um_fiber_switch(struct um *machine) {
   VALUE ret = Qnil;
@@ -210,12 +149,6 @@ VALUE um_fiber_switch(struct um *machine) {
     ret = um_wait_for_and_process_cqe(machine);
   
   return ret;
-
-  // static VALUE nil = Qnil;
-  // if (machine->poll_fiber != Qnil)
-  //   return rb_fiber_transfer(machine->poll_fiber, 1, &nil);
-  // else
-  //   return um_poll(machine);
 }
 
 static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
@@ -236,10 +169,17 @@ inline VALUE um_await(struct um *machine) {
   return raise_if_exception(v);
 }
 
+void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
+  // printf("um_prep_op %p kind %d\n", op, kind);
+  memset(op, 0, sizeof(struct um_op));
+  op->kind = kind;
+  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
+  op->value = Qnil;
+}
+
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
   struct um_op *op = malloc(sizeof(struct um_op));
-  memset(op, 0, sizeof(struct um_op));
-  op->kind = OP_SCHEDULE;
+  um_prep_op(machine, op, OP_SCHEDULE);
   op->flags = OP_F_TRANSIENT;
   RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
   RB_OBJ_WRITE(machine->self, &op->value, value);
@@ -275,13 +215,6 @@ VALUE um_timeout_ensure(VALUE arg) {
   }
 
   return Qnil;
-}
-
-void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
-  memset(op, 0, sizeof(struct um_op));
-  op->kind = kind;
-  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
-  op->value = Qnil;
 }
 
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
@@ -639,8 +572,6 @@ VALUE um_accept_each(struct um *machine, int fd) {
 }
 
 int um_read_each_singleshot_loop(struct op_ctx *ctx) {
-  printf("!!!um_read_each_singleshot_loop\n");
-
   struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
   ctx->read_maxlen = desc->buf_size;
   ctx->read_buf = malloc(desc->buf_size);
@@ -668,7 +599,6 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
 
 // returns true if more results are expected
 int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
-  printf("!!! read_each_multishot_process_result op %p res %d flags %d\n", ctx->op, ctx->op->cqe_res, ctx->op->cqe_flags);
   if (ctx->op->cqe_res == 0)
     return false;
 
@@ -691,11 +621,9 @@ int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
 
 VALUE read_each_begin(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
-
-  printf("read_each_begin op %p fd %d bgid %d\n", ctx->op, ctx->fd, ctx->bgid);
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
-	sqe->flags |= IOSQE_BUFFER_SELECT;
+	// sqe->flags |= IOSQE_BUFFER_SELECT;
   int total = 0;
 
   while (true) {
@@ -725,7 +653,6 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
 VALUE recv_each_begin(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
 
-  printf("recv_each_begin op %p fd %d bgid %d\n", ctx->op, ctx->fd, ctx->bgid);
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_recv_multishot(sqe, ctx->fd, NULL, 0, 0);
 	sqe->buf_group = ctx->bgid;

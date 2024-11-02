@@ -265,25 +265,21 @@ class ReadEachTest < UMBaseTest
 
     f = Fiber.new do
       w << 'foo'
-      # machine.sleep 0.02
-      # w << 'bar'
-      # machine.sleep 0.02
-      # w << 'baz'
+      machine.sleep 0.02
+      w << 'bar'
+      machine.sleep 0.02
+      w << 'baz'
       machine.sleep 0.02
       w.close
       machine.yield
     end
     
-    p 1
     machine.schedule(f, nil)
 
-    p 2
     machine.read_each(r.fileno, bgid) do |buf|
-      p [3, buf]
       bufs << buf
     end
 
-    p 4
     assert_equal ['foo', 'bar', 'baz'], bufs
     assert_equal 0, machine.pending_count
   end
