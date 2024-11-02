@@ -12,11 +12,7 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
     sqe, (uint32_t *)futex, expect, FUTEX_BITSET_MATCH_ANY,
 		FUTEX2_SIZE_U32, 0
   );
-  INSPECT("um_futex_wait >>", rb_fiber_current());
   VALUE ret = um_fiber_switch(machine);
-  INSPECT("um_futex_wait <<", rb_fiber_current());
-  INSPECT("  ret", ret);
-
   if (!um_op_completed_p(&op))
     um_cancel_and_wait(machine, &op);
   else {
