@@ -91,10 +91,10 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;
 
-  // printf(
-  //   ": process_cqe op %p kind %d state %d flags %d cqe_res %d cqe_flags %d\n",
-  //   op, op->kind, op->state, op->flags, cqe->res, cqe->flags
-  // );
+  printf(
+    ": process_cqe op %p kind %d state %d flags %d cqe_res %d cqe_flags %d\n",
+    op, op->kind, op->state, op->flags, cqe->res, cqe->flags
+  );
   if (unlikely(op->flags & OP_F_DISCARD)) {
     // multishot ops might have multiple CQEs already queued, so we transition
     // to idle only on the last one. Otherwise, we just ignore the CQE.
