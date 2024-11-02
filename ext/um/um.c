@@ -164,6 +164,16 @@ void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   }
 }
 
+int um_check_completion(struct um *machine, struct um_op *op) {
+  if (!um_op_completed_p(op)) {
+    um_cancel_and_wait(machine, op);
+    return 0;
+  }
+
+  um_raise_on_error_result(op->cqe_res);
+  return 1;
+}
+
 inline VALUE um_await(struct um *machine) {
   VALUE v = um_fiber_switch(machine);
   return raise_if_exception(v);
@@ -234,6 +244,10 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
 }
 
+/*******************************************************************************
+                         blocking singleshot ops
+*******************************************************************************/
+
 VALUE um_sleep(struct um *machine, double duration) {
   struct um_op op;
   um_prep_op(machine, &op, OP_SLEEP);
@@ -259,14 +273,12 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
   io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
+  
   VALUE ret = um_fiber_switch(machine);
-
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  if (um_check_completion(machine, &op)) {
     um_update_read_buffer(machine, buffer, buffer_offset, op.cqe_res, op.cqe_flags);
     ret = INT2NUM(op.cqe_res);
+    
   }
 
   RB_GC_GUARD(buffer);
@@ -283,15 +295,12 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   struct um_buffer *buffer = um_buffer_checkout(machine, len);  
   memcpy(buffer->ptr, RSTRING_PTR(str), len);
   io_uring_prep_write(sqe, fd, buffer->ptr, len, -1);
+  
   VALUE ret = um_fiber_switch(machine);
-
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
+  // TODO: on failure the buffer will leak!
   um_buffer_checkin(machine, buffer);
 
   RB_GC_GUARD(str);
@@ -304,14 +313,10 @@ VALUE um_close(struct um *machine, int fd) {
   um_prep_op(machine, &op, OP_CLOSE);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_close(sqe, fd);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(fd);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -322,14 +327,10 @@ VALUE um_accept(struct um *machine, int fd) {
   um_prep_op(machine, &op, OP_ACCEPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -340,14 +341,10 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   um_prep_op(machine, &op, OP_SOCKET);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -358,14 +355,10 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   um_prep_op(machine, &op, OP_CONNECT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_connect(sqe, fd, addr, addrlen);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -376,14 +369,10 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   um_prep_op(machine, &op, OP_SEND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(buffer);
   RB_GC_GUARD(ret);
@@ -396,12 +385,9 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op)) {
     um_update_read_buffer(machine, buffer, 0, op.cqe_res, op.cqe_flags);
     ret = INT2NUM(op.cqe_res);
   }
@@ -416,14 +402,10 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
   um_prep_op(machine, &op, OP_BIND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_bind(sqe, fd, addr, addrlen);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -434,14 +416,10 @@ VALUE um_listen(struct um *machine, int fd, int backlog) {
   um_prep_op(machine, &op, OP_BIND);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_listen(sqe, fd, backlog);
-  VALUE ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -451,26 +429,22 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   VALUE ret = Qnil;
   int value;
 
-  #ifdef HAVE_IO_URING_PREP_CMD_SOCK
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_GETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
-  ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(value);
-  }
-  #else
+#else
   socklen_t nvalue = sizeof(value);
   int res = getsockopt(fd, level, opt, &value, &nvalue);
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   ret = INT2NUM(value);
-  #endif
+#endif
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
@@ -479,57 +453,29 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   VALUE ret = Qnil;
 
-  #ifdef HAVE_IO_URING_PREP_CMD_SOCK
+#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_GETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
-  ret = um_fiber_switch(machine);
 
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
-  else {
-    um_raise_on_error_result(op.cqe_res);
+  ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
     ret = INT2NUM(op.cqe_res);
-  }
-  #else
+#else
   int res = setsockopt(fd, level, opt, &value, sizeof(value));
   if (res)
     rb_syserr_fail(errno, strerror(errno));
   ret = INT2NUM(0);
-  #endif
+#endif
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/*******************************************************************************
+                            multishot ops
+*******************************************************************************/
 
 VALUE accept_each_begin(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
@@ -581,8 +527,8 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
     um_prep_op(ctx->machine, ctx->op, OP_READ);
     struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
-    VALUE ret = um_fiber_switch(ctx->machine);
 
+    VALUE ret = um_fiber_switch(ctx->machine);
     if (um_op_completed_p(ctx->op)) {
       um_raise_on_error_result(ctx->op->cqe_res);
       if (!ctx->op->cqe_res) return total;
@@ -598,7 +544,7 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
 }
 
 // returns true if more results are expected
-int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
+int read_recv_each_multishot_process_result(struct op_ctx *ctx, int *total) {
   if (ctx->op->cqe_res == 0)
     return false;
 
@@ -610,7 +556,6 @@ int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
   // TTY devices might not support multishot reads:
   // https://github.com/axboe/liburing/issues/1185. We detect this by checking
   // if the F_MORE flag is absent, then switch to single shot mode.
-
   if (unlikely(!(ctx->op->cqe_flags & IORING_CQE_F_MORE))) {
     *total += um_read_each_singleshot_loop(ctx);
     return false;
@@ -619,11 +564,25 @@ int read_each_multishot_process_result(struct op_ctx *ctx, int *total) {
   return true;
 }
 
-VALUE read_each_begin(VALUE arg) {
+void read_recv_each_prep(struct io_uring_sqe *sqe, struct op_ctx *ctx) {
+  switch (ctx->op->kind) {
+    case OP_READ_MULTISHOT:
+      io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
+      return;
+    case OP_RECV_MULTISHOT:
+      io_uring_prep_recv_multishot(sqe, ctx->fd, NULL, 0, 0);
+	    sqe->buf_group = ctx->bgid;
+	    sqe->flags |= IOSQE_BUFFER_SELECT;
+      return;
+    default:
+      return;
+  }
+}
+
+VALUE read_recv_each_begin(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
-  io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
-	// sqe->flags |= IOSQE_BUFFER_SELECT;
+  read_recv_each_prep(sqe, ctx);
   int total = 0;
 
   while (true) {
@@ -634,7 +593,7 @@ VALUE read_each_begin(VALUE arg) {
       int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
       if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
       um_raise_on_error_result(ctx->op->cqe_res);
-      if (!read_each_multishot_process_result(ctx, &total))
+      if (!read_recv_each_multishot_process_result(ctx, &total))
         return INT2NUM(total);
     }
   }
@@ -647,32 +606,7 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
   um_prep_op(machine, &op, OP_READ_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL };
-  return rb_ensure(read_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
-}
-
-VALUE recv_each_begin(VALUE arg) {
-  struct op_ctx *ctx = (struct op_ctx *)arg;
-
-  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
-  io_uring_prep_recv_multishot(sqe, ctx->fd, NULL, 0, 0);
-	sqe->buf_group = ctx->bgid;
-	sqe->flags |= IOSQE_BUFFER_SELECT;
-  int total = 0;
-
-  while (true) {
-    VALUE ret = um_fiber_switch(ctx->machine);
-    if (!um_op_completed_p(ctx->op))
-      return raise_if_exception(ret);
-    else {
-      int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
-      if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
-      um_raise_on_error_result(ctx->op->cqe_res);
-      if (!read_each_multishot_process_result(ctx, &total))
-        return INT2NUM(total);
-    }
-  }
-
-  return Qnil;
+  return rb_ensure(read_recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }
 
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
@@ -680,5 +614,5 @@ VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
   um_prep_op(machine, &op, OP_RECV_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
-  return rb_ensure(recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+  return rb_ensure(read_recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }

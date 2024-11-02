@@ -156,8 +156,10 @@ struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
-#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
 void um_cancel_and_wait(struct um *machine, struct um_op *op);
+int um_check_completion(struct um *machine, struct um_op *op);
+
+#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
