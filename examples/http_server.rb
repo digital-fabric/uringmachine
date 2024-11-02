@@ -25,7 +25,7 @@ def http_handle_connection(fd)
   end
   # puts "Connection closed on fd #{fd}"
 rescue => e
-  puts "Error while handling connection on fd #{fd}: #{e.inspect}"
+  # puts "Error while handling connection on fd #{fd}: #{e.inspect}"
 ensure
   @machine.close(fd) rescue nil
 end
