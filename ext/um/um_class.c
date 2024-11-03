@@ -7,7 +7,8 @@ static void UM_mark(void *ptr) {
   struct um *machine = ptr;
   rb_gc_mark_movable(machine->self);
 
-  um_op_transient_mark(machine);
+  um_op_list_mark(machine, machine->transient_head);
+  um_op_list_mark(machine, machine->runqueue_head);
 }
 
 static void UM_compact(void *ptr) {
@@ -15,7 +16,8 @@ static void UM_compact(void *ptr) {
   machine->self = rb_gc_location(machine->self);
   machine->poll_fiber = rb_gc_location(machine->poll_fiber);
 
-  um_op_transient_compact(machine);
+  um_op_list_compact(machine, machine->transient_head);
+  um_op_list_compact(machine, machine->runqueue_head);
 }
 
 static void UM_free(void *ptr) {

@@ -24,11 +24,13 @@ def start_fiber
 end
 
 t0 = Time.now
+MAX_FIBERS = 20
+MAX_TIME = 10
 loop do
   @machine.sleep 0.1
   puts "pending: #{@machine.pending_count}"
-  break if (Time.now - t0) > 20
-  start_fiber while @fiber_count < 20
+  break if (Time.now - t0) > MAX_TIME
+  start_fiber while @fiber_count < MAX_FIBERS
 end
 t1 = Time.now  
 elapsed = t1 - t0

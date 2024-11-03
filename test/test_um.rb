@@ -53,9 +53,7 @@ class SchedulingTest < UMBaseTest
     main = Fiber.current
     e = CustomError.new
     f = Fiber.new do
-      assert_equal 1, machine.pending_count
       machine.schedule(main, e)
-      assert_equal 2, machine.pending_count
       machine.yield
     end
     
@@ -63,7 +61,7 @@ class SchedulingTest < UMBaseTest
     t0 = monotonic_clock
 
     # the call to schedule means an op is checked out
-    assert_equal 1, machine.pending_count
+    assert_equal 0, machine.pending_count
     begin
       machine.sleep(1)
     rescue Exception => e2
@@ -463,7 +461,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each
     conns = []
     t = Thread.new do
-      sleep 0.1
+      sleep 0.05
       3.times { conns << TCPSocket.new('127.0.0.1', @port) }
     end
 
@@ -827,13 +825,13 @@ class QueueTest < UMBaseTest
 
     machine.push(q, :foo)
     assert_equal 1, q.count
-    2.times { machine.snooze }
+    machine.sleep(0.02)
     assert_equal [[1, :foo]], buf
 
     machine.push(q, :bar)
     assert_equal 1, q.count
 
-    2.times { machine.snooze }
+    machine.sleep(0.02)
     assert_equal [[1, :foo], [2, :bar]], buf
     assert_equal 0, q.count
   end

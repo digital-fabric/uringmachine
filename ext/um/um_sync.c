@@ -17,8 +17,8 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
   if (!um_op_completed_p(&op))
     um_cancel_and_wait(machine, &op);
   else {
-    if (op.cqe_res != -EAGAIN)
-      um_raise_on_error_result(op.cqe_res);
+    if (op.result.res != -EAGAIN)
+      um_raise_on_error_result(op.result.res);
   }
 
   RB_GC_GUARD(ret);

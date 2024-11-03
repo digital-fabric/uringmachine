@@ -7,48 +7,89 @@ void um_op_clear(struct um *machine, struct um_op *op) {
 }
 
 void um_op_transient_add(struct um *machine, struct um_op *op) {
-  // printf("transient_add %p kind %d transient_head %p\n", op, op->kind, machine->transient_head);
-  // INSPECT("  fiber", op->fiber);
-  // INSPECT("  value", op->fiber);
   if (machine->transient_head) {
-    op->transient_next = machine->transient_head;
-    machine->transient_head->transient_prev = op;
+    op->next = machine->transient_head;
+    machine->transient_head->prev = op;
   }
   machine->transient_head = op;
 }
 
 void um_op_transient_remove(struct um *machine, struct um_op *op) {
-  // printf("transient_remove %p transient_head %p\n", op, machine->transient_head);
-  // INSPECT("  fiber", op->fiber);
-  // INSPECT("  value", op->fiber);
-  // printf("  prev %p next %p\n", op->transient_prev, op->transient_next);
-  if (op->transient_prev)
-    op->transient_prev->transient_next = op->transient_next;
-  if (op->transient_next)
-    op->transient_next->transient_prev = op->transient_prev;
+  if (op->prev)
+    op->prev->next = op->next;
+  if (op->next)
+    op->next->prev = op->prev;
 
   if (machine->transient_head == op)
-    machine->transient_head = op->transient_next;
+    machine->transient_head = op->next;
 }
 
-void um_op_transient_mark(struct um *machine) {
-  struct um_op *op = machine->transient_head;
-  while (op) {
-    // printf("mark %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
-    struct um_op *next = op->transient_next;
-    rb_gc_mark_movable(op->fiber);
-    rb_gc_mark_movable(op->value);
-    op = next;
+void um_runqueue_push(struct um *machine, struct um_op *op) {
+  if (machine->runqueue_tail) {
+    op->prev = machine->runqueue_tail;
+    machine->runqueue_tail->next = op;
+    machine->runqueue_tail = op;
+  }
+  else
+    machine->runqueue_head = machine->runqueue_tail = op;
+  op->next = NULL;
+}
+
+struct um_op *um_runqueue_shift(struct um *machine) {
+  struct um_op *op = machine->runqueue_head;
+  if (!op) return NULL;
+
+  machine->runqueue_head = op->next;
+  if (!machine->runqueue_head)
+    machine->runqueue_tail = NULL;
+  return op;
+}
+
+void um_op_list_mark(struct um *machine, struct um_op *head) {
+  while (head) {
+    struct um_op *next = head->next;
+    rb_gc_mark_movable(head->fiber);
+    rb_gc_mark_movable(head->value);
+    head = next;
   }
 }
 
-void um_op_transient_compact(struct um *machine) {
-  struct um_op *op = machine->transient_head;
-  while (op) {
-    // printf("compact %p (prev %p next %p)\n", op, op->transient_prev, op->transient_next);
-    struct um_op *next = op->transient_next;
-    op->fiber = rb_gc_location(op->fiber);
-    op->value = rb_gc_location(op->value);
-    op = next;
+void um_op_list_compact(struct um *machine, struct um_op *head) {
+  while (head) {
+    struct um_op *next = head->next;
+    head->fiber = rb_gc_location(head->fiber);
+    head->value = rb_gc_location(head->value);
+    head = next;
   }
+}
+
+void um_op_multishot_results_push(struct um_op *op, __s32 res, __u32 flags) {
+  if (!op->multishot_result_count) {
+    op->result.res    = res;
+    op->result.flags  = flags;
+    op->result.next   = NULL;
+    op->multishot_result_tail = &op->result;
+  }
+  else {
+    struct um_op_result *result = malloc(sizeof(struct um_op_result));
+    result->res   = res;
+    result->flags = flags;
+    result->next  = NULL;
+    op->multishot_result_tail->next = result;
+    op->multishot_result_tail = result;
+  }
+  op->multishot_result_count++;
+}
+
+void um_op_multishot_results_clear(struct um_op *op) {
+  if (op->multishot_result_count < 1) return;
+
+  struct um_op_result *result = op->result.next;
+  while (result) {
+    struct um_op_result *next = result->next;
+    free(result);
+    result = next;
+  }
+  op->multishot_result_tail = NULL;
+  op->multishot_result_count = 0;
 }

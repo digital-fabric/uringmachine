@@ -16,13 +16,14 @@ def http_handle_connection(fd)
   end
 
   buf = +''
-  # while !done && @machine.read(fd, buf, 8192) > 0
-  #   parser << buf
-  # end
-  @machine.read_each(fd, @bgid) do
-    parser << _1
-    break if done
+  while !done && @machine.read(fd, buf, 8192) > 0
+    parser << buf
   end
+  # @machine.read_each(fd, @bgid) do
+  #   parser << _1
+  #   break if done
+  # end
+
   # puts "Connection closed on fd #{fd}"
 rescue => e
   # puts "Error while handling connection on fd #{fd}: #{e.inspect}"

@@ -23,15 +23,13 @@
 enum op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
+
   OP_SLEEP,
   OP_READ,
-  OP_READ_MULTISHOT,
   OP_WRITE,
   OP_CLOSE,
   OP_ACCEPT,
-  OP_ACCEPT_MULTISHOT,
   OP_RECV,
-  OP_RECV_MULTISHOT,
   OP_SEND,
   OP_SOCKET,
   OP_CONNECT,
@@ -39,26 +37,39 @@ enum op_kind {
   OP_LISTEN,
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
+
   OP_FUTEX_WAIT,
-  OP_FUTEX_WAKE
+  OP_FUTEX_WAKE,
+
+  OP_ACCEPT_MULTISHOT,
+  OP_READ_MULTISHOT,
+  OP_RECV_MULTISHOT
 };
 
 #define OP_F_COMPLETED        (1U << 0)
 #define OP_F_TRANSIENT        (1U << 1)
 #define OP_F_IGNORE_CANCELED  (1U << 2)
+#define OP_F_MULTISHOT        (1U << 3)
+
+struct um_op_result {
+  __s32 res;
+  __u32 flags;
+  struct um_op_result *next;
+};
 
 struct um_op {
+  struct um_op *prev;
+  struct um_op *next;
+
   enum op_kind kind;
   unsigned flags;
 
   VALUE fiber;
   VALUE value;
 
-  __s32 cqe_res;
-  __u32 cqe_flags;
-
-  struct um_op *transient_prev;
-  struct um_op *transient_next;
+  struct um_op_result result;
+  struct um_op_result *multishot_result_tail;
+  unsigned multishot_result_count;
 
   struct __kernel_timespec ts; // used for timeout operation
 };
@@ -96,6 +107,8 @@ struct um {
   unsigned int buffer_ring_count;
 
   struct um_op *transient_head;
+  struct um_op *runqueue_head;
+  struct um_op *runqueue_tail;
 };
 
 struct um_mutex {
@@ -131,8 +144,14 @@ void um_teardown(struct um *machine);
 void um_op_clear(struct um *machine, struct um_op *op);
 void um_op_transient_add(struct um *machine, struct um_op *op);
 void um_op_transient_remove(struct um *machine, struct um_op *op);
-void um_op_transient_mark(struct um *machine);
-void um_op_transient_compact(struct um *machine);
+void um_op_list_mark(struct um *machine, struct um_op *head);
+void um_op_list_compact(struct um *machine, struct um_op *head);
+
+void um_op_multishot_results_push(struct um_op *op, __s32 res, __u32 flags);
+void um_op_multishot_results_clear(struct um_op *op);
+
+void um_runqueue_push(struct um *machine, struct um_op *op);
+struct um_op *um_runqueue_shift(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
 void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
