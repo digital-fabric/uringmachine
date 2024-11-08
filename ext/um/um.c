@@ -38,7 +38,7 @@ inline void um_teardown(struct um *machine) {
   um_free_buffer_linked_list(machine);
 }
 
-struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
+inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe;
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
@@ -80,7 +80,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     um_op_transient_remove(machine, op);
 
   if (op->flags & OP_F_MULTISHOT) {
-    um_op_multishot_results_push(op, cqe->res, cqe->flags);
+    um_op_multishot_results_push(machine, op, cqe->res, cqe->flags);
     if (op->multishot_result_count > 1)
       return;
   }
@@ -160,7 +160,7 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   VALUE value = op->value;
 
   if (unlikely(op->flags & OP_F_TRANSIENT))
-    free(op);
+    um_op_free(machine, op);
 
   return rb_fiber_transfer(fiber, 1, &value);
 }
@@ -171,7 +171,7 @@ inline VALUE um_fiber_switch(struct um *machine) {
     if (op)
       return process_runqueue_op(machine, op);
 
-    if (machine->unsubmitted_count || !um_process_ready_cqes(machine))
+    // if (machine->unsubmitted_count || !um_process_ready_cqes(machine))
       um_wait_for_and_process_ready_cqes(machine);
   }
 }
@@ -219,7 +219,7 @@ inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) 
 }
 
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
-  struct um_op *op = malloc(sizeof(struct um_op));
+  struct um_op *op = um_op_alloc(machine);
   memset(op, 0, sizeof(struct um_op));
   op->kind = OP_SCHEDULE;
   op->flags = OP_F_TRANSIENT;
@@ -317,16 +317,12 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   const int str_len = RSTRING_LEN(str);
   if (len > str_len) len = str_len;
-  struct um_buffer *buffer = um_buffer_checkout(machine, len);  
-  memcpy(buffer->ptr, RSTRING_PTR(str), len);
-  io_uring_prep_write(sqe, fd, buffer->ptr, len, -1);
-  
+
+  io_uring_prep_write(sqe, fd, RSTRING_PTR(str), len, -1);
+
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
-
-  // TODO: on failure the buffer will leak!
-  um_buffer_checkin(machine, buffer);
 
   RB_GC_GUARD(str);
   RB_GC_GUARD(ret);
@@ -517,13 +513,13 @@ VALUE accept_each_begin(VALUE arg) {
     while (result) {
       more = (result->flags & IORING_CQE_F_MORE);
       if (result->res < 0) {
-        um_op_multishot_results_clear(ctx->op);
+        um_op_multishot_results_clear(ctx->machine, ctx->op);
         return Qnil;
       }
       rb_yield(INT2NUM(result->res));
       result = result->next;
     }
-    um_op_multishot_results_clear(ctx->op);
+    um_op_multishot_results_clear(ctx->machine, ctx->op);
     if (more)
       ctx->op->flags &= ~OP_F_COMPLETED;
     else
@@ -539,7 +535,7 @@ VALUE multishot_ensure(VALUE arg) {
     int more = ctx->op->multishot_result_tail->flags & IORING_CQE_F_MORE;
     if (more)
       ctx->op->flags &= ~OP_F_COMPLETED;
-    um_op_multishot_results_clear(ctx->op);
+    um_op_multishot_results_clear(ctx->machine, ctx->op);
   }
   if (!um_op_completed_p(ctx->op))
     um_cancel_and_wait(ctx->machine, ctx->op);
@@ -636,7 +632,7 @@ VALUE read_recv_each_begin(VALUE arg) {
     while (result) {
       more = (result->flags & IORING_CQE_F_MORE);
       if (result->res < 0) {
-        um_op_multishot_results_clear(ctx->op);
+        um_op_multishot_results_clear(ctx->machine, ctx->op);
         return Qnil;
       }
 
@@ -646,7 +642,7 @@ VALUE read_recv_each_begin(VALUE arg) {
       // rb_yield(INT2NUM(result->res));
       result = result->next;
     }
-    um_op_multishot_results_clear(ctx->op);
+    um_op_multishot_results_clear(ctx->machine, ctx->op);
     if (more)
       ctx->op->flags &= ~OP_F_COMPLETED;
     else

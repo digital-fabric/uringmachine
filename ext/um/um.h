@@ -109,6 +109,9 @@ struct um {
   struct um_op *transient_head;
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
+
+  struct um_op *op_freelist;
+  struct um_op_result *result_freelist;
 };
 
 struct um_mutex {
@@ -141,14 +144,16 @@ extern VALUE cQueue;
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
 
+struct um_op *um_op_alloc(struct um *machine);
+void um_op_free(struct um *machine, struct um_op *op);
 void um_op_clear(struct um *machine, struct um_op *op);
 void um_op_transient_add(struct um *machine, struct um_op *op);
 void um_op_transient_remove(struct um *machine, struct um_op *op);
 void um_op_list_mark(struct um *machine, struct um_op *head);
 void um_op_list_compact(struct um *machine, struct um_op *head);
 
-void um_op_multishot_results_push(struct um_op *op, __s32 res, __u32 flags);
-void um_op_multishot_results_clear(struct um_op *op);
+void um_op_multishot_results_push(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
+void um_op_multishot_results_clear(struct um *machine, struct um_op *op);
 
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);

@@ -13,8 +13,9 @@ require 'uringmachine'
 
 ITERATIONS = 1000
 
+$machine = UringMachine.new
+
 def run_snooze
-  machine = UringMachine.new
   count = 0
   main = Fiber.current
 
@@ -22,10 +23,10 @@ def run_snooze
     loop do
       count += 1
       if count == ITERATIONS
-        machine.schedule(main, nil)
+        $machine.schedule(main, nil)
         break
       else
-        machine.snooze
+        $machine.snooze
       end
     end
   end
@@ -34,17 +35,17 @@ def run_snooze
     loop do
       count += 1
       if count == ITERATIONS
-        machine.schedule(main, nil)
+        $machine.schedule(main, nil)
         break
       else
-        machine.snooze
+        $machine.snooze
       end
     end
   end
 
-  machine.schedule(f1, nil)
-  machine.schedule(f2, nil)
-  machine.yield
+  $machine.schedule(f1, nil)
+  $machine.schedule(f2, nil)
+  $machine.yield
 end
 
 def run_raw_transfer
@@ -86,6 +87,3 @@ bm = Benchmark.ips do |x|
 
   x.compare!
 end
-puts;
-# bm.entries.each { |e| puts "#{e.label}: #{(e.ips * c).round.to_i} rows/s" }
-puts;
