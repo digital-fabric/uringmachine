@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative './um_ext'
+require_relative 'uringmachine/dns_resolver'
 
 UM = UringMachine
 
@@ -22,5 +23,10 @@ class UringMachine
     end
     schedule(f, value)
     @@fiber_map[f] = true
+  end
+
+  def resolve(hostname, type = :A)
+    @resolver ||= DNSResolver.new(self)
+    @resolver.resolve(hostname, type)
   end
 end

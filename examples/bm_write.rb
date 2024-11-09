@@ -5,32 +5,52 @@ require 'bundler/inline'
 gemfile do
   source 'https://rubygems.org'
   gem 'uringmachine', path: '..'
-  gem 'benchmark-ips'
+  gem 'benchmark'
 end
 
-require 'benchmark/ips'
+require 'benchmark'
 require 'uringmachine'
 
-ITERATIONS = 1000
-DEV_NULL = File.open('/dev/null', 'w')
-FD = DEV_NULL.fileno
+ITERATIONS = 100000
 BUF = ('*' * 8192).freeze
+FN = '/tmp/bm_write'
 
-def run_io_write
-  DEV_NULL.write(BUF)
+def run_io_write(num_threads)
+  FileUtils.rm(FN) rescue nil
+  fio = File.open(FN, 'w')
+  
+  threads = num_threads.times.map do |i|
+    Thread.new do
+      ITERATIONS.times { fio.write(BUF) }
+    end
+  end
+  threads.each(&:join)
+ensure
+  fio.close
 end
 
-$machine = UringMachine.new
-
-def run_um_write
-  $machine.write(FD, BUF)
+def run_um_write(num_fibers)
+  FileUtils.rm(FN) rescue nil
+  fio = File.open(FN, 'w')
+  fd = fio.fileno
+  
+  machine = UringMachine.new
+  done = UringMachine::Queue.new
+  num_fibers.times do
+    machine.spin do
+      ITERATIONS.times { machine.write(fd, BUF) }
+      machine.push(done, true) 
+    end
+  end
+  num_fibers.times { machine.pop(done) }
+ensure
+  fio.close
 end
 
-bm = Benchmark.ips do |x|
-  x.config(:time => 5, :warmup => 2)
-
-  x.report("io_write")  { run_io_write }
-  x.report("um_write")  { run_um_write }
-
-  x.compare!
+Benchmark.bm do |x|
+  [1, 2, 4, 8].each do |c|
+    x.report("IO (#{c} threads)")     { run_io_write(c) }
+    x.report("UM (#{c} fibers) ")     { run_um_write(c) }
+    puts
+  end
 end
