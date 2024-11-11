@@ -114,3 +114,26 @@ loop do
   end
 end
 ```
+
+## Concurrent Execution
+
+Concurrent execution is done by calling `#spin`, which creates a fiber:
+
+```ruby
+machine = UringMachine.new
+
+rfd, wfd = machine.pipe
+
+f1 = machine.spin do
+  machine.write(wfd, 'hello')
+  machine.write(wfd, 'world')
+  machine.close(wfd)
+end
+
+bgid = machine.setup_buffer_ring(4096, 1024)
+f2 = machine.spin do
+  machine.read_each(rfd, bgid) do |str|
+    puts str
+  end
+end
+```
