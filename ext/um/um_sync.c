@@ -58,14 +58,14 @@ void um_mutex_init(struct um_mutex *mutex) {
   mutex->state = MUTEX_UNLOCKED;
 }
 
-void um_mutex_lock(struct um *machine, uint32_t *state) {
+inline void um_mutex_lock(struct um *machine, uint32_t *state) {
   while (*state == MUTEX_LOCKED) {
     um_futex_wait(machine, state, MUTEX_LOCKED);
   }
   *state = MUTEX_LOCKED;
 }
 
-void um_mutex_unlock(struct um *machine, uint32_t *state) {
+inline void um_mutex_unlock(struct um *machine, uint32_t *state) {
   *state = MUTEX_UNLOCKED;
   // Wake up 1 waiting fiber
   um_futex_wake(machine, state, 1);
@@ -88,7 +88,7 @@ VALUE synchronize_ensure(VALUE arg) {
   return Qnil;
 }
 
-VALUE um_mutex_synchronize(struct um *machine, uint32_t *state) {
+inline VALUE um_mutex_synchronize(struct um *machine, uint32_t *state) {
   struct sync_ctx ctx = { .machine = machine, .state = state };
   return rb_ensure(synchronize_begin, (VALUE)&ctx, synchronize_ensure, (VALUE)&ctx);
 }
@@ -96,13 +96,13 @@ VALUE um_mutex_synchronize(struct um *machine, uint32_t *state) {
 #define QUEUE_EMPTY 0
 #define QUEUE_READY 1
 
-void um_queue_init(struct um_queue *queue) {
+inline void um_queue_init(struct um_queue *queue) {
   queue->head = queue->tail = queue->free_head = NULL;
   queue->state = QUEUE_EMPTY;
   queue->count = 0;
 }
 
-void um_queue_free(struct um_queue *queue) {
+inline void um_queue_free(struct um_queue *queue) {
   struct um_queue_entry *entry = queue->head;
   while (entry) {
     struct um_queue_entry *next = entry->next;
@@ -120,7 +120,7 @@ void um_queue_free(struct um_queue *queue) {
   free(queue);
 }
 
-void um_queue_mark(struct um_queue *queue) {
+inline void um_queue_mark(struct um_queue *queue) {
   rb_gc_mark_movable(queue->self);
   struct um_queue_entry *entry = queue->head;
   while (entry) {
@@ -129,7 +129,7 @@ void um_queue_mark(struct um_queue *queue) {
   }
 }
 
-void um_queue_compact(struct um_queue *queue) {
+inline void um_queue_compact(struct um_queue *queue) {
   queue->self = rb_gc_location(queue->self);
   struct um_queue_entry *entry = queue->head;
   while (entry) {
@@ -138,7 +138,7 @@ void um_queue_compact(struct um_queue *queue) {
   }
 }
 
-struct um_queue_entry *um_queue_entry_checkout(struct um_queue *queue) {
+inline struct um_queue_entry *um_queue_entry_checkout(struct um_queue *queue) {
   struct um_queue_entry *entry = queue->free_head;
   if (entry) {
     queue->free_head = entry->next;
@@ -148,12 +148,12 @@ struct um_queue_entry *um_queue_entry_checkout(struct um_queue *queue) {
   return entry;
 }
 
-void um_queue_entry_checkin(struct um_queue *queue, struct um_queue_entry *entry) {
+inline void um_queue_entry_checkin(struct um_queue *queue, struct um_queue_entry *entry) {
   entry->next = queue->free_head;
   queue->free_head = entry;
 }
 
-void queue_add_head(struct um_queue *queue, VALUE value) {
+static inline void queue_add_head(struct um_queue *queue, VALUE value) {
   struct um_queue_entry *entry = um_queue_entry_checkout(queue);
 
   entry->next = queue->head;
@@ -167,7 +167,7 @@ void queue_add_head(struct um_queue *queue, VALUE value) {
   RB_OBJ_WRITE(queue->self, &entry->value, value);
 }
 
-void queue_add_tail(struct um_queue *queue, VALUE value) {
+static inline void queue_add_tail(struct um_queue *queue, VALUE value) {
   struct um_queue_entry *entry = um_queue_entry_checkout(queue);
 
   entry->prev = queue->tail;
@@ -202,30 +202,27 @@ VALUE queue_remove_tail(struct um_queue *queue) {
   return v;
 }
 
-VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value) {
-  queue_add_tail(queue, value);
+static inline VALUE um_queue_add(struct um *machine, struct um_queue *queue, VALUE value, int add_head) {
+  if (add_head) queue_add_head(queue, value);
+  else          queue_add_tail(queue, value);
+  
   queue->count++;
 
   queue->state = QUEUE_READY;
   if (queue->num_waiters)
     um_futex_wake_transient(machine, &queue->state, 1);
   return queue->self;
+}
+
+VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value) {
+  return um_queue_add(machine, queue, value, false);
 }
 
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value) {
-  queue_add_head(queue, value);
-  queue->count++;
-
-  queue->state = QUEUE_READY;
-  if (queue->num_waiters)
-    um_futex_wake_transient(machine, &queue->state, 1);
-  return queue->self;
+  return um_queue_add(machine, queue, value, true);
 }
 
-enum queue_op {
-  QUEUE_POP,
-  QUEUE_SHIFT
-};
+enum queue_op { QUEUE_POP, QUEUE_SHIFT };
 
 struct queue_wait_ctx {
   struct um *machine;

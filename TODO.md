@@ -1,7 +1,7 @@
 - splice / - tee
 - sendto
 - recvfrom
-- poll
+- poll_add / poll_remove / poll_multishot / poll_update
 - open / openat
 - fsync
 - mkdir / mkdirat
@@ -13,5 +13,4 @@
 - madvise
 - getxattr / setxattr
 - shutdown
-
 - send_bundle / recv_bundle (kernel >= 6.10)
