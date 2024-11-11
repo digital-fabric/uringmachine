@@ -6,15 +6,18 @@ VALUE cUM;
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
   rb_gc_mark_movable(machine->self);
-  um_mark_op_linked_list(&machine->list_pending);
-  um_mark_op_linked_list(&machine->list_scheduled);
+
+  um_op_list_mark(machine, machine->transient_head);
+  um_op_list_mark(machine, machine->runqueue_head);
 }
 
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
   machine->self = rb_gc_location(machine->self);
-  um_compact_op_linked_list(&machine->list_pending);
-  um_compact_op_linked_list(&machine->list_scheduled);
+  machine->poll_fiber = rb_gc_location(machine->poll_fiber);
+
+  um_op_list_compact(machine, machine->transient_head);
+  um_op_list_compact(machine, machine->runqueue_head);
 }
 
 static void UM_free(void *ptr) {
@@ -79,12 +82,6 @@ VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   return self;
 }
 
-VALUE UM_interrupt(VALUE self, VALUE fiber, VALUE value) {
-  struct um *machine = get_machine(self);
-  um_interrupt(machine, fiber, value);
-  return self;
-}
-
 VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
   struct um *machine = get_machine(self);
   return um_timeout(machine, interval, class);
@@ -92,8 +89,7 @@ VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
 
 VALUE UM_sleep(VALUE self, VALUE duration) {
   struct um *machine = get_machine(self);
-  um_sleep(machine, NUM2DBL(duration));
-  return duration;
+  return um_sleep(machine, NUM2DBL(duration));
 }
 
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
@@ -111,8 +107,12 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
 }
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
+#ifdef HAVE_IO_URING_PREP_READ_MULTISHOT
   struct um *machine = get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
+#else
+  rb_raise(rb_eRuntimeError, "Not supported by kernel");
+#endif
 }
 
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
@@ -258,9 +258,8 @@ VALUE UM_queue_shift(VALUE self, VALUE queue) {
 
 #endif
 
-VALUE UM_debug(VALUE self) {
-  struct um *machine = get_machine(self);
-  return um_debug(machine);
+VALUE UM_kernel_version(VALUE self) {
+  return INT2NUM(UM_KERNEL_VERSION);
 }
 
 void Init_UM(void) {
@@ -276,7 +275,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "yield", UM_yield, 0);
   rb_define_method(cUM, "schedule", UM_schedule, 2);
-  rb_define_method(cUM, "interrupt", UM_interrupt, 2);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
 
   rb_define_method(cUM, "sleep", UM_sleep, 1);
@@ -305,7 +303,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   #endif
 
-  rb_define_method(cUM, "debug", UM_debug, 0);
+  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
   um_define_net_constants(cUM);
 }

@@ -3,13 +3,21 @@
 require_relative 'helper'
 require 'socket'
 
+class UringMachineTest < Minitest::Test
+  def test_kernel_version
+    v = UringMachine.kernel_version
+    assert_kind_of Integer, v
+    assert_in_range 600..700, v
+  end
+end
+
 class SchedulingTest < UMBaseTest
   def test_schedule_and_yield
     buf = []
-    cur = Fiber.current
+    main = Fiber.current
     f = Fiber.new do |x|
       buf << [21, x]
-      machine.schedule(cur, 21)
+      machine.schedule(main, 21)
       buf << 22
       x = machine.yield
       buf << [23, x]
@@ -49,12 +57,11 @@ class SchedulingTest < UMBaseTest
     assert_equal [e], buf
   end
 
-  def test_interrupt
-    cur = Fiber.current
+  def test_schedule_exception2
+    main = Fiber.current
     e = CustomError.new
     f = Fiber.new do
-      machine.interrupt(cur, e)
-      assert_equal 1, machine.pending_count
+      machine.schedule(main, e)
       machine.yield
     end
     
@@ -62,7 +69,7 @@ class SchedulingTest < UMBaseTest
     t0 = monotonic_clock
 
     # the call to schedule means an op is checked out
-    assert_equal 1, machine.pending_count
+    assert_equal 0, machine.pending_count
     begin
       machine.sleep(1)
     rescue Exception => e2
@@ -105,7 +112,7 @@ class SchedulingTest < UMBaseTest
     end
 
     assert_equal 1, machine.pending_count
-    machine.snooze
+    machine.sleep(0.01) # wait for cancelled CQEs
     assert_equal 0, machine.pending_count
 
     assert_kind_of RuntimeError, e
@@ -118,7 +125,7 @@ class SchedulingTest < UMBaseTest
     assert_equal 42, v
 
     assert_equal 1, machine.pending_count
-    machine.snooze
+    machine.sleep 0.01 # wait for cancelled CQE
     assert_equal 0, machine.pending_count
   end
 
@@ -141,7 +148,7 @@ class SchedulingTest < UMBaseTest
     end
 
     assert_equal 2, machine.pending_count
-    machine.snooze
+    machine.sleep(0.01) # wait for cancelled CQEs
     assert_equal 0, machine.pending_count
 
     assert_kind_of TO2Error, e
@@ -158,6 +165,34 @@ class SleepTest < UMBaseTest
     t1 = monotonic_clock
     assert_in_range 0.09..0.13, t1 - t0
     assert_equal 0.1, res
+  end
+
+  class C; end
+
+  def test_sleep_interrupted
+    t0 = monotonic_clock
+    ret = machine.timeout(0.03, C) do
+      machine.sleep 1
+    end
+    t1 = monotonic_clock
+    assert_in_range 0.02..0.04, t1 - t0
+    assert_kind_of C, ret
+  end
+
+  class D < RuntimeError; end
+
+  def test_sleep_with_timeout
+    t0 = monotonic_clock
+    ret = begin
+      machine.timeout(0.03, D) do
+        machine.sleep 1
+      end
+    rescue => e
+      e
+    end
+    t1 = monotonic_clock
+    assert_in_range 0.02..0.04, t1 - t0
+    assert_kind_of D, ret
   end
 end
 
@@ -227,9 +262,10 @@ end
 
 class ReadEachTest < UMBaseTest
   def test_read_each
+    skip if UringMachine.kernel_version < 607
+
     r, w = IO.pipe
     bufs = []
-
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -256,8 +292,9 @@ class ReadEachTest < UMBaseTest
 
   # send once and close write fd
   def test_read_each_raising_1
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -279,8 +316,9 @@ class ReadEachTest < UMBaseTest
 
   # send once and leave write fd open
   def test_read_each_raising_2
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -303,8 +341,9 @@ class ReadEachTest < UMBaseTest
 
   # send twice
   def test_read_each_raising_3
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -327,8 +366,9 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_break
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
     t = Thread.new do
@@ -349,6 +389,17 @@ class ReadEachTest < UMBaseTest
     assert_equal 0, machine.pending_count
   ensure
     t&.kill
+  end
+
+  def test_read_each_bad_file
+    skip if UringMachine.kernel_version < 607
+
+    _r, w = IO.pipe
+    bgid = machine.setup_buffer_ring(4096, 1024)
+
+    assert_raises(Errno::EBADF) do
+      machine.read_each(w.fileno, bgid)
+    end
   end
 end
 
@@ -434,7 +485,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each
     conns = []
     t = Thread.new do
-      sleep 0.1
+      sleep 0.05
       3.times { conns << TCPSocket.new('127.0.0.1', @port) }
     end
 
@@ -445,8 +496,6 @@ class AcceptEachTest < UMBaseTest
     end
 
     assert_equal 3, count
-    assert_equal 1, machine.pending_count
-    machine.snooze
     assert_equal 0, machine.pending_count
   ensure
     t&.kill
@@ -605,6 +654,9 @@ class RecvEachTest < UMBaseTest
 
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
+
+    bgid2 = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 1, bgid2
 
     bufs = []
 
@@ -782,12 +834,14 @@ class QueueTest < UMBaseTest
       buf << [1, machine.pop(q)]
       machine.yield
     end
+
     machine.schedule(f1, nil)
 
     f2 = Fiber.new do
       buf << [2, machine.pop(q)]
       machine.yield
     end
+
     machine.schedule(f2, nil)
 
     machine.snooze
@@ -795,12 +849,13 @@ class QueueTest < UMBaseTest
 
     machine.push(q, :foo)
     assert_equal 1, q.count
-    2.times { machine.snooze }
+    machine.sleep(0.02)
     assert_equal [[1, :foo]], buf
 
     machine.push(q, :bar)
     assert_equal 1, q.count
-    2.times { machine.snooze }
+
+    machine.sleep(0.02)
     assert_equal [[1, :foo], [2, :bar]], buf
     assert_equal 0, q.count
   end
@@ -854,11 +909,12 @@ class QueueTest < UMBaseTest
     end
     machine.schedule(f2, nil)
 
-    machine.snooze
+    machine.sleep 0.01
 
     assert_equal [[1, :foo]], buf
     machine.push(q, :bar)
-    2.times { machine.snooze }
+
+    machine.sleep 0.01
     assert_equal [[1, :foo], [2, :bar]], buf
   end
 
