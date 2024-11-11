@@ -630,12 +630,9 @@ VALUE read_recv_each_begin(VALUE arg) {
     int more = false;
     struct um_op_result *result = &ctx->op->result;
     while (result) {
-      more = (result->flags & IORING_CQE_F_MORE);
-      if (result->res < 0) {
-        um_op_multishot_results_clear(ctx->machine, ctx->op);
-        return Qnil;
-      }
+      um_raise_on_error_result(result->res);
 
+      more = (result->flags & IORING_CQE_F_MORE);
       if (!read_recv_each_multishot_process_result(ctx, result, &total))
         return Qnil;
 

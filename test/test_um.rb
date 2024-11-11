@@ -377,6 +377,15 @@ class ReadEachTest < UMBaseTest
   ensure
     t&.kill
   end
+
+  def test_read_each_bad_file
+    r, w = IO.pipe
+    bgid = machine.setup_buffer_ring(4096, 1024)
+
+    assert_raises(Errno::EBADF) do
+      machine.read_each(w.fileno, bgid)
+    end
+  end
 end
 
 class WriteTest < UMBaseTest
