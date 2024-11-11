@@ -93,13 +93,7 @@ When a cancellation does occur, UringMachine issues a cancellation (using
 `io_uring_prep_cancel64`), and then waits for the corresponding CQE (with a
 `-ECANCELED` result).
 
-### No scheduler, no runqueue
-
-UringMachine manages the scheduling of fibers by relying solely on io_uring
-CQE's. There's no list of ready fibers, no runqueue. Manually scheduling fibers
-is done by issuing `NOP` operations and then processing CQE's one by one.
-
-## Example
+## Short Example
 
 ```ruby
 require 'uringmachine'

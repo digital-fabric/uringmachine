@@ -644,17 +644,6 @@ VALUE read_recv_each_begin(VALUE arg) {
       ctx->op->flags &= ~OP_F_COMPLETED;
     else
       break;
-
-
-
-
-    // else {
-    //   int more = (ctx->op->cqe_flags & IORING_CQE_F_MORE);
-    //   if (more) ctx->op->flags &= ~ OP_F_COMPLETED;
-    //   um_raise_on_error_result(ctx->op->result.res);
-    //   if (!read_recv_each_multishot_process_result(ctx, &total))
-    //     return INT2NUM(total);
-    // }
   }
 
   return Qnil;
