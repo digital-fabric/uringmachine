@@ -3,6 +3,14 @@
 require_relative 'helper'
 require 'socket'
 
+class UringMachineTest < Minitest::Test
+  def test_kernel_version
+    v = UringMachine.kernel_version
+    assert_kind_of Integer, v
+    assert_in_range 600..700, v
+  end
+end
+
 class SchedulingTest < UMBaseTest
   def test_schedule_and_yield
     buf = []
@@ -254,9 +262,10 @@ end
 
 class ReadEachTest < UMBaseTest
   def test_read_each
+    skip if UringMachine.kernel_version < 607
+
     r, w = IO.pipe
     bufs = []
-
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -283,8 +292,9 @@ class ReadEachTest < UMBaseTest
 
   # send once and close write fd
   def test_read_each_raising_1
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -306,8 +316,9 @@ class ReadEachTest < UMBaseTest
 
   # send once and leave write fd open
   def test_read_each_raising_2
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -330,8 +341,9 @@ class ReadEachTest < UMBaseTest
 
   # send twice
   def test_read_each_raising_3
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
 
@@ -354,8 +366,9 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_break
-    r, w = IO.pipe
+    skip if UringMachine.kernel_version < 607
 
+    r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
     t = Thread.new do
@@ -379,6 +392,8 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_bad_file
+    skip if UringMachine.kernel_version < 607
+
     _r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 

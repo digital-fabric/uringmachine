@@ -107,8 +107,12 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
 }
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
+#ifdef HAVE_IO_URING_PREP_READ_MULTISHOT
   struct um *machine = get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
+#else
+  rb_raise(rb_eRuntimeError, "Not supported by kernel");
+#endif
 }
 
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
@@ -254,6 +258,10 @@ VALUE UM_queue_shift(VALUE self, VALUE queue) {
 
 #endif
 
+VALUE UM_kernel_version(VALUE self) {
+  return INT2NUM(UM_KERNEL_VERSION);
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -294,6 +302,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   #endif
+
+  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
   um_define_net_constants(cUM);
 }
