@@ -20,27 +20,16 @@
 #define likely(cond)	__builtin_expect(!!(cond), 1)
 #endif
 
-enum op_state {
-  OP_IDLE,
-  OP_PENDING,
-  OP_SCHEDULED,
-  OP_DONE
-};
-
 enum op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
-  OP_INTERRUPT,
-  OP_MULTISHOT_AUX,
+
   OP_SLEEP,
   OP_READ,
-  OP_READ_MULTISHOT,
   OP_WRITE,
   OP_CLOSE,
   OP_ACCEPT,
-  OP_ACCEPT_MULTISHOT,
   OP_RECV,
-  OP_RECV_MULTISHOT,
   OP_SEND,
   OP_SOCKET,
   OP_CONNECT,
@@ -48,50 +37,41 @@ enum op_kind {
   OP_LISTEN,
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
-  OP_SYNCHRONIZE
+
+  OP_FUTEX_WAIT,
+  OP_FUTEX_WAKE,
+
+  OP_ACCEPT_MULTISHOT,
+  OP_READ_MULTISHOT,
+  OP_RECV_MULTISHOT
 };
 
-struct um_result_entry {
-  struct um_result_entry *next;
+#define OP_F_COMPLETED        (1U << 0)
+#define OP_F_TRANSIENT        (1U << 1)
+#define OP_F_IGNORE_CANCELED  (1U << 2)
+#define OP_F_MULTISHOT        (1U << 3)
 
-  __s32 result;
+struct um_op_result {
+  __s32 res;
   __u32 flags;
+  struct um_op_result *next;
 };
-
-struct um_result_list {
-  struct um_result_entry *head;
-  struct um_result_entry *tail;
-};
-
-#define OP_F_MULTISHOT    (1U << 0)
-#define OP_F_CANCELLED    (1U << 1)
-#define OP_F_DISCARD      (1U << 2)
-#define OP_F_AUTO_CHECKIN (1U << 3)
 
 struct um_op {
-  enum op_kind kind;
-  enum op_state state;
-  unsigned flags;
-
   struct um_op *prev;
   struct um_op *next;
-  
-  union {
-    struct __kernel_timespec ts;
-    struct {
-      struct um_op *aux;
-      struct um_result_list list_results;
-    };
-    struct um_result_entry cqe;
-  };
+
+  enum op_kind kind;
+  unsigned flags;
 
   VALUE fiber;
   VALUE value;
-};
 
-struct um_op_linked_list {
-  struct um_op *head;
-  struct um_op *tail;
+  struct um_op_result result;
+  struct um_op_result *multishot_result_tail;
+  unsigned multishot_result_count;
+
+  struct __kernel_timespec ts; // used for timeout operation
 };
 
 struct um_buffer {
@@ -113,12 +93,8 @@ struct buf_ring_descriptor {
 
 struct um {
   VALUE self;
+  VALUE poll_fiber;
 
-  struct um_op_linked_list list_idle;
-  struct um_op_linked_list list_pending;
-  struct um_op_linked_list list_scheduled;
-
-  struct um_result_entry *result_freelist;
   struct um_buffer *buffer_freelist;
 
   struct io_uring ring;
@@ -129,6 +105,13 @@ struct um {
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
   unsigned int buffer_ring_count;
+
+  struct um_op *transient_head;
+  struct um_op *runqueue_head;
+  struct um_op *runqueue_tail;
+
+  struct um_op *op_freelist;
+  struct um_op_result *result_freelist;
 };
 
 struct um_mutex {
@@ -161,20 +144,19 @@ extern VALUE cQueue;
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
 
-struct um_op*  um_op_idle_checkout(struct um *machine, enum op_kind kind);
-void um_op_state_transition(struct um *machine, struct um_op *op, enum op_state new_state);
-void um_op_push_multishot_result(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
-struct um_op *um_op_list_shift(struct um_op_linked_list *list);
-struct um_op *um_op_search_by_fiber(struct um_op_linked_list *list, VALUE fiber);
+struct um_op *um_op_alloc(struct um *machine);
+void um_op_free(struct um *machine, struct um_op *op);
+void um_op_clear(struct um *machine, struct um_op *op);
+void um_op_transient_add(struct um *machine, struct um_op *op);
+void um_op_transient_remove(struct um *machine, struct um_op *op);
+void um_op_list_mark(struct um *machine, struct um_op *head);
+void um_op_list_compact(struct um *machine, struct um_op *head);
 
-void um_op_free_list(struct um *machine, struct um_op_linked_list *list);
-void um_mark_op_linked_list(struct um_op_linked_list *list);
-void um_compact_op_linked_list(struct um_op_linked_list *list);
+void um_op_multishot_results_push(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
+void um_op_multishot_results_clear(struct um *machine, struct um_op *op);
 
-void um_op_result_push(struct um *machine, struct um_op *op, __s32 result, __u32 flags);
-int um_op_result_shift(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
-void um_op_result_cleanup(struct um *machine, struct um_op *op);
-void um_op_result_list_free(struct um *machine);
+void um_runqueue_push(struct um *machine, struct um_op *op);
+struct um_op *um_runqueue_shift(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
 void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
@@ -183,6 +165,10 @@ void um_free_buffer_linked_list(struct um *machine);
 struct __kernel_timespec um_double_to_timespec(double value);
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
+
+#define raise_if_exception(v) (um_value_is_exception_p(v) ? um_raise_exception(v) : v)
+
+void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind);
 void um_raise_on_error_result(int result);
 void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
@@ -190,11 +176,15 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
-VALUE um_await_op(struct um *machine, struct um_op *op, __s32 *result, __u32 *flags);
 
+VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
+void um_cancel_and_wait(struct um *machine, struct um_op *op);
+int um_check_completion(struct um *machine, struct um_op *op);
+
+#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
+
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
-void um_interrupt(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
@@ -229,8 +219,6 @@ VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
-
-VALUE um_debug(struct um *machine);
 
 void um_define_net_constants(VALUE mod);
 

@@ -22,15 +22,16 @@ def get_config
   raise "UringMachine requires kernel version 6.4 or newer!" if combined_version < 604
 
   {
-    kernel_version:     combined_version,
-    submit_all_flag:    combined_version >= 518,
-    coop_taskrun_flag:  combined_version >= 519,
-    single_issuer_flag: combined_version >= 600,
-    prep_bind:          combined_version >= 611,
-    prep_listen:        combined_version >= 611,
-    prep_cmd_sock:      combined_version >= 607,
-    prep_futex:         combined_version >= 607,
-    prep_waitid:        combined_version >= 607
+    kernel_version:       combined_version,
+    submit_all_flag:      combined_version >= 518,
+    coop_taskrun_flag:    combined_version >= 519,
+    single_issuer_flag:   combined_version >= 600,
+    prep_bind:            combined_version >= 611,
+    prep_listen:          combined_version >= 611,
+    prep_cmd_sock:        combined_version >= 607,
+    prep_futex:           combined_version >= 607,
+    prep_waitid:          combined_version >= 607,
+    prep_read_multishot:  combined_version >= 607
   }
 end
 
@@ -55,13 +56,15 @@ if !find_library('uring', nil, File.join(liburing_path, 'src'))
   raise "Couldn't find liburing.a"
 end
 
-$defs << '-DHAVE_IORING_SETUP_SUBMIT_ALL'   if config[:submit_all_flag]
-$defs << '-DHAVE_IORING_SETUP_COOP_TASKRUN' if config[:coop_taskrun_flag]
-$defs << '-DHAVE_IO_URING_PREP_BIND'        if config[:prep_bind]
-$defs << '-DHAVE_IO_URING_PREP_LISTEN'      if config[:prep_listen]
-$defs << '-DHAVE_IO_URING_PREP_CMD_SOCK'    if config[:prep_cmd_sock]
-$defs << '-DHAVE_IO_URING_PREP_FUTEX'       if config[:prep_futex]
-$defs << '-DHAVE_IO_URING_PREP_WAITID'      if config[:prep_waitid]
+$defs << "-DUM_KERNEL_VERSION=#{config[:kernel_version]}"
+$defs << '-DHAVE_IORING_SETUP_SUBMIT_ALL'       if config[:submit_all_flag]
+$defs << '-DHAVE_IORING_SETUP_COOP_TASKRUN'     if config[:coop_taskrun_flag]
+$defs << '-DHAVE_IO_URING_PREP_BIND'            if config[:prep_bind]
+$defs << '-DHAVE_IO_URING_PREP_LISTEN'          if config[:prep_listen]
+$defs << '-DHAVE_IO_URING_PREP_CMD_SOCK'        if config[:prep_cmd_sock]
+$defs << '-DHAVE_IO_URING_PREP_FUTEX'           if config[:prep_futex]
+$defs << '-DHAVE_IO_URING_PREP_WAITID'          if config[:prep_waitid]
+$defs << '-DHAVE_IO_URING_PREP_READ_MULTISHOT'  if config[:prep_read_multishot]
 $CFLAGS << ' -Wno-pointer-arith'
 
 CONFIG['optflags'] << ' -fno-strict-aliasing'
