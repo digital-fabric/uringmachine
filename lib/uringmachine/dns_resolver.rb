@@ -54,7 +54,7 @@ class UringMachine
       @machine.send(fd, msg, msg.bytesize, 0)
 
       buf = +''
-      ret = @machine.recv(fd, buf, 16384, 0)
+      @machine.recv(fd, buf, 16384, 0)
 
       msg = Resolv::DNS::Message.decode buf
       addrs = []

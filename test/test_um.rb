@@ -49,7 +49,7 @@ class SchedulingTest < UMBaseTest
     assert_equal [e], buf
   end
 
-  def test_schedule_exception
+  def test_schedule_exception2
     main = Fiber.current
     e = CustomError.new
     f = Fiber.new do
@@ -379,7 +379,7 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_bad_file
-    r, w = IO.pipe
+    _r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
     assert_raises(Errno::EBADF) do
