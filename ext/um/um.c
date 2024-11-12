@@ -133,7 +133,14 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   struct wait_for_cqe_ctx *ctx = ptr;
   if (ctx->machine->unsubmitted_count) {
     ctx->machine->unsubmitted_count = 0;
-    ctx->result = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, 1, NULL, NULL);
+
+    // Attn: The io_uring_submit_and_wait_timeout will not return -EINTR if
+    // interrupted with a signal. We can detect this by testing ctx->cqe for
+    // NULL.
+    //
+    // https://github.com/axboe/liburing/issues/1280
+    int res = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, 1, NULL, NULL);
+    ctx->result = (!ctx->cqe) ? -EINTR : res;
   }
   else
     ctx->result = io_uring_wait_cqe(&ctx->machine->ring, &ctx->cqe);
@@ -141,18 +148,17 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
 }
 
 static inline void um_wait_for_and_process_ready_cqes(struct um *machine) {
-  struct wait_for_cqe_ctx ctx = {
-    .machine = machine,
-    .cqe = NULL
-  };
-
+  struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL };
   rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
-  if (unlikely(ctx.result < 0)) {
+
+  if (unlikely(ctx.result < 0 && ctx.result != -EINTR))
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+
+  if (ctx.cqe) {
+    um_process_cqe(machine, ctx.cqe);
+    io_uring_cq_advance(&machine->ring, 1);
+    um_process_ready_cqes(machine);
   }
-  um_process_cqe(machine, ctx.cqe);
-  io_uring_cq_advance(&machine->ring, 1);
-  um_process_ready_cqes(machine);
 }
 
 inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
@@ -171,8 +177,7 @@ inline VALUE um_fiber_switch(struct um *machine) {
     if (op)
       return process_runqueue_op(machine, op);
 
-    // if (machine->unsubmitted_count || !um_process_ready_cqes(machine))
-      um_wait_for_and_process_ready_cqes(machine);
+    um_wait_for_and_process_ready_cqes(machine);
   }
 }
 
