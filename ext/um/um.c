@@ -140,7 +140,7 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
     //
     // https://github.com/axboe/liburing/issues/1280
     int res = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, 1, NULL, NULL);
-    ctx->result = (!ctx->cqe) ? -EINTR : res;
+    ctx->result = (res > 0 && !ctx->cqe) ? -EINTR : res;
   }
   else
     ctx->result = io_uring_wait_cqe(&ctx->machine->ring, &ctx->cqe);
