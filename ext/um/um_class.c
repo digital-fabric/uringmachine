@@ -271,7 +271,8 @@ VALUE UM_open_ensure(VALUE arg) {
 
 VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
   struct um *machine = get_machine(self);
-  VALUE ret = um_open(machine, pathname, NUM2INT(flags), S_IRWXU);
+  // TODO: take optional perm (mode) arg
+  VALUE ret = um_open(machine, pathname, NUM2INT(flags), 0666);
   if (rb_block_given_p()) {
     struct um_open_ctx ctx = { self, ret };
     return rb_ensure(rb_yield, ret, UM_open_ensure, (VALUE)&ctx);
