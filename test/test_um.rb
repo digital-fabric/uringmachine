@@ -11,7 +11,23 @@ class UringMachineTest < Minitest::Test
   end
 end
 
-class SchedulingTest < UMBaseTest
+class FiberTest < UMBaseTest
+  def test_spin
+    x = nil
+    f = machine.spin do
+      x = :foo
+    end
+
+    assert_kind_of Fiber, f
+    assert_nil x
+
+    machine.snooze
+
+    assert_equal :foo, x
+  end
+end
+
+class ScheduleTest < UMBaseTest
   def test_schedule_and_yield
     buf = []
     main = Fiber.current
@@ -946,3 +962,4 @@ class QueueTest < UMBaseTest
     assert_equal :foo, machine.shift(q)
   end
 end
+

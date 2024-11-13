@@ -23,6 +23,7 @@ class UringMachine
     end
     schedule(f, value)
     @@fiber_map[f] = true
+    f
   end
 
   def resolve(hostname, type = :A)
