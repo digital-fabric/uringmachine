@@ -1,4 +1,7 @@
 #include "ruby.h"
+
+#include <fcntl.h>
+
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -12,6 +15,23 @@
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
 void um_define_net_constants(VALUE mod) {
+  DEF_CONST_INT(mod, O_APPEND);
+  DEF_CONST_INT(mod, O_CLOEXEC);
+  DEF_CONST_INT(mod, O_CREAT);
+  DEF_CONST_INT(mod, O_DIRECT);
+  DEF_CONST_INT(mod, O_DIRECTORY);
+  DEF_CONST_INT(mod, O_DSYNC);
+  DEF_CONST_INT(mod, O_EXCL);
+  DEF_CONST_INT(mod, O_NOCTTY);
+  DEF_CONST_INT(mod, O_NOFOLLOW);
+  DEF_CONST_INT(mod, O_PATH);
+  DEF_CONST_INT(mod, O_RDONLY);
+  DEF_CONST_INT(mod, O_RDWR);
+  DEF_CONST_INT(mod, O_SYNC);
+  DEF_CONST_INT(mod, O_TMPFILE);
+  DEF_CONST_INT(mod, O_TRUNC);
+  DEF_CONST_INT(mod, O_WRONLY);
+
   DEF_CONST_INT(mod, SOCK_STREAM);
   DEF_CONST_INT(mod, SOCK_DGRAM);
   DEF_CONST_INT(mod, SOCK_RAW);

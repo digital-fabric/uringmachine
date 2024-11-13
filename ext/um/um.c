@@ -499,6 +499,20 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   return raise_if_exception(ret);
 }
 
+VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_BIND);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_open(sqe, StringValueCStr(pathname), flags, mode);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+}
+
 /*******************************************************************************
                             multishot ops
 *******************************************************************************/

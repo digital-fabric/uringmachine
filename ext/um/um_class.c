@@ -258,6 +258,28 @@ VALUE UM_queue_shift(VALUE self, VALUE queue) {
 
 #endif
 
+struct um_open_ctx {
+  VALUE self;
+  VALUE fd;
+};
+
+VALUE UM_open_ensure(VALUE arg) {
+  struct um_open_ctx *ctx = (struct um_open_ctx *)arg;
+  UM_close(ctx->self, ctx->fd);
+  return ctx->self;
+}
+
+VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
+  struct um *machine = get_machine(self);
+  VALUE ret = um_open(machine, pathname, NUM2INT(flags), S_IRWXU);
+  if (rb_block_given_p()) {
+    struct um_open_ctx ctx = { self, ret };
+    return rb_ensure(rb_yield, ret, UM_open_ensure, (VALUE)&ctx);
+  }
+  else
+    return ret;
+}
+
 VALUE UM_kernel_version(VALUE self) {
   return INT2NUM(UM_KERNEL_VERSION);
 }
@@ -269,41 +291,42 @@ void Init_UM(void) {
   rb_define_alloc_func(cUM, UM_allocate);
 
   rb_define_method(cUM, "initialize", UM_initialize, 0);
-  rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
+  rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
+  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
-  rb_define_method(cUM, "snooze", UM_snooze, 0);
-  rb_define_method(cUM, "yield", UM_yield, 0);
+
   rb_define_method(cUM, "schedule", UM_schedule, 2);
+  rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
+  rb_define_method(cUM, "yield", UM_yield, 0);
 
-  rb_define_method(cUM, "sleep", UM_sleep, 1);
+  rb_define_method(cUM, "close", UM_close, 1);
+  rb_define_method(cUM, "open", UM_open, 2);
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
+  rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "write", UM_write, -1);
-  rb_define_method(cUM, "close", UM_close, 1);
 
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);
-  rb_define_method(cUM, "socket", UM_socket, 4);
+  rb_define_method(cUM, "bind", UM_bind, 3);
   rb_define_method(cUM, "connect", UM_connect, 3);
-  rb_define_method(cUM, "send", UM_send, 4);
+  rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
+  rb_define_method(cUM, "listen", UM_listen, 2);
   rb_define_method(cUM, "recv", UM_recv, 4);
   rb_define_method(cUM, "recv_each", UM_recv_each, 3);
-  rb_define_method(cUM, "bind", UM_bind, 3);
-  rb_define_method(cUM, "listen", UM_listen, 2);
-  rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
+  rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
+  rb_define_method(cUM, "socket", UM_socket, 4);
 
   #ifdef HAVE_IO_URING_PREP_FUTEX
-  rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
-  rb_define_method(cUM, "push", UM_queue_push, 2);
   rb_define_method(cUM, "pop", UM_queue_pop, 1);
-  rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
+  rb_define_method(cUM, "push", UM_queue_push, 2);
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
+  rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
+  rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   #endif
-
-  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
   um_define_net_constants(cUM);
 }

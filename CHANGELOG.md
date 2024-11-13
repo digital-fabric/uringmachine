@@ -1,3 +1,9 @@
+- Add `#open`
+- Fix `#spin`
+- Fix handling of signal interruption.
+- Reimplement and simplify um_op
+- Add `UM::Queue`, `#push`, `#pop`, `#shift`, `#unshift`
+- Add `UM::Mutex`, `#synchronize`
 - Add `#recv_each`
 - Add `#getsockopt`, `#setsockopt`
 - Simplify and improve op management

@@ -963,3 +963,33 @@ class QueueTest < UMBaseTest
   end
 end
 
+class OpenTest < UMBaseTest
+  PATH = '/tmp/um_open_test'
+
+  def setup
+    super
+    FileUtils.rm(PATH, force: true)
+  end
+
+  def test_open
+    fd = machine.open(PATH, UM::O_CREAT | UM::O_WRONLY)
+    assert_kind_of Integer, fd
+    assert File.file?(PATH)
+
+    machine.write(fd, 'foo')
+    machine.close(fd)
+
+    assert_equal 'foo', IO.read(PATH)
+  end
+
+  def test_open_with_block
+    res = machine.open(PATH, UM::O_CREAT | UM::O_WRONLY) do |fd|
+      machine.write(fd, 'bar')
+      fd
+    end
+
+    assert_kind_of Integer, res
+    assert_raises(Errno::EBADF) { machine.close(res) }
+    assert_equal 'bar', IO.read(PATH)
+  end
+end
