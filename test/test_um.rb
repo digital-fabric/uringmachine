@@ -993,3 +993,32 @@ class OpenTest < UMBaseTest
     assert_equal 'bar', IO.read(PATH)
   end
 end
+
+class PipeTest < UMBaseTest
+  def test_pipe
+    rfd, wfd = UM.pipe
+    ret = machine.write(wfd, 'foo')
+    assert_equal 3, ret
+    
+    ret = machine.close(wfd)
+    assert_equal wfd, ret
+
+    buf = +''
+    ret = machine.read(rfd, buf, 8192)
+
+    assert_equal 3, ret
+    assert_equal 'foo', buf
+
+    ret = machine.close(rfd)
+    assert_equal rfd, ret
+  end
+end
+
+# class WaitIDTest < UMBaseTest
+#   def test_waitid
+#     rfd, wfd = UM.pipe
+#     pid = fork do
+#       exit 42
+#     end
+#   end
+# end

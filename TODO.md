@@ -2,7 +2,6 @@
 - sendto
 - recvfrom
 - poll_add / poll_remove / poll_multishot / poll_update
-- open / openat
 - fsync
 - mkdir / mkdirat
 - statx

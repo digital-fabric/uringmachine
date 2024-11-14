@@ -281,6 +281,17 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
     return ret;
 }
 
+VALUE UM_pipe(VALUE self) {
+  int fds[2];
+  int ret = pipe(fds);
+  if (ret) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+
+  return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
+}
+
 VALUE UM_kernel_version(VALUE self) {
   return INT2NUM(UM_KERNEL_VERSION);
 }
@@ -294,6 +305,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "initialize", UM_initialize, 0);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
+
+  rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
 

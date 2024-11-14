@@ -1,3 +1,4 @@
+- Add `#pipe`
 - Add `#open`
 - Fix `#spin`
 - Fix handling of signal interruption.
