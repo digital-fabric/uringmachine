@@ -1,6 +1,7 @@
 #include "ruby.h"
 
 #include <fcntl.h>
+#include <sys/wait.h>
 
 #include <arpa/inet.h>
 #include <sys/types.h>
@@ -31,6 +32,14 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, O_TMPFILE);
   DEF_CONST_INT(mod, O_TRUNC);
   DEF_CONST_INT(mod, O_WRONLY);
+
+  DEF_CONST_INT(mod, WNOHANG);
+  DEF_CONST_INT(mod, WUNTRACED);
+  DEF_CONST_INT(mod, WCONTINUED);
+  DEF_CONST_INT(mod, WEXITED);
+  DEF_CONST_INT(mod, WSTOPPED);
+  DEF_CONST_INT(mod, WCONTINUED);
+  DEF_CONST_INT(mod, WNOWAIT);
 
   DEF_CONST_INT(mod, SOCK_STREAM);
   DEF_CONST_INT(mod, SOCK_DGRAM);

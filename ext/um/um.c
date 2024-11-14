@@ -513,6 +513,24 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   return raise_if_exception(ret);
 }
 
+VALUE um_waitpid(struct um *machine, int pid, int options) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_BIND);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+  siginfo_t infop;
+  io_uring_prep_waitid(sqe, P_PID, pid, &infop, options, 0);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RB_GC_GUARD(ret);
+  raise_if_exception(ret);
+
+  return rb_ary_new_from_args(2, INT2NUM(infop.si_pid), INT2NUM(infop.si_status));
+}
+
 /*******************************************************************************
                             multishot ops
 *******************************************************************************/

@@ -1,4 +1,5 @@
-- Add `#pipe`
+- Add `#waitpid`
+- Add `UM.pipe`, `UM.kernel_version`
 - Add `#open`
 - Fix `#spin`
 - Fix handling of signal interruption.

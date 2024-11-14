@@ -992,6 +992,11 @@ class OpenTest < UMBaseTest
     assert_raises(Errno::EBADF) { machine.close(res) }
     assert_equal 'bar', IO.read(PATH)
   end
+
+  def test_open_bad_arg
+    assert_raises(Errno::ENOENT) { machine.open(PATH, UM::O_RDONLY) }
+    assert_raises(Errno::ENOENT) { machine.open(PATH, UM::O_RDONLY) {} }
+  end
 end
 
 class PipeTest < UMBaseTest
@@ -1014,11 +1019,31 @@ class PipeTest < UMBaseTest
   end
 end
 
-# class WaitIDTest < UMBaseTest
-#   def test_waitid
-#     rfd, wfd = UM.pipe
-#     pid = fork do
-#       exit 42
-#     end
-#   end
-# end
+class WaitTest < UMBaseTest
+  def test_waitpid
+    msg = 'hello from child'
+
+    rfd, wfd = UM.pipe
+    pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    ret = machine.waitpid(pid, UM::WEXITED)
+    assert_kind_of Array, ret
+    assert_equal [pid, 42], ret
+
+    buf = +''
+    ret = machine.read(rfd, buf, 8192)
+    assert_equal msg.bytesize, ret
+    assert_equal msg, buf
+  end
+
+  def test_waitpid_bad_pid
+    assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }    
+  end
+
+end
+

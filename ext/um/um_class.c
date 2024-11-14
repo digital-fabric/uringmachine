@@ -272,13 +272,18 @@ VALUE UM_open_ensure(VALUE arg) {
 VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
   struct um *machine = get_machine(self);
   // TODO: take optional perm (mode) arg
-  VALUE ret = um_open(machine, pathname, NUM2INT(flags), 0666);
+  VALUE fd = um_open(machine, pathname, NUM2INT(flags), 0666);
   if (rb_block_given_p()) {
-    struct um_open_ctx ctx = { self, ret };
-    return rb_ensure(rb_yield, ret, UM_open_ensure, (VALUE)&ctx);
+    struct um_open_ctx ctx = { self, fd };
+    return rb_ensure(rb_yield, fd, UM_open_ensure, (VALUE)&ctx);
   }
   else
-    return ret;
+    return fd;
+}
+
+VALUE UM_waitpid(VALUE self, VALUE pid, VALUE options) {
+  struct um *machine = get_machine(self);
+  return um_waitpid(machine, NUM2INT(pid), NUM2INT(options));
 }
 
 VALUE UM_pipe(VALUE self) {
@@ -321,6 +326,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "read_each", UM_read_each, 2);
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "write", UM_write, -1);
+
+  rb_define_method(cUM, "waitpid", UM_waitpid, 2);
 
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);

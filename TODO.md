@@ -7,7 +7,6 @@
 - statx
 - link / linkat / unlink / unlinkat / symlink
 - rename / renameat
-- waitid
 - fadvise
 - madvise
 - getxattr / setxattr
