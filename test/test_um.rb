@@ -1021,6 +1021,8 @@ end
 
 class WaitTest < UMBaseTest
   def test_waitpid
+    skip if UM.kernel_version < 607
+
     msg = 'hello from child'
 
     rfd, wfd = UM.pipe
@@ -1042,6 +1044,8 @@ class WaitTest < UMBaseTest
   end
 
   def test_waitpid_bad_pid
+    skip if UM.kernel_version < 607
+
     assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }    
   end
 
