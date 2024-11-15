@@ -349,5 +349,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   #endif
 
+  Init_micro_ssl(cUM);
+
   um_define_net_constants(cUM);
 }

@@ -38,7 +38,6 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, WCONTINUED);
   DEF_CONST_INT(mod, WEXITED);
   DEF_CONST_INT(mod, WSTOPPED);
-  DEF_CONST_INT(mod, WCONTINUED);
   DEF_CONST_INT(mod, WNOWAIT);
 
   DEF_CONST_INT(mod, SOCK_STREAM);
