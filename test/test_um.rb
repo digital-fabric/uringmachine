@@ -1048,6 +1048,4 @@ class WaitTest < UMBaseTest
 
     assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }    
   end
-
 end
-
