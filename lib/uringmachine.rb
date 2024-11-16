@@ -8,6 +8,10 @@ UM = UringMachine
 class UringMachine
   @@fiber_map = {}
 
+  def fiber_map
+    @@fiber_map
+  end
+
   def spin(value = nil, &block)
     f = Fiber.new do |resume_value|
       block.(resume_value)
