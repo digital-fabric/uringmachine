@@ -74,7 +74,7 @@ class AsyncOpTest < UMBaseTest
     assert_equal 0, machine.pending_count
     assert_kind_of TOError, e
     assert_equal true, @op.done?
-    assert_equal -ECANCELED, @op.result
+    assert_equal (-ECANCELED), @op.result
     assert_equal true, @op.cancelled?
   end
 end
