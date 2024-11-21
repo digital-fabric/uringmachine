@@ -1,8 +1,12 @@
 require_relative "helper"
 
-require "uringmachine/micro_ssl"
+__END__
 
-class TestSSL < Minitest::Test
+require 'uringmachine/ssl'
+require 'openssl'
+require 'localhost'
+
+class TestSSLContext < Minitest::Test
 
   if false
     def test_raises_with_invalid_keystore_file
@@ -90,5 +94,62 @@ class TestSSL < Minitest::Test
 
       assert_raises(Errno::ENOENT) { ctx.key_password }
     end
+  end
+end
+
+class TestSSLServer < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+    @ssl_ctx = create_ssl_ctx
+  end
+
+  def create_ssl_ctx
+    authority = Localhost::Authority.fetch
+    authority.server_context
+  end
+
+  def test_ssl_accept
+    server_fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    machine.bind(server_fd, '127.0.0.1', @port)
+    res = machine.listen(server_fd, 5)
+    assert_equal 0, res
+    assert_equal 0, machine.pending_count
+
+    fd = nil
+    sock = nil
+
+    reply = nil
+    t = Thread.new do
+      p 21
+      sleep 0.1
+      p 22
+      sock = TCPSocket.new('127.0.0.1', @port)
+      p 23
+      sleep 0.1
+      p 24
+      client = OpenSSL::SSL::SSLSocket.new(sock)
+      p 25
+      client.connect
+      p 26
+      client.write('foobar')
+      p 27
+      reply = client.read(8192)
+      p 28
+    end
+
+    p 11
+    fd = machine.accept(server_fd)
+    p 12
+    sock = machine.ssl_accept(fd, @ssl_ctx)
+    msg = +''
+    p 13
+    ret = sock.recv(msg, 8192)
+    p 14
+    sock.send("Hello: #{msg} (#{ret})", 0)
+    p 15
+    machine.close(fd)
+
+    assert_equal 'Hello: foobar (6)', reply
   end
 end

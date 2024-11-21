@@ -1,7 +1,7 @@
 #ifndef UM_H
 #define UM_H
 
-#include "ruby.h"
+#include <ruby.h>
 #include <liburing.h>
 
 // debugging
@@ -93,7 +93,6 @@ struct buf_ring_descriptor {
 
 struct um {
   VALUE self;
-  VALUE poll_fiber;
 
   struct um_buffer *buffer_freelist;
 
@@ -224,6 +223,6 @@ VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
 void um_define_net_constants(VALUE mod);
 
-void Init_micro_ssl(VALUE mod);
+// void Init_micro_ssl(VALUE mod);
 
 #endif // UM_H

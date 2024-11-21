@@ -14,7 +14,6 @@ static void UM_mark(void *ptr) {
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
   machine->self = rb_gc_location(machine->self);
-  machine->poll_fiber = rb_gc_location(machine->poll_fiber);
 
   um_op_list_compact(machine, machine->transient_head);
   um_op_list_compact(machine, machine->runqueue_head);
@@ -349,7 +348,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   #endif
 
-  Init_micro_ssl(cUM);
+  // Init_micro_ssl(cUM);
 
   um_define_net_constants(cUM);
 }

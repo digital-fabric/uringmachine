@@ -20,8 +20,9 @@ Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.required_ruby_version = '>= 3.3'
 
-  s.add_development_dependency  'rake-compiler',        '1.2.7'
+  s.add_development_dependency  'rake-compiler',        '1.2.8'
   s.add_development_dependency  'minitest',             '5.25.1'
   s.add_development_dependency  'http_parser.rb',       '0.8.0'
-  s.add_development_dependency  'benchmark-ips',        '2.10.0'
+  s.add_development_dependency  'benchmark-ips',        '2.14.0'
+  s.add_development_dependency  'localhost',            '1.3.1'
 end

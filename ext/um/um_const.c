@@ -16,6 +16,19 @@
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
 void um_define_net_constants(VALUE mod) {
+  DEF_CONST_INT(mod, MSG_CONFIRM);
+  DEF_CONST_INT(mod, MSG_DONTROUTE);
+  DEF_CONST_INT(mod, MSG_DONTWAIT);
+  DEF_CONST_INT(mod, MSG_EOR);
+  DEF_CONST_INT(mod, MSG_ERRQUEUE);
+  DEF_CONST_INT(mod, MSG_FASTOPEN);
+  DEF_CONST_INT(mod, MSG_MORE);
+  DEF_CONST_INT(mod, MSG_NOSIGNAL);
+  DEF_CONST_INT(mod, MSG_OOB);
+  DEF_CONST_INT(mod, MSG_PEEK);
+  DEF_CONST_INT(mod, MSG_TRUNC);
+  DEF_CONST_INT(mod, MSG_WAITALL);
+
   DEF_CONST_INT(mod, O_APPEND);
   DEF_CONST_INT(mod, O_CLOEXEC);
   DEF_CONST_INT(mod, O_CREAT);
@@ -62,13 +75,6 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, PF_ROUTE);
   DEF_CONST_INT(mod, AF_MAX);
   DEF_CONST_INT(mod, PF_MAX);
-
-  DEF_CONST_INT(mod, MSG_OOB);
-  DEF_CONST_INT(mod, MSG_PEEK);
-  DEF_CONST_INT(mod, MSG_DONTROUTE);
-  DEF_CONST_INT(mod, MSG_WAITALL);
-  DEF_CONST_INT(mod, MSG_DONTWAIT);
-  DEF_CONST_INT(mod, MSG_MORE);
 
   DEF_CONST_INT(mod, SOL_SOCKET);
   DEF_CONST_INT(mod, SOL_IP);

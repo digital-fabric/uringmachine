@@ -34,4 +34,8 @@ class UringMachine
     @resolver ||= DNSResolver.new(self)
     @resolver.resolve(hostname, type)
   end
+
+  def ssl_accept(fd, ssl_ctx)
+    SSL::Connection.new(self, fd, ssl_ctx)
+  end
 end

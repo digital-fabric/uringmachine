@@ -35,7 +35,7 @@ end
 
 server_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
 @machine.setsockopt(server_fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
-@machine.bind(server_fd, '127.0.0.1', 1234)
+@machine.bind(server_fd, '0.0.0.0', 1234)
 @machine.listen(server_fd, UM::SOMAXCONN)
 puts 'Listening on port 1234'
 

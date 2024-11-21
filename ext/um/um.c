@@ -5,7 +5,6 @@ void um_setup(VALUE self, struct um *machine) {
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
-  RB_OBJ_WRITE(self, &machine->poll_fiber, Qnil);
 
   unsigned prepared_limit = 4096;
   unsigned flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_COOP_TASKRUN;

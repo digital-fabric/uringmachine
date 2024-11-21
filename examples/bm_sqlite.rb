@@ -54,15 +54,36 @@ class UM
   end
 end
 
+class Locker
+  def initialize(machine, target)
+    @machine = machine
+    @target = target
+    @mutex = UM::Mutex.new
+  end
+
+  def method_missing(sym, *a, **k)
+    @machine.synchronize(@mutex) { @target.send(sym, *a, **k) }
+  end
+end
+
+
+PATH = '/tmp/foo'
+
 $machine = UM.new
-$actor_db = $machine.spin_actor(Extralite::Database.new('/tmp/foo'))
-$raw_db = Extralite::Database.new('/tmp/foo')
+$raw_db = Extralite::Database.new(PATH)
+$actor_db = $machine.spin_actor(Extralite::Database.new(PATH))
+$locker_db = Locker.new($machine, Extralite::Database.new(PATH))
+
+[$raw_db, $actor_db, $locker_db].each do |db|
+  p db.query('select 1')
+end
 
 bm = Benchmark.ips do |x|
-  x.config(:time => 5, :warmup => 3)
+  x.config(:time => 5, :warmup => 2)
 
-  x.report("raw")    { $raw_db.query('select 1') }
-  x.report("actor")  { $actor_db.query('select 1') }
+  x.report("raw")     { $raw_db.query('select 1') }
+  x.report("actor")   { $actor_db.query('select 1') }
+  x.report("locker")  { $locker_db.query('select 1') }
 
   x.compare!
 end
