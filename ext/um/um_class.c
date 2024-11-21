@@ -40,7 +40,7 @@ static VALUE UM_allocate(VALUE klass) {
   return TypedData_Wrap_Struct(klass, &UM_type, machine);
 }
 
-inline struct um *get_machine(VALUE self) {
+inline struct um *um_get_machine(VALUE self) {
   struct um *machine = RTYPEDDATA_DATA(self);
   if (!machine->ring_initialized)
     rb_raise(rb_eRuntimeError, "Machine not initialized");
@@ -54,45 +54,45 @@ VALUE UM_initialize(VALUE self) {
 }
 
 VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   int bgid = um_setup_buffer_ring(machine, NUM2UINT(size), NUM2UINT(count));
   return INT2NUM(bgid);
 }
 
 VALUE UM_pending_count(VALUE self) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return INT2NUM(machine->pending_count);
 }
 
 VALUE UM_snooze(VALUE self) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   um_schedule(machine, rb_fiber_current(), Qnil);
   return um_await(machine);
 }
 
 VALUE UM_yield(VALUE self) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_await(machine);
 }
 
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   um_schedule(machine, fiber, value);
   return self;
 }
 
 VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_timeout(machine, interval, class);
 }
 
 VALUE UM_sleep(VALUE self, VALUE duration) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_sleep(machine, NUM2DBL(duration));
 }
 
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   VALUE fd;
   VALUE buffer;
   VALUE maxlen;
@@ -107,7 +107,7 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
 #ifdef HAVE_IO_URING_PREP_READ_MULTISHOT
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
 #else
   rb_raise(rb_eRuntimeError, "Not supported by kernel");
@@ -115,7 +115,7 @@ VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
 }
 
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   VALUE fd;
   VALUE buffer;
   VALUE len;
@@ -126,27 +126,27 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
 }
 
 VALUE UM_close(VALUE self, VALUE fd) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_close(machine, NUM2INT(fd));
 }
 
 VALUE UM_accept(VALUE self, VALUE fd) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_accept(machine, NUM2INT(fd));
 }
 
 VALUE UM_accept_each(VALUE self, VALUE fd) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_accept_each(machine, NUM2INT(fd));
 }
 
 VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flags) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
 }
 
 VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
 
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
@@ -158,17 +158,17 @@ VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
 }
 
 VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_send(machine, NUM2INT(fd), buffer, NUM2INT(len), NUM2INT(flags));
 }
 
 VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
 }
 
 VALUE UM_recv_each(VALUE self, VALUE fd, VALUE bgid, VALUE flags) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_recv_each(machine, NUM2INT(fd), NUM2INT(bgid), NUM2INT(flags));
 }
 
@@ -180,7 +180,7 @@ VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
   addr.sin_port = htons(NUM2INT(port));
 
 #ifdef HAVE_IO_URING_PREP_BIND
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_bind(machine, NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
 #else
   int res = bind(NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
@@ -192,7 +192,7 @@ VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
 
 VALUE UM_listen(VALUE self, VALUE fd, VALUE backlog) {
 #ifdef HAVE_IO_URING_PREP_LISTEN
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_listen(machine, NUM2INT(fd), NUM2INT(backlog));
 #else
   int res = listen(NUM2INT(fd), NUM2INT(backlog));
@@ -214,43 +214,43 @@ static inline int numeric_value(VALUE value) {
 }
 
 VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_getsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt));
 }
 
 VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
 }
 
 #ifdef HAVE_IO_URING_PREP_FUTEX
 
 VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   struct um_mutex *mutex_data = Mutex_data(mutex);
   return um_mutex_synchronize(machine, &mutex_data->state);
 }
 
 VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_push(machine, que, value);
 }
 
 VALUE UM_queue_pop(VALUE self, VALUE queue) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_pop(machine, que);
 }
 
 VALUE UM_queue_unshift(VALUE self, VALUE queue, VALUE value) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_unshift(machine, que, value);
 }
 
 VALUE UM_queue_shift(VALUE self, VALUE queue) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_shift(machine, que);
 }
@@ -269,7 +269,7 @@ VALUE UM_open_ensure(VALUE arg) {
 }
 
 VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   // TODO: take optional perm (mode) arg
   VALUE fd = um_open(machine, pathname, NUM2INT(flags), 0666);
   if (rb_block_given_p()) {
@@ -281,8 +281,13 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
 }
 
 VALUE UM_waitpid(VALUE self, VALUE pid, VALUE options) {
-  struct um *machine = get_machine(self);
+  struct um *machine = um_get_machine(self);
   return um_waitpid(machine, NUM2INT(pid), NUM2INT(options));
+}
+
+VALUE UM_prep_timeout(VALUE self, VALUE interval) {
+  struct um *machine = um_get_machine(self);
+  return um_prep_timeout(machine, NUM2DBL(interval));
 }
 
 VALUE UM_pipe(VALUE self) {
@@ -339,6 +344,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
+
+  rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 
   #ifdef HAVE_IO_URING_PREP_FUTEX
   rb_define_method(cUM, "pop", UM_queue_pop, 1);

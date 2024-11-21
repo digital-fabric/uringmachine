@@ -2,8 +2,9 @@
 
 inline void um_op_clear(struct um *machine, struct um_op *op) {
   memset(op, 0, sizeof(struct um_op));
-  RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->value, Qnil);
+  op->fiber = Qnil;
+  op->value = Qnil;
+  op->async_op = Qnil;
 }
 
 inline void um_op_transient_add(struct um *machine, struct um_op *op) {
@@ -50,6 +51,7 @@ inline void um_op_list_mark(struct um *machine, struct um_op *head) {
     struct um_op *next = head->next;
     rb_gc_mark_movable(head->fiber);
     rb_gc_mark_movable(head->value);
+    rb_gc_mark_movable(head->async_op);
     head = next;
   }
 }
@@ -59,6 +61,7 @@ inline void um_op_list_compact(struct um *machine, struct um_op *head) {
     struct um_op *next = head->next;
     head->fiber = rb_gc_location(head->fiber);
     head->value = rb_gc_location(head->value);
+    head->async_op = rb_gc_location(head->async_op);
     head = next;
   }
 }

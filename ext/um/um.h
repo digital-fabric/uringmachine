@@ -48,8 +48,9 @@ enum op_kind {
 
 #define OP_F_COMPLETED        (1U << 0)
 #define OP_F_TRANSIENT        (1U << 1)
-#define OP_F_IGNORE_CANCELED  (1U << 2)
-#define OP_F_MULTISHOT        (1U << 3)
+#define OP_F_ASYNC            (1U << 2)
+#define OP_F_IGNORE_CANCELED  (1U << 3)
+#define OP_F_MULTISHOT        (1U << 4)
 
 struct um_op_result {
   __s32 res;
@@ -66,6 +67,7 @@ struct um_op {
 
   VALUE fiber;
   VALUE value;
+  VALUE async_op;
 
   struct um_op_result result;
   struct um_op_result *multishot_result_tail;
@@ -136,10 +138,19 @@ struct um_queue {
   uint32_t count;
 };
 
+struct um_async_op {
+  VALUE self;
+
+  struct um *machine;
+  struct um_op *op;
+};
+
 extern VALUE cUM;
 extern VALUE cMutex;
 extern VALUE cQueue;
+extern VALUE cAsyncOp;
 
+struct um *um_get_machine(VALUE self);
 void um_setup(VALUE self, struct um *machine);
 void um_teardown(struct um *machine);
 
@@ -178,6 +189,7 @@ struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
+void um_submit_cancel_op(struct um *machine, struct um_op *op);
 void um_cancel_and_wait(struct um *machine, struct um_op *op);
 int um_check_completion(struct um *machine, struct um_op *op);
 
@@ -205,6 +217,12 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
+
+void um_async_op_set(VALUE self, struct um *machine, struct um_op *op);
+VALUE um_async_op_await(struct um_async_op *async_op);
+void um_async_op_cancel(struct um_async_op *async_op);
+
+VALUE um_prep_timeout(struct um *machine, double interval);
 
 struct um_mutex *Mutex_data(VALUE self);
 struct um_queue *Queue_data(VALUE self);

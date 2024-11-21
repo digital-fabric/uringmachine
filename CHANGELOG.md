@@ -1,3 +1,5 @@
+- Add `#prep_timeout` and `AsyncOp`
+
 # 2024-11-14 Version 0.5
 
 - Add `#waitpid`

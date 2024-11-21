@@ -51,6 +51,12 @@ module Minitest::Assertions
 end
 
 class UMBaseTest < Minitest::Test
+  # pull in UM constants
+  UM.constants.each do |c|
+    v = UM.const_get(c)
+    const_set(c, v) if v.is_a?(Integer)
+  end
+
   attr_accessor :machine
   
   def setup

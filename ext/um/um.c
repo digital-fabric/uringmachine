@@ -75,7 +75,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   if (unlikely((cqe->res == -ECANCELED) && (op->flags & OP_F_IGNORE_CANCELED))) return;
 
   op->flags |= OP_F_COMPLETED;
-  if (unlikely(op->flags & OP_F_TRANSIENT))
+  if (op->flags & OP_F_TRANSIENT)
     um_op_transient_remove(machine, op);
 
   if (op->flags & OP_F_MULTISHOT) {
@@ -88,7 +88,8 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     op->result.flags  = cqe->flags;
   }
 
-  um_runqueue_push(machine, op);
+  if (!(op->flags & OP_F_ASYNC))
+    um_runqueue_push(machine, op);
 }
 
 // copied from liburing/queue.c
@@ -180,7 +181,7 @@ inline VALUE um_fiber_switch(struct um *machine) {
   }
 }
 
-static inline void um_submit_cancel_op(struct um *machine, struct um_op *op) {
+void um_submit_cancel_op(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
@@ -260,7 +261,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  struct um_op *op = malloc(sizeof(struct um_op));
+  struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_TIMEOUT);
   op->ts = um_double_to_timespec(NUM2DBL(interval));
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
