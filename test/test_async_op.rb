@@ -77,6 +77,28 @@ class AsyncOpTest < UMBaseTest
     assert_equal (-ECANCELED), @op.result
     assert_equal true, @op.cancelled?
   end
+
+  def test_async_op_await_with_timeout2
+    e = nil
+  
+    begin
+      machine.timeout(0.1, TOError) do
+        @op.await
+      end
+    rescue => e
+    end
+
+    # machine.timeout is cancelled async, so CQE is not yet reaped
+    assert_equal 1, machine.pending_count
+    assert_nil e
+    assert_equal true, @op.done?
+    assert_equal (-ETIME), @op.result
+    assert_equal false, @op.cancelled?
+
+    # wait for timeout cancellation
+    machine.sleep(0.01)
+    assert_equal 0, machine.pending_count
+  end
 end
 
 class PrepTimeoutTest < UMBaseTest
