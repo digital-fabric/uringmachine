@@ -12,8 +12,8 @@ class UringMachine
     @@fiber_map
   end
 
-  def spin(value = nil, &block)
-    f = Fiber.new do |resume_value|
+  def spin(value = nil, fiber_class = Fiber, &block)
+    f = fiber_class.new do |resume_value|
       block.(resume_value)
     rescue Exception => e
       STDERR.puts "Unhandled fiber exception: #{e.inspect}"
