@@ -274,6 +274,26 @@ class ReadTest < UMBaseTest
     assert_equal 3, result
     assert_equal 'foobar', buffer
   end
+
+  def test_read_with_string_io
+    require 'stringio'
+
+    buffer = +'foo'
+    sio = StringIO.new(buffer)
+    
+    r, w = IO.pipe
+    w << 'bar'
+
+    result = machine.read(r.fileno, buffer, 100, -1)
+    assert_equal 3, result
+    assert_equal 'foobar', sio.read
+
+    w << 'baz'
+
+    result = machine.read(r.fileno, buffer, 100, -1)
+    assert_equal 3, result
+    assert_equal 'baz', sio.read
+  end
 end
 
 class ReadEachTest < UMBaseTest
