@@ -90,7 +90,7 @@ def get_config
   }
 end
 
-config_ssl
+# config_ssl
 
 config = get_config
 puts "Building UringMachine (\n#{config.map { |(k, v)| "  #{k}: #{v}\n"}.join})"
