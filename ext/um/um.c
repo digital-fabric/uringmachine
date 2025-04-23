@@ -88,8 +88,9 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     op->result.flags  = cqe->flags;
   }
 
-  if (!(op->flags & OP_F_ASYNC))
-    um_runqueue_push(machine, op);
+  if (op->flags & OP_F_ASYNC) return;
+  
+  um_runqueue_push(machine, op);
 }
 
 // copied from liburing/queue.c
@@ -216,6 +217,8 @@ inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) 
     case OP_ACCEPT_MULTISHOT:
     case OP_READ_MULTISHOT:
     case OP_RECV_MULTISHOT:
+    case OP_TIMEOUT_MULTISHOT:
+    case OP_SLEEP_MULTISHOT:
       op->flags |= OP_F_MULTISHOT;
     default:
   }
@@ -296,6 +299,33 @@ VALUE um_sleep(struct um *machine, double duration) {
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
 }
+
+// VALUE um_periodically(struct um *machine, double interval) {
+//   struct um_op op;
+//   VALUE ret = Qnil;
+//   um_prep_op(machine, &op, OP_SLEEP_MULTISHOT);
+//   op.ts = um_double_to_timespec(interval);
+//   op.flags |= OP_F_MULTISHOT;
+//   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+//   io_uring_prep_timeout(sqe, &op.ts, 0, IORING_TIMEOUT_MULTISHOT);
+
+//   while (true) {
+//     ret = um_fiber_switch(machine);
+
+//     if (!um_op_completed_p(&op)) {
+//       um_cancel_and_wait(machine, &op);
+//       break;
+//     }
+//     else {
+//       if (op.result.res != -ETIME) um_raise_on_error_result(op.result.res);
+//       ret = DBL2NUM(interval);
+//     }
+//   }
+
+//   RB_GC_GUARD(ret);
+//   return raise_if_exception(ret);
+
+// }
 
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
   struct um_op op;
@@ -701,3 +731,44 @@ VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
   return rb_ensure(read_recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }
+
+VALUE periodically_begin(VALUE arg) {
+  struct op_ctx *ctx = (struct op_ctx *)arg;
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
+  io_uring_prep_timeout(sqe, &ctx->ts, 0, IORING_TIMEOUT_MULTISHOT);
+
+  while (true) {
+    VALUE ret = um_fiber_switch(ctx->machine);
+    if (!um_op_completed_p(ctx->op))
+      return raise_if_exception(ret);
+
+    int more = false;
+    struct um_op_result *result = &ctx->op->result;
+    while (result) {
+      more = (result->flags & IORING_CQE_F_MORE);
+      if (result->res < 0 && result->res != -ETIME) {
+        um_op_multishot_results_clear(ctx->machine, ctx->op);
+        return Qnil;
+      }
+      rb_yield(Qnil);
+      result = result->next;
+    }
+    um_op_multishot_results_clear(ctx->machine, ctx->op);
+    if (more)
+      ctx->op->flags &= ~OP_F_COMPLETED;
+    else
+      break;
+  }
+
+  return Qnil;
+}
+
+VALUE um_periodically(struct um *machine, double interval) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_SLEEP_MULTISHOT);
+  op.ts = um_double_to_timespec(interval);
+  
+  struct op_ctx ctx = { .machine = machine, .op = &op, .ts = op.ts, .read_buf = NULL };
+  return rb_ensure(periodically_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+}
+

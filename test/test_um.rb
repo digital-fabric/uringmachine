@@ -212,6 +212,57 @@ class SleepTest < UMBaseTest
   end
 end
 
+class PeriodicallyTest < UMBaseTest
+  class Cancel < StandardError; end
+
+  def test_periodically
+    count = 0
+    cancel = 0
+
+    t0 = monotonic_clock
+    assert_equal 0, machine.pending_count
+    begin
+      machine.periodically(0.01) do
+        count += 1
+        raise Cancel if count >= 5
+      end
+    rescue Cancel
+      cancel = 1
+    end
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    t1 = monotonic_clock
+    assert_in_range 0.05..0.09, t1 - t0
+    assert_equal 5, count
+    assert_equal 1, cancel 
+  end
+
+  def test_periodically_with_timeout
+    count = 0
+    cancel = 0
+
+    t0 = monotonic_clock
+    assert_equal 0, machine.pending_count
+    begin
+      machine.timeout(0.05, Cancel) do
+        machine.periodically(0.01) do
+          count += 1
+          raise Cancel if count >= 5
+        end
+      end
+    rescue Cancel
+      cancel = 1
+    end
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    t1 = monotonic_clock
+    assert_in_range 0.05..0.08, t1 - t0
+    assert_in_range 4..6, count
+    assert_equal 1, cancel 
+
+  end
+end
+
 class ReadTest < UMBaseTest
   def test_read
     r, w = IO.pipe

@@ -91,6 +91,11 @@ VALUE UM_sleep(VALUE self, VALUE duration) {
   return um_sleep(machine, NUM2DBL(duration));
 }
 
+VALUE UM_periodically(VALUE self, VALUE interval) {
+  struct um *machine = um_get_machine(self);
+  return um_periodically(machine, NUM2DBL(interval));
+}
+
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   VALUE fd;
@@ -329,6 +334,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
   rb_define_method(cUM, "sleep", UM_sleep, 1);
+  rb_define_method(cUM, "periodically", UM_periodically, 1);
   rb_define_method(cUM, "write", UM_write, -1);
 
   rb_define_method(cUM, "waitpid", UM_waitpid, 2);

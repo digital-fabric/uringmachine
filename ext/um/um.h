@@ -43,14 +43,16 @@ enum op_kind {
 
   OP_ACCEPT_MULTISHOT,
   OP_READ_MULTISHOT,
-  OP_RECV_MULTISHOT
+  OP_RECV_MULTISHOT,
+  OP_TIMEOUT_MULTISHOT,
+  OP_SLEEP_MULTISHOT
 };
 
-#define OP_F_COMPLETED        (1U << 0)
-#define OP_F_TRANSIENT        (1U << 1)
-#define OP_F_ASYNC            (1U << 2)
-#define OP_F_IGNORE_CANCELED  (1U << 3)
-#define OP_F_MULTISHOT        (1U << 4)
+#define OP_F_COMPLETED        (1U << 0) // op is completed (set on each CQE for multishot ops)
+#define OP_F_TRANSIENT        (1U << 1) // op is heap allocated
+#define OP_F_ASYNC            (1U << 2) // op belongs to an AsyncOp
+#define OP_F_IGNORE_CANCELED  (1U << 3) // CQE with -ECANCEL should be ignored
+#define OP_F_MULTISHOT        (1U << 4) // op is multishot
 
 struct um_op_result {
   __s32 res;
@@ -199,6 +201,7 @@ void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
+VALUE um_periodically(struct um *machine, double interval);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE str, int len);

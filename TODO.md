@@ -1,3 +1,7 @@
+- [ ] multishot timeout
+  - [ ] machine.periodically { ... }
+  - [ ] machine.prep_timeout_multishot(0.1)
+
 - splice / - tee
 - sendto
 - recvfrom
