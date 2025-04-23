@@ -1,3 +1,5 @@
+# 2025-04-23 Version 0.6.1
+
 - Improve `#snooze` to prevent op completion starvation
 
 # 2025-04-23 Version 0.6
