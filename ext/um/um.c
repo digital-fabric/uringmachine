@@ -175,8 +175,28 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
 inline VALUE um_fiber_switch(struct um *machine) {
   while (true) {
     struct um_op *op = um_runqueue_shift(machine);
-    if (op)
+    if (op) {
+      // in case of a snooze, we need to prevent a situation where completions
+      // are not processed because the runqueue is never empty. Theoretically,
+      // we can still have a situation where multiple fibers are all doing a
+      // snooze repeatedly, which can prevent completions from being processed.
+
+      // is the op a snooze op and is this the same fiber as the current one?
+      if (unlikely(op->kind == OP_SCHEDULE && op->fiber == rb_fiber_current())) {
+        //  are there any pending ops (i.e. waiting for completion)?
+        if (machine->pending_count > 0) {
+          // if yes, process completions, get runqueue head, put original op
+          // back on runqueue.
+          um_wait_for_and_process_ready_cqes(machine);
+          struct um_op *op2 = um_runqueue_shift(machine);
+          if (likely(op2 && op2 != op)) {
+            um_runqueue_push(machine, op);
+            op = op2; 
+          }
+        }
+      }
       return process_runqueue_op(machine, op);
+    }
 
     um_wait_for_and_process_ready_cqes(machine);
   }
