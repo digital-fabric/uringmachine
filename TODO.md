@@ -1,6 +1,6 @@
 - [ ] multishot timeout
-  - [ ] machine.periodically { ... }
-  - [ ] machine.prep_timeout_multishot(0.1)
+  - [v] machine.periodically(interval) { ... }
+  - [ ] machine.prep_timeout_multishot(interval)
 
 - splice / - tee
 - sendto

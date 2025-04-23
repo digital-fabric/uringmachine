@@ -1,3 +1,7 @@
+# 2025-04-23 Version 0.6
+
+- Add `#periodically` for multishot timeout
+- Add `UM::Actor` class
 - Add `#prep_timeout` and `AsyncOp`
 
 # 2024-11-14 Version 0.5
