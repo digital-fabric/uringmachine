@@ -150,6 +150,12 @@ VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flag
   return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
 }
 
+VALUE UM_shutdown(VALUE self, VALUE fd, VALUE how) {
+  struct um *machine = um_get_machine(self);
+  return um_shutdown(machine, NUM2INT(fd), NUM2INT(how));
+
+}
+
 VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
   struct um *machine = um_get_machine(self);
 
@@ -350,6 +356,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
+  rb_define_method(cUM, "shutdown", UM_shutdown, 2);
 
   rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 

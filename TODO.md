@@ -14,5 +14,4 @@
 - fadvise
 - madvise
 - getxattr / setxattr
-- shutdown
 - send_bundle / recv_bundle (kernel >= 6.10)

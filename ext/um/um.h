@@ -37,6 +37,7 @@ enum op_kind {
   OP_LISTEN,
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
+  OP_SHUTDOWN,
 
   OP_FUTEX_WAIT,
   OP_FUTEX_WAKE,
@@ -220,6 +221,7 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
+VALUE um_shutdown(struct um *machine, int fd, int how);
 
 void um_async_op_set(VALUE self, struct um *machine, struct um_op *op);
 VALUE um_async_op_await(struct um_async_op *async_op);
