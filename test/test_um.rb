@@ -1076,6 +1076,30 @@ class QueueTest < UMBaseTest
     assert_equal :bar, machine.shift(q)
     assert_equal :foo, machine.shift(q)
   end
+
+  def test_cross_thread_push_shift
+    q = UM::Queue.new
+
+    t1 = Thread.new {
+      m = UM.new
+      3.times { m.push(q, it); m.sleep(0.01) }
+    }
+
+    items = []
+
+    t2 = Thread.new {
+      m = UM.new
+      3.times {
+        i = m.pop(q)
+        items << i
+        m.sleep(0.01)
+      }
+    }
+
+    [t1, t2].each(&:join)
+
+    assert_equal [0, 1, 2], items
+  end
 end
 
 class OpenTest < UMBaseTest
