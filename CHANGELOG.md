@@ -1,3 +1,5 @@
+- Add `#join`
+
 # 2025-04-28 Version 0.7
 
 - Add `#shutdown`

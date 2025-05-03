@@ -12,22 +12,48 @@ class UringMachine
     @@fiber_map
   end
 
+  class Terminate < Exception
+  end
+
   def spin(value = nil, fiber_class = Fiber, &block)
     f = fiber_class.new do |resume_value|
-      block.(resume_value)
+      f.set_result block.(resume_value)
     rescue Exception => e
-      STDERR.puts "Unhandled fiber exception: #{e.inspect}"
-      STDERR.puts e.backtrace.join("\n")
-      exit
+      f.set_result e
     ensure
+      f.mark_as_done
+      # cleanup
       @@fiber_map.delete(f)
-      # yield control
+      self.notify_done_listeners(f)
+      # transfer control to other fibers
       self.yield
-      p :bad_bad_bad
     end
-    schedule(f, value)
+    self.schedule(f, value)
     @@fiber_map[f] = true
     f
+  end
+
+  def join(*fibers)
+    results = fibers.inject({}) { |h, f| h[f] = nil; h }
+    queue = nil
+    pending = nil
+    fibers.each do |f|
+      if f.done?
+        results[f] = f.result
+      else
+        (pending ||= []) << f
+        queue ||= UM::Queue.new
+        f.add_done_listener(queue)
+      end
+    end
+    return results.values if !pending
+
+    while !pending.empty?
+      f = self.shift(queue)
+      pending.delete(f)
+      results[f] = f.result
+    end
+    results.values
   end
 
   def resolve(hostname, type = :A)
@@ -37,5 +63,38 @@ class UringMachine
 
   def ssl_accept(fd, ssl_ctx)
     SSL::Connection.new(self, fd, ssl_ctx)
+  end
+
+  private
+
+  def notify_done_listeners(fiber)
+    listeners = fiber.done_listeners
+    return if !listeners
+
+    listeners.each { self.push(it, fiber) }
+  end
+
+  module FiberExtensions
+    attr_reader :result, :done, :done_listeners
+
+    def mark_as_done
+      @done = true
+    end
+
+    def set_result(value)
+      @result = value
+    end
+
+    def done?
+      @done
+    end
+
+    def add_done_listener(queue)
+      (@done_listeners ||= []) << queue
+    end
+  end
+
+  class ::Fiber
+    include UringMachine::FiberExtensions
   end
 end
