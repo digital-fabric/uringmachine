@@ -7,7 +7,7 @@ require 'uringmachine/actor'
 class ActorTest < UMBaseTest
   module Counter
     def setup
-      @count = 0      
+      @count = 0
     end
 
     def incr
@@ -24,16 +24,17 @@ class ActorTest < UMBaseTest
   end
 
   def test_basic_actor_functionality
+    mailbox = UM::Queue.new
     actor = @machine.spin_actor(Counter)
     
     assert_kind_of Fiber, actor
 
-    assert_equal 0, actor.call(:get)
-    assert_equal 1, actor.call(:incr)
+    assert_equal 0, actor.call(mailbox, :get)
+    assert_equal 1, actor.call(mailbox, :incr)
     assert_equal actor, actor.cast(:incr)
-    assert_equal 2, actor.call(:get)
+    assert_equal 2, actor.call(mailbox, :get)
     assert_equal actor, actor.cast(:reset)
-    assert_equal 0, actor.call(:get)
+    assert_equal 0, actor.call(mailbox, :get)
   end
 
   module Counter2
@@ -57,7 +58,8 @@ class ActorTest < UMBaseTest
 
   def test_actor_with_args
     actor = @machine.spin_actor(Counter2, 43)
+    mailbox = UM::Queue.new
     
-    assert_equal 43, actor.call(:get)
+    assert_equal 43, actor.call(mailbox, :get)
   end
 end

@@ -10,6 +10,19 @@ class UringMachine
     actor
   end
 
+  def spin_thread_actor(mod, *a, **k)
+    machine = UM.new
+    target = Object.new.extend(mod)
+    mailbox = UM::Queue.new
+    actor = Actor.new
+    thread = Thread.new do
+      actor.run(machine, target, mailbox)
+    end
+    target.setup(*a, **k)
+    snooze
+    actor
+  end
+
   class Actor < Fiber
     def run(machine, target, mailbox)
       @machine = machine
@@ -23,30 +36,26 @@ class UringMachine
     end
 
     def cast(sym, *a, **k)
-      self << [:cast, nil, sym, a, k]
+      @machine.push @mailbox, [:cast, nil, sym, a, k]
       self
     end
 
-    def call(sym, *a, **k)
-      self << [:call, Fiber.current, sym, a, k]
-      @machine.yield
+    def call(response_mailbox, sym, *a, **k)
+      @machine.push @mailbox, [:call, response_mailbox, sym, a, k]
+      @machine.shift response_mailbox
     end
 
     private
 
     def process_message(msg)
-      type, fiber, sym, args, kwargs = msg
+      type, response_mailbox, sym, args, kwargs = msg
       case type
       when :cast
         @target.send(sym, *args, **kwargs)
       when :call
         res = @target.send(sym, *args, **kwargs)
-        @machine.schedule(fiber, res)
+        @machine.push(response_mailbox, res)
       end
-    end
-
-    def <<(msg)
-      @machine.push(@mailbox, msg)
     end
   end
 end

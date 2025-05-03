@@ -1,3 +1,5 @@
+# ops
+
 - [ ] multishot timeout
   - [v] machine.periodically(interval) { ... }
   - [ ] machine.prep_timeout_multishot(interval)
@@ -15,3 +17,9 @@
 - madvise
 - getxattr / setxattr
 - send_bundle / recv_bundle (kernel >= 6.10)
+
+# actors
+
+When doing a `call`, we need to provide a mailbox for the response. can this be
+automatic?
+
