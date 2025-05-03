@@ -18,7 +18,7 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = ["README.md"]
   s.extensions = ["ext/um/extconf.rb"]
   s.require_paths = ["lib"]
-  s.required_ruby_version = '>= 3.3'
+  s.required_ruby_version = '>= 3.4'
 
   s.add_development_dependency  'rake-compiler',        '1.2.9'
   s.add_development_dependency  'minitest',             '5.25.4'
