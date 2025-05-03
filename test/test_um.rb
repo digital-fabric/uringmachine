@@ -1082,7 +1082,7 @@ class QueueTest < UMBaseTest
 
     t1 = Thread.new {
       m = UM.new
-      3.times { m.push(q, it); m.sleep(0.01) }
+      3.times { m.push(q, it) }
     }
 
     items = []
@@ -1090,7 +1090,7 @@ class QueueTest < UMBaseTest
     t2 = Thread.new {
       m = UM.new
       3.times {
-        i = m.pop(q)
+        i = m.shift(q)
         items << i
         m.sleep(0.01)
       }
