@@ -246,6 +246,4 @@ VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
 void um_define_net_constants(VALUE mod);
 
-// void Init_micro_ssl(VALUE mod);
-
 #endif // UM_H
