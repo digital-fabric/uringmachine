@@ -12,7 +12,7 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
     sqe, (uint32_t *)futex, expect, FUTEX_BITSET_MATCH_ANY,
 		FUTEX2_SIZE_U32, 0
   );
-  
+
   VALUE ret = um_fiber_switch(machine);
   if (!um_op_completed_p(&op))
     um_cancel_and_wait(machine, &op);
@@ -157,7 +157,7 @@ static inline void queue_add_head(struct um_queue *queue, VALUE value) {
   struct um_queue_entry *entry = um_queue_entry_checkout(queue);
 
   entry->next = queue->head;
-  if (queue->head) { 
+  if (queue->head) {
     queue->head->prev = entry;
     queue->head = entry;
   }
@@ -171,7 +171,7 @@ static inline void queue_add_tail(struct um_queue *queue, VALUE value) {
   struct um_queue_entry *entry = um_queue_entry_checkout(queue);
 
   entry->prev = queue->tail;
-  if (queue->tail) { 
+  if (queue->tail) {
     queue->tail->next = entry;
     queue->tail = entry;
   }
@@ -205,7 +205,7 @@ VALUE queue_remove_tail(struct um_queue *queue) {
 static inline VALUE um_queue_add(struct um *machine, struct um_queue *queue, VALUE value, int add_head) {
   if (add_head) queue_add_head(queue, value);
   else          queue_add_tail(queue, value);
-  
+
   queue->count++;
 
   queue->state = QUEUE_READY;
@@ -232,7 +232,7 @@ struct queue_wait_ctx {
 
 VALUE um_queue_remove_begin(VALUE arg) {
   struct queue_wait_ctx *ctx = (struct queue_wait_ctx *)arg;
-  
+
   ctx->queue->num_waiters++;
   while (ctx->queue->state == QUEUE_EMPTY) {
     um_futex_wait(ctx->machine, &ctx->queue->state, QUEUE_EMPTY);

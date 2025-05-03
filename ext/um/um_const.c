@@ -159,7 +159,7 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, TCP_THIN_LINEAR_TIMEOUTS);
   DEF_CONST_INT(mod, TCP_TIMESTAMP);
   DEF_CONST_INT(mod, TCP_USER_TIMEOUT);
-  
+
   DEF_CONST_INT(mod, UDP_CORK);
 
   DEF_CONST_INT(mod, AI_PASSIVE);
@@ -169,7 +169,7 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, AI_ALL);
   DEF_CONST_INT(mod, AI_ADDRCONFIG);
   DEF_CONST_INT(mod, AI_V4MAPPED);
-  
+
   DEF_CONST_INT(mod, NI_MAXHOST);
   DEF_CONST_INT(mod, NI_MAXSERV);
   DEF_CONST_INT(mod, NI_NOFQDN);
@@ -177,7 +177,7 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, NI_NAMEREQD);
   DEF_CONST_INT(mod, NI_NUMERICSERV);
   DEF_CONST_INT(mod, NI_DGRAM);
-  
+
   DEF_CONST_INT(mod, SHUT_RD);
   DEF_CONST_INT(mod, SHUT_WR);
   DEF_CONST_INT(mod, SHUT_RDWR);

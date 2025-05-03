@@ -43,7 +43,7 @@ def parse_http_parser
     headers['protocol'] = parser.http_version
     $machine.schedule(current_fiber, headers)
   end
-  
+
   $machine.write(w.fileno, HTTP_MSG)
   $machine.yield
 ensure
@@ -89,7 +89,7 @@ def parse_headers(fd)
   while true
     line = get_line(fd, sio, buffer)
     break if line.empty?
-    
+
     m = line.match(RE_HEADER_LINE)
     raise "Invalid header" if !m
 
@@ -111,7 +111,7 @@ def parse_http_stringio
     puts e.backtrace.join("\n")
     exit!
   end
-  
+
   $machine.write(w.fileno, HTTP_MSG)
   $machine.yield
 ensure

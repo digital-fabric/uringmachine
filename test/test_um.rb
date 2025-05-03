@@ -60,7 +60,7 @@ class ScheduleTest < UMBaseTest
       buf << e
       machine.yield
     end
-    
+
     machine.schedule(f, nil)
     # start the f fiber
     machine.snooze
@@ -80,7 +80,7 @@ class ScheduleTest < UMBaseTest
       machine.schedule(main, e)
       machine.yield
     end
-    
+
     machine.schedule(f, nil)
     t0 = monotonic_clock
 
@@ -234,7 +234,7 @@ class PeriodicallyTest < UMBaseTest
     t1 = monotonic_clock
     assert_in_range 0.05..0.09, t1 - t0
     assert_equal 5, count
-    assert_equal 1, cancel 
+    assert_equal 1, cancel
   end
 
   def test_periodically_with_timeout
@@ -258,7 +258,7 @@ class PeriodicallyTest < UMBaseTest
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
     assert_in_range 4..6, count
-    assert_equal 1, cancel 
+    assert_equal 1, cancel
 
   end
 end
@@ -331,7 +331,7 @@ class ReadTest < UMBaseTest
 
     buffer = +'foo'
     sio = StringIO.new(buffer)
-    
+
     r, w = IO.pipe
     w << 'bar'
 
@@ -366,7 +366,7 @@ class ReadEachTest < UMBaseTest
       w.close
       machine.yield
     end
-    
+
     machine.schedule(f, nil)
 
     machine.read_each(r.fileno, bgid) do |buf|
@@ -464,7 +464,7 @@ class ReadEachTest < UMBaseTest
       sleep 0.1
       w.close
     end
-    
+
     bufs = []
     machine.read_each(r.fileno, bgid) do |b|
       bufs << b
@@ -591,7 +591,7 @@ class AcceptTest < UMBaseTest
 
   def test_accept
     conn = TCPSocket.new('127.0.0.1', @port)
-    
+
     assert_equal 0, machine.pending_count
     fd = machine.accept(@server.fileno)
     assert_equal 0, machine.pending_count
@@ -1143,7 +1143,7 @@ class PipeTest < UMBaseTest
     rfd, wfd = UM.pipe
     ret = machine.write(wfd, 'foo')
     assert_equal 3, ret
-    
+
     ret = machine.close(wfd)
     assert_equal wfd, ret
 
@@ -1185,6 +1185,6 @@ class WaitTest < UMBaseTest
   def test_waitpid_bad_pid
     skip if UM.kernel_version < 607
 
-    assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }    
+    assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }
   end
 end

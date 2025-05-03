@@ -37,9 +37,9 @@ class AsyncOpTest < UMBaseTest
     assert_equal 1, machine.pending_count
     @op.cancel
     assert_equal false, @op.done?
-    
+
     machine.sleep(0.01)
-  
+
     assert_equal 0, machine.pending_count
     assert_equal true, @op.done?
     assert_equal (-ECANCELED), @op.result
@@ -52,7 +52,7 @@ class AsyncOpTest < UMBaseTest
     end
 
     res = @op.await
-  
+
     assert_equal 0, machine.pending_count
     assert_equal true, @op.done?
     assert_equal (-ECANCELED), res
@@ -63,7 +63,7 @@ class AsyncOpTest < UMBaseTest
 
   def test_async_op_await_with_timeout
     e = nil
-  
+
     begin
       machine.timeout(0.01, TOError) do
         @op.await
@@ -80,7 +80,7 @@ class AsyncOpTest < UMBaseTest
 
   def test_async_op_await_with_timeout2
     e = nil
-  
+
     begin
       machine.timeout(0.1, TOError) do
         @op.await

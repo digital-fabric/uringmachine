@@ -135,7 +135,7 @@ struct um_queue {
   struct um_queue_entry *head;
   struct um_queue_entry *tail;
   struct um_queue_entry *free_head;
-  
+
   uint32_t num_waiters;
   uint32_t state;
   uint32_t count;

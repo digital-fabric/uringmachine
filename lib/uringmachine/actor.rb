@@ -26,7 +26,7 @@ class UringMachine
   class Actor < Fiber
     def run(machine, target, mailbox)
       @machine = machine
-      @target = target      
+      @target = target
       @mailbox = mailbox
       while (msg = machine.shift(mailbox))
         process_message(msg)

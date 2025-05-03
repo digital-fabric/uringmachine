@@ -89,7 +89,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   }
 
   if (op->flags & OP_F_ASYNC) return;
-  
+
   um_runqueue_push(machine, op);
 }
 
@@ -191,7 +191,7 @@ inline VALUE um_fiber_switch(struct um *machine) {
           struct um_op *op2 = um_runqueue_shift(machine);
           if (likely(op2 && op2 != op)) {
             um_runqueue_push(machine, op);
-            op = op2; 
+            op = op2;
           }
         }
       }
@@ -320,45 +320,18 @@ VALUE um_sleep(struct um *machine, double duration) {
   return raise_if_exception(ret);
 }
 
-// VALUE um_periodically(struct um *machine, double interval) {
-//   struct um_op op;
-//   VALUE ret = Qnil;
-//   um_prep_op(machine, &op, OP_SLEEP_MULTISHOT);
-//   op.ts = um_double_to_timespec(interval);
-//   op.flags |= OP_F_MULTISHOT;
-//   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-//   io_uring_prep_timeout(sqe, &op.ts, 0, IORING_TIMEOUT_MULTISHOT);
-
-//   while (true) {
-//     ret = um_fiber_switch(machine);
-
-//     if (!um_op_completed_p(&op)) {
-//       um_cancel_and_wait(machine, &op);
-//       break;
-//     }
-//     else {
-//       if (op.result.res != -ETIME) um_raise_on_error_result(op.result.res);
-//       ret = DBL2NUM(interval);
-//     }
-//   }
-
-//   RB_GC_GUARD(ret);
-//   return raise_if_exception(ret);
-
-// }
-
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
   struct um_op op;
   um_prep_op(machine, &op, OP_READ);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
   io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
-  
+
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op)) {
     um_update_read_buffer(machine, buffer, buffer_offset, op.result.res, op.result.flags);
     ret = INT2NUM(op.result.res);
-    
+
   }
 
   RB_GC_GUARD(buffer);
@@ -652,7 +625,7 @@ VALUE multishot_ensure(VALUE arg) {
 VALUE um_accept_each(struct um *machine, int fd) {
   struct um_op op;
   um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT);
-  
+
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
   return rb_ensure(accept_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }
@@ -803,7 +776,7 @@ VALUE um_periodically(struct um *machine, double interval) {
   struct um_op op;
   um_prep_op(machine, &op, OP_SLEEP_MULTISHOT);
   op.ts = um_double_to_timespec(interval);
-  
+
   struct op_ctx ctx = { .machine = machine, .op = &op, .ts = op.ts, .read_buf = NULL };
   return rb_ensure(periodically_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
 }

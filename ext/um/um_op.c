@@ -66,7 +66,7 @@ inline void um_op_list_compact(struct um *machine, struct um_op *head) {
   }
 }
 
-inline struct um_op_result *multishot_result_alloc(struct um *machine) {  
+inline struct um_op_result *multishot_result_alloc(struct um *machine) {
   if (machine->result_freelist) {
     struct um_op_result *result = machine->result_freelist;
     machine->result_freelist = result->next;

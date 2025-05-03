@@ -32,7 +32,7 @@ loop do
   break if (Time.now - t0) > MAX_TIME
   start_fiber while @fiber_count < MAX_FIBERS
 end
-t1 = Time.now  
+t1 = Time.now
 elapsed = t1 - t0
 rate = @counter / elapsed
 puts "Did #{@counter} ops in #{elapsed} seconds (#{rate} ops/s)"

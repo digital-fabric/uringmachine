@@ -55,7 +55,7 @@ class FiberTerminateTest < UMBaseTest
     assert_nil x
     machine.snooze
     assert_equal 1, x
-    
+
     machine.schedule(f, UM::Terminate.new)
     2.times { machine.snooze }
 

@@ -18,7 +18,7 @@ FN = '/tmp/bm_write'
 def run_io_write(num_threads)
   FileUtils.rm(FN) rescue nil
   fio = File.open(FN, 'w')
-  
+
   threads = num_threads.times.map do |i|
     Thread.new do
       ITERATIONS.times { fio.write(BUF) }
@@ -33,13 +33,13 @@ def run_um_write(num_fibers)
   FileUtils.rm(FN) rescue nil
   fio = File.open(FN, 'w')
   fd = fio.fileno
-  
+
   machine = UringMachine.new
   done = UringMachine::Queue.new
   num_fibers.times do
     machine.spin do
       ITERATIONS.times { machine.write(fd, BUF) }
-      machine.push(done, true) 
+      machine.push(done, true)
     end
   end
   num_fibers.times { machine.pop(done) }

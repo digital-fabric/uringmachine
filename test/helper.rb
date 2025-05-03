@@ -58,7 +58,7 @@ class UMBaseTest < Minitest::Test
   end
 
   attr_accessor :machine
-  
+
   def setup
     @machine = UM.new
   end

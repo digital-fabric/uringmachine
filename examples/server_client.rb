@@ -31,7 +31,7 @@ def run_client
     @machine.send(fd, msg, msg.bytesize, 0)
     res = @machine.recv(fd, buf, 8192, 0)
     @counter += 2
-    
+
     break if res == 0
     raise "Got #{res} bytes instead of #{msg.bytesize}" if res != msg.bytesize
   end
@@ -59,6 +59,6 @@ end
 
 t0 = Time.now
 @machine.sleep 3
-t1 = Time.now  
+t1 = Time.now
 elapsed = t1 - t0
 puts "Did #{@counter} ops in #{elapsed} seconds (#{(@counter / elapsed)} ops/s)"

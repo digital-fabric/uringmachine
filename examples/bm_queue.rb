@@ -18,14 +18,14 @@ NUM_CONSUMERS = 10
 def run_threads
   queue = Queue.new
   done = Queue.new
-  
+
   NUM_PRODUCERS.times do
     Thread.new do
       COUNT.times { queue << rand(1000) }
       done << true
     end
   end
-  
+
   total = 0
   NUM_CONSUMERS.times do
     Thread.new do

@@ -22,7 +22,7 @@ class UM::Stream
       @eof = true
       return false
     end
-      
+
     @ofs_tail += ret
     true
   end
