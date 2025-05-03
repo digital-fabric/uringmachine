@@ -1,3 +1,5 @@
+# 2025-05-03 Version 0.8
+
 - Add `#join`
 
 # 2025-04-28 Version 0.7
