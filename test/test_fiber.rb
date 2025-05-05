@@ -151,14 +151,14 @@ class ScopeTest < UMBaseTest
 
     t0 = monotonic_clock
     machine.scope do
-      f1 = machine.spin do
+      machine.spin do
         x1 = 1
         machine.sleep 0.01
       ensure
         x1 = 0
       end
 
-      f2 = machine.spin do
+      machine.spin do
         x2 = 1
         machine.sleep 0.03
       ensure

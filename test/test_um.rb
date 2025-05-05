@@ -29,7 +29,7 @@ end
 
 class SnoozeTest < UMBaseTest
   def test_snooze_while_sleeping_fiber
-    f = machine.spin do
+    machine.spin do
       machine.sleep(0.1)
     end
 
@@ -655,7 +655,6 @@ class AcceptEachTest < UMBaseTest
   end
 
   def test_accept_each_interrupted
-    conns = []
     count = 0
     terminated = nil
     f = @machine.spin do
@@ -678,6 +677,8 @@ class AcceptEachTest < UMBaseTest
 
     assert f.done?
     assert terminated
+  ensure
+    s.close
   end
 end
 

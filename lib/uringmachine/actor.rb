@@ -15,7 +15,7 @@ class UringMachine
     target = Object.new.extend(mod)
     mailbox = UM::Queue.new
     actor = Actor.new
-    thread = Thread.new do
+    Thread.new do
       actor.run(machine, target, mailbox)
     end
     target.setup(*a, **k)
