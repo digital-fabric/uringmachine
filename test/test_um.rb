@@ -635,6 +635,32 @@ class AcceptEachTest < UMBaseTest
   ensure
     t&.kill
   end
+
+  def test_accept_each_interrupted
+    conns = []
+    count = 0
+    terminated = nil
+    f = @machine.spin do
+      machine.accept_each(@server.fileno) do |fd|
+        count += 1
+        break if count == 3
+      end
+    rescue UM::Terminate
+      terminated = true
+    end
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    @machine.sleep(0.01)
+
+    assert_equal 1, count
+    refute terminated
+
+    @machine.schedule(f, UM::Terminate.new)
+    @machine.sleep(0.01)
+
+    assert f.done?
+    assert terminated
+  end
 end
 
 class SocketTest < UMBaseTest

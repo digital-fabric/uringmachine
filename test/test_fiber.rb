@@ -149,6 +149,7 @@ class ScopeTest < UMBaseTest
     x1 = nil
     x2 = nil
 
+    t0 = monotonic_clock
     machine.scope do
       f1 = machine.spin do
         x1 = 1
@@ -159,11 +160,13 @@ class ScopeTest < UMBaseTest
 
       f2 = machine.spin do
         x2 = 1
-        machine.sleep 0.01
+        machine.sleep 0.03
       ensure
         x2 = 0
       end
     end
+    elapsed = monotonic_clock - t0
+    assert_in_range 0.03..0.05, elapsed
 
     assert_equal 0, x1
     assert_equal 0, x2
