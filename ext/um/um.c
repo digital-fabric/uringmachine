@@ -156,8 +156,20 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
   struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL, .wait_nr = wait_nr };
   rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
 
-  if (unlikely(ctx.result < 0 && ctx.result != -EINTR))
-    rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+  if (unlikely(ctx.result < 0)) {
+    // the internal calls to (maybe submit) and wait for cqes may fail with:
+    // -EINTR (interrupted by signal)
+    // -EAGAIN (apparently can be returned when wait_nr = 0)
+    // both should not raise an exception.
+    switch (ctx.result) {
+      case -EINTR:
+      case -EAGAIN:
+        // do nothing
+        break;
+      default:
+        rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+    }
+  }
 
   if (ctx.cqe) {
     um_process_cqe(machine, ctx.cqe);
