@@ -11,7 +11,7 @@ class UringMachineTest < Minitest::Test
   end
 end
 
-class FiberTest < UMBaseTest
+class SpinTest < UMBaseTest
   def test_spin
     x = nil
     f = machine.spin do
@@ -24,6 +24,24 @@ class FiberTest < UMBaseTest
     machine.snooze
 
     assert_equal :foo, x
+  end
+end
+
+class SnoozeTest < UMBaseTest
+  def test_snooze_while_sleeping_fiber
+    f = machine.spin do
+      machine.sleep(0.1)
+    end
+
+    t0 = monotonic_clock
+    machine.snooze
+    t1 = monotonic_clock
+    assert_in_range 0..0.001, t1 - t0
+
+    t0 = monotonic_clock
+    machine.snooze
+    t1 = monotonic_clock
+    assert_in_range 0..0.001, t1 - t0
   end
 end
 
@@ -1067,10 +1085,9 @@ class QueueTest < UMBaseTest
     machine.schedule(f2, nil)
 
     machine.snooze
-
     assert_equal [[1, :foo]], buf
-    machine.push(q, :bar)
 
+    machine.push(q, :bar)
     machine.snooze
     assert_equal [[1, :foo], [2, :bar]], buf
   end

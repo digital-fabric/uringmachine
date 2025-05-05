@@ -127,6 +127,7 @@ done:
 struct wait_for_cqe_ctx {
   struct um *machine;
   struct io_uring_cqe *cqe;
+  int wait_nr;
   int result;
 };
 
@@ -140,16 +141,19 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
     // NULL.
     //
     // https://github.com/axboe/liburing/issues/1280
-    int res = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, 1, NULL, NULL);
+    int res = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
     ctx->result = (res > 0 && !ctx->cqe) ? -EINTR : res;
   }
   else
-    ctx->result = io_uring_wait_cqe(&ctx->machine->ring, &ctx->cqe);
+    ctx->result = io_uring_wait_cqes(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
   return NULL;
 }
 
-static inline void um_wait_for_and_process_ready_cqes(struct um *machine) {
-  struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL };
+// Waits for the given minimum number of completion entries. The wait_nr is
+// either 1 - where we wait for at least one CQE to be ready, or 0, where we
+// don't wait, and just process any CQEs that already ready.
+static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wait_nr) {
+  struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL, .wait_nr = wait_nr };
   rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
 
   if (unlikely(ctx.result < 0 && ctx.result != -EINTR))
@@ -187,7 +191,8 @@ inline VALUE um_fiber_switch(struct um *machine) {
         if (machine->pending_count > 0) {
           // if yes, process completions, get runqueue head, put original op
           // back on runqueue.
-          um_wait_for_and_process_ready_cqes(machine);
+          // um_process_ready_cqes(machine);
+          um_wait_for_and_process_ready_cqes(machine, 0);
           struct um_op *op2 = um_runqueue_shift(machine);
           if (likely(op2 && op2 != op)) {
             um_runqueue_push(machine, op);
@@ -198,7 +203,7 @@ inline VALUE um_fiber_switch(struct um *machine) {
       return process_runqueue_op(machine, op);
     }
 
-    um_wait_for_and_process_ready_cqes(machine);
+    um_wait_for_and_process_ready_cqes(machine, 1);
   }
 }
 
