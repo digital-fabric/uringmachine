@@ -88,6 +88,10 @@ class UringMachine
     def add_done_listener(queue)
       (@done_listeners ||= []) << queue
     end
+
+    def mailbox
+      @mailbox ||= UM::Queue.new
+    end
   end
 
   class ::Fiber

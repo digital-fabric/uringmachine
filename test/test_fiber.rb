@@ -63,7 +63,7 @@ class FiberTerminateTest < UMBaseTest
   end
 end
 
-class JoinTest < UMBaseTest
+class FiberJoinTest < UMBaseTest
   def test_join
     q = UM::Queue.new
     x = nil
@@ -170,5 +170,12 @@ class ScopeTest < UMBaseTest
 
     assert_equal 0, x1
     assert_equal 0, x2
+  end
+end
+
+class FiberMailboxTest < UMBaseTest
+  def test_fiber_mailbox
+    m = Fiber.current.mailbox
+    assert_kind_of UM::Queue, m
   end
 end
