@@ -1,3 +1,7 @@
+# 2025-05-05 Version 0.8.1
+
+- Fix `#snooze` to not block waiting for CQE
+
 # 2025-05-03 Version 0.8
 
 - Add `#join`
