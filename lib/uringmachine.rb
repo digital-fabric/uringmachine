@@ -95,6 +95,16 @@ class UringMachine
   end
 
   class ::Fiber
-    include UringMachine::FiberExtensions
+    include FiberExtensions
+  end
+
+  module ThreadExtensions
+    def machine
+      @machine ||= UM.new
+    end
+  end
+
+  class ::Thread
+    include ThreadExtensions
   end
 end

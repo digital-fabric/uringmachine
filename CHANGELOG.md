@@ -1,3 +1,5 @@
+
+- Add `Thread#machine`
 - Add `Fiber#mailbox`
 
 # 2025-05-05 Version 0.9

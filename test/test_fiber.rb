@@ -177,5 +177,18 @@ class FiberMailboxTest < UMBaseTest
   def test_fiber_mailbox
     m = Fiber.current.mailbox
     assert_kind_of UM::Queue, m
+
+    m2 = Fiber.current.mailbox
+    assert_equal m, m2
+  end
+end
+
+class ThreadMachineTest < UMBaseTest
+  def test_thread_machine
+    m = Thread.current.machine
+    assert_kind_of UM, m
+
+    m2 = Thread.current.machine
+    assert_equal m, m2
   end
 end
