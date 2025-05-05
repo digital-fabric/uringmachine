@@ -1,3 +1,7 @@
+# 2025-05-05 Version 0.8.2
+
+- Correctly deal with -EAGAIN when waiting for CQEs
+
 # 2025-05-05 Version 0.8.1
 
 - Fix `#snooze` to not block waiting for CQE
