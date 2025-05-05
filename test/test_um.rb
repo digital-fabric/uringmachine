@@ -1231,3 +1231,46 @@ class WaitTest < UMBaseTest
     assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }
   end
 end
+
+class StatxTest < UMBaseTest
+  def test_statx
+    io = File.open(__FILE__, 'r')
+    ustat = machine.statx(io.fileno, nil, UM::AT_EMPTY_PATH, UM::STATX_ALL)
+    rstat = File.stat(__FILE__)
+
+    assert_equal rstat.dev,         ustat[:dev]
+    assert_equal rstat.ino,         ustat[:ino]
+    assert_equal rstat.mode,        ustat[:mode]
+    assert_equal rstat.nlink,       ustat[:nlink]
+    assert_equal rstat.uid,         ustat[:uid]
+    assert_equal rstat.gid,         ustat[:gid]
+    assert_equal rstat.rdev,        ustat[:rdev]
+    assert_equal rstat.size,        ustat[:size]
+    assert_equal rstat.blksize,     ustat[:blksize]
+    assert_equal rstat.blocks,      ustat[:blocks]
+    assert_equal rstat.atime.to_i,  ustat[:atime].to_i
+    assert_equal rstat.ctime.to_i,  ustat[:ctime].to_i
+    assert_equal rstat.mtime.to_i,  ustat[:mtime].to_i
+
+    ustat2 = machine.statx(UM::AT_FDCWD, __FILE__, 0, UM::STATX_ALL)
+    assert_equal rstat.dev,         ustat2[:dev]
+    assert_equal rstat.ino,         ustat2[:ino]
+    assert_equal rstat.mode,        ustat2[:mode]
+    assert_equal rstat.nlink,       ustat2[:nlink]
+    assert_equal rstat.uid,         ustat2[:uid]
+    assert_equal rstat.gid,         ustat2[:gid]
+    assert_equal rstat.rdev,        ustat2[:rdev]
+    assert_equal rstat.size,        ustat2[:size]
+    assert_equal rstat.blksize,     ustat2[:blksize]
+    assert_equal rstat.blocks,      ustat2[:blocks]
+    assert_equal rstat.atime.to_i,  ustat2[:atime].to_i
+    assert_equal rstat.ctime.to_i,  ustat2[:ctime].to_i
+    assert_equal rstat.mtime.to_i,  ustat2[:mtime].to_i
+  ensure
+    io.close
+  end
+
+  def test_statx_bad_path
+    assert_raises(Errno::ENOENT) { machine.statx(UM::AT_FDCWD, 'foobar', 0, UM::STATX_ALL) }
+  end
+end

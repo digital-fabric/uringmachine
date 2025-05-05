@@ -130,6 +130,11 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   return um_write(machine, NUM2INT(fd), buffer, bytes);
 }
 
+VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {
+  struct um *machine = um_get_machine(self);
+  return um_statx(machine, NUM2INT(dirfd), path, NUM2INT(flags), NUM2UINT(mask));
+}
+
 VALUE UM_close(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
   return um_close(machine, NUM2INT(fd));
@@ -342,6 +347,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "periodically", UM_periodically, 1);
   rb_define_method(cUM, "write", UM_write, -1);
+  rb_define_method(cUM, "statx", UM_statx, 4);
 
   rb_define_method(cUM, "waitpid", UM_waitpid, 2);
 

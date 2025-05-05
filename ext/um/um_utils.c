@@ -11,6 +11,10 @@ inline struct __kernel_timespec um_double_to_timespec(double value) {
   return ts;
 }
 
+inline double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec) {
+  return (double)tv_sec + ((double)tv_nsec) / 1000000000;
+}
+
 #define RAISE_EXCEPTION(e) rb_funcall(e, ID_invoke, 0);
 
 inline int um_value_is_exception_p(VALUE v) {

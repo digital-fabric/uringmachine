@@ -10,7 +10,6 @@
 - poll_add / poll_remove / poll_multishot / poll_update
 - fsync
 - mkdir / mkdirat
-- statx
 - link / linkat / unlink / unlinkat / symlink
 - rename / renameat
 - fadvise

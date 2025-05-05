@@ -25,9 +25,12 @@ enum op_kind {
   OP_SCHEDULE,
 
   OP_SLEEP,
+  OP_OPEN,
   OP_READ,
   OP_WRITE,
   OP_CLOSE,
+  OP_STATX,
+
   OP_ACCEPT,
   OP_RECV,
   OP_SEND,
@@ -38,6 +41,8 @@ enum op_kind {
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
   OP_SHUTDOWN,
+  
+  OP_WAITPID,
 
   OP_FUTEX_WAIT,
   OP_FUTEX_WAKE,
@@ -176,6 +181,7 @@ void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
 void um_free_buffer_linked_list(struct um *machine);
 
 struct __kernel_timespec um_double_to_timespec(double value);
+double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
 
@@ -209,6 +215,7 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len);
 VALUE um_close(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_waitpid(struct um *machine, int pid, int options);
+VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
 
 VALUE um_accept(struct um *machine, int fd);
 VALUE um_accept_each(struct um *machine, int fd);

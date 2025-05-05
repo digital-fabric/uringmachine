@@ -521,7 +521,7 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 
 #ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
-  um_prep_op(machine, &op, OP_GETSOCKOPT);
+  um_prep_op(machine, &op, OP_SETSOCKOPT);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
 
@@ -557,7 +557,7 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
 
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_BIND);
+  um_prep_op(machine, &op, OP_OPEN);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_open(sqe, StringValueCStr(pathname), flags, mode);
 
@@ -571,7 +571,7 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
 
 VALUE um_waitpid(struct um *machine, int pid, int options) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_BIND);
+  um_prep_op(machine, &op, OP_WAITPID);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   siginfo_t infop;
@@ -585,6 +585,52 @@ VALUE um_waitpid(struct um *machine, int pid, int options) {
   raise_if_exception(ret);
 
   return rb_ary_new_from_args(2, INT2NUM(infop.si_pid), INT2NUM(infop.si_status));
+}
+
+#define hash_set(h, sym, v) rb_hash_aset(h, ID2SYM(rb_intern(sym)), v)
+
+VALUE statx_to_hash(struct statx *stat) {
+  VALUE hash = rb_hash_new();
+
+  hash_set(hash, "dev",         UINT2NUM(stat->stx_dev_major << 8 | stat->stx_dev_minor));
+  hash_set(hash, "rdev",        UINT2NUM(stat->stx_rdev_major << 8 | stat->stx_rdev_minor));
+  hash_set(hash, "blksize",     UINT2NUM(stat->stx_blksize));
+  hash_set(hash, "attributes",  UINT2NUM(stat->stx_attributes));
+  hash_set(hash, "nlink",       UINT2NUM(stat->stx_nlink));
+  hash_set(hash, "uid",         UINT2NUM(stat->stx_uid));
+  hash_set(hash, "gid",         UINT2NUM(stat->stx_gid));
+  hash_set(hash, "mode",        UINT2NUM(stat->stx_mode));
+  hash_set(hash, "ino",         UINT2NUM(stat->stx_ino));
+  hash_set(hash, "size",        UINT2NUM(stat->stx_size));
+  hash_set(hash, "blocks",      UINT2NUM(stat->stx_blocks));
+  hash_set(hash, "atime",       DBL2NUM(um_timestamp_to_double(stat->stx_atime.tv_sec, stat->stx_atime.tv_nsec)));
+  hash_set(hash, "btime",       DBL2NUM(um_timestamp_to_double(stat->stx_btime.tv_sec, stat->stx_btime.tv_nsec)));
+  hash_set(hash, "ctime",       DBL2NUM(um_timestamp_to_double(stat->stx_ctime.tv_sec, stat->stx_ctime.tv_nsec)));
+  hash_set(hash, "mtime",       DBL2NUM(um_timestamp_to_double(stat->stx_mtime.tv_sec, stat->stx_mtime.tv_nsec)));
+  return hash;
+}
+
+VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_STATX);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+  struct statx stat;
+  memset(&stat, 0, sizeof(stat));
+
+  if (NIL_P(path))
+    path = rb_str_new_literal("");
+
+  io_uring_prep_statx(sqe, dirfd, StringValueCStr(path), flags, mask, &stat);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RB_GC_GUARD(ret);
+  raise_if_exception(ret);
+
+  return statx_to_hash(&stat);
 }
 
 /*******************************************************************************
