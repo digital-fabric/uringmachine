@@ -1224,6 +1224,8 @@ class WaitTest < UMBaseTest
     ret = machine.read(rfd, buf, 8192)
     assert_equal msg.bytesize, ret
     assert_equal msg, buf
+  ensure
+    Process.wait(pid) rescue Errno::ECHILD
   end
 
   def test_waitpid_any
@@ -1248,6 +1250,8 @@ class WaitTest < UMBaseTest
     assert_equal msg.bytesize, ret
     assert_equal msg, buf
     
+  ensure
+    Process.wait(pid) rescue Errno::ECHILD
   end
 
   def test_waitpid_bad_pid
@@ -1305,7 +1309,7 @@ class ForkTest < UMBaseTest
     parent_rfd, child_wfd = UM.pipe
     child_rfd, parent_wfd = UM.pipe
 
-    fork do
+    child_pid = fork do
       # we cannot use the same machine after fork
       m = UM.new
       buf = +''
@@ -1329,5 +1333,8 @@ class ForkTest < UMBaseTest
 
     assert_equal 3, ret
     assert_equal 'foo', buf
+  ensure
+    Process.wait(child_pid) rescue Errno::ECHILD
   end
+
 end
