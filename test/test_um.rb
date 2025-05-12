@@ -1226,6 +1226,30 @@ class WaitTest < UMBaseTest
     assert_equal msg, buf
   end
 
+  def test_waitpid_any
+    skip if UM.kernel_version < 607
+
+    msg = 'hello from child'
+
+    rfd, wfd = UM.pipe
+    pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    ret = machine.waitpid(0, UM::WEXITED)
+    assert_kind_of Array, ret
+    assert_equal [pid, 42], ret
+
+    buf = +''
+    ret = machine.read(rfd, buf, 8192)
+    assert_equal msg.bytesize, ret
+    assert_equal msg, buf
+    
+  end
+
   def test_waitpid_bad_pid
     skip if UM.kernel_version < 607
 

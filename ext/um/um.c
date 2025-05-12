@@ -575,7 +575,7 @@ VALUE um_waitpid(struct um *machine, int pid, int options) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   siginfo_t infop;
-  io_uring_prep_waitid(sqe, P_PID, pid, &infop, options, 0);
+  io_uring_prep_waitid(sqe, pid == 0 ? P_ALL : P_PID, pid, &infop, options, 0);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
