@@ -1275,3 +1275,35 @@ class StatxTest < UMBaseTest
     assert_raises(Errno::ENOENT) { machine.statx(UM::AT_FDCWD, 'foobar', 0, UM::STATX_ALL) }
   end
 end
+
+class ForkTest < UMBaseTest
+  def test_fork
+    parent_rfd, child_wfd = UM.pipe
+    child_rfd, parent_wfd = UM.pipe
+
+    fork do
+      # we cannot use the same machine after fork
+      m = UM.new
+      buf = +''
+      ret = m.read(child_rfd, buf, 8192)
+      ret = m.write(child_wfd, buf, buf.bytesize)
+      m.close(child_wfd)
+    rescue Exception => e
+      puts 'c' * 40
+      p e
+      puts e.backtrace.join("\n")
+    end
+
+    ret = machine.write(parent_wfd, 'foo')
+    assert_equal 3, ret
+
+    ret = machine.close(parent_wfd)
+    assert_equal parent_wfd, ret
+
+    buf = +''
+    ret = machine.read(parent_rfd, buf, 8192)
+
+    assert_equal 3, ret
+    assert_equal 'foo', buf
+  end
+end
