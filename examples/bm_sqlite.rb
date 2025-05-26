@@ -49,7 +49,7 @@ class UM
   def spin_actor(target)
     f = UM::Actor.new(self, target)
     schedule(f, nil)
-    @@fiber_map[f] = true
+    @@fiber_map[f] = f
     f
   end
 end

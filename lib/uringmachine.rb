@@ -15,22 +15,11 @@ class UringMachine
   class Terminate < Exception
   end
 
-  def spin(value = nil, fiber_class = Fiber, &block)
-    f = fiber_class.new do |resume_value|
-      f.set_result block.(resume_value)
-    rescue Exception => e
-      f.set_result e
-    ensure
-      f.mark_as_done
-      # cleanup
-      @@fiber_map.delete(f)
-      self.notify_done_listeners(f)
-      # transfer control to other fibers
-      self.yield
-    end
-    self.schedule(f, value)
-    @@fiber_map[f] = true
-    f
+  def spin(value = nil, klass = Fiber, &block)
+    fiber = klass.new { |v| run_block_in_fiber(block, fiber, v) }
+    self.schedule(fiber, value)
+
+    @@fiber_map[fiber] = fiber
   end
 
   def join(*fibers)
@@ -62,6 +51,21 @@ class UringMachine
   end
 
   private
+
+  def run_block_in_fiber(block, fiber, value)
+    ret = block.(value)
+    fiber.set_result(ret)
+  rescue Exception => e
+    fiber.set_result(e)
+  ensure
+    fiber.mark_as_done
+    # cleanup
+    @@fiber_map.delete(fiber)
+    self.notify_done_listeners(fiber)
+    
+    # transfer control to UM scheduler
+    self.yield
+  end
 
   def notify_done_listeners(fiber)
     listeners = fiber.done_listeners
