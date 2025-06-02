@@ -1,3 +1,7 @@
+# 2025-06-02 Version 0.11
+
+- Implement `UM::Stream` class for read streams
+
 # 2025-05-05 Version 0.10
 
 - Add `Thread#machine`
