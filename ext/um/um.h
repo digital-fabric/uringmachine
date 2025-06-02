@@ -153,6 +153,17 @@ struct um_async_op {
   struct um_op *op;
 };
 
+struct um_stream {
+  VALUE self;
+
+  struct um *machine;
+  int fd;
+  VALUE buffer;
+  ulong len;
+  ulong pos;
+  int eof;
+};
+
 extern VALUE cUM;
 extern VALUE cMutex;
 extern VALUE cQueue;
