@@ -1,16 +1,17 @@
 # frozen_string_literal: true
 
-require 'bundler/inline'
+# require 'bundler/inline'
 
-gemfile do
-  source 'https://rubygems.org'
-  gem 'uringmachine', path: '..'
-  gem 'benchmark-ips'
-  gem 'http_parser.rb'
-end
+# gemfile do
+#   source 'https://rubygems.org'
+#   gem 'uringmachine', path: '..'
+#   gem 'benchmark-ips'
+#   gem 'http_parser.rb'
+# end
 
-require 'benchmark/ips'
+require 'bundler/setup'
 require 'uringmachine'
+require 'benchmark/ips'
 require 'http/parser'
 
 $machine = UM.new
@@ -18,6 +19,8 @@ $machine = UM.new
 HTTP_MSG = "GET /foo/bar HTTP/1.1\r\nServer: foobar.com\r\nFoo: bar\r\n\r\n"
 
 $count = 0
+
+STDOUT.sync = true
 
 def parse_http_parser
   current_fiber = Fiber.current
@@ -45,10 +48,16 @@ def parse_http_parser
   end
 
   $machine.write(w.fileno, HTTP_MSG)
-  $machine.yield
+  ret = $machine.yield
+  ret
+rescue Exception => e
+  p e: e
+  exit
 ensure
-  $machine.close(r.fileno)
-  $machine.close(w.fileno)
+  r.close rescue nil
+  w.close rescue nil
+  # $machine.close(r.fileno) rescue nil
+  # $machine.close(w.fileno) rescue nil
 end
 
 require 'stringio'
@@ -100,50 +109,114 @@ def parse_headers(fd)
 end
 
 def parse_http_stringio
-  current_fiber = Fiber.current
-  r, w = IO.pipe
+  rfd, wfd = UM.pipe
+  queue = UM::Queue.new
 
   $machine.spin do
-    headers = parse_headers(r.fileno)
-    $machine.schedule(current_fiber, headers)
+    headers = parse_headers(rfd)
+    $machine.push(queue, headers)
   rescue Exception => e
     p e
     puts e.backtrace.join("\n")
     exit!
   end
 
-  $machine.write(w.fileno, HTTP_MSG)
-  $machine.yield
+  $machine.write(wfd, HTTP_MSG)
+  $machine.close(wfd)
+  $machine.shift(queue)
 ensure
-  $machine.close(r.fileno)
-  $machine.close(w.fileno)
+  ($machine.close(rfd) rescue nil) if rfd
+  ($machine.close(wfd) rescue nil) if wfd
 end
 
-# p parse_http_parser
-# p parse_http_stringio
+def stream_parse_headers(fd)
+  stream = UM::Stream.new($machine, fd)
+
+  headers = stream_get_request_line(stream)
+  return nil if !headers
+
+  while true
+    line = stream.get_line()
+    break if line.empty?
+
+    m = line.match(RE_HEADER_LINE)
+    raise "Invalid header" if !m
+
+    headers[m[1]] = m[2]
+  end
+
+  headers
+end
+
+def stream_get_request_line(stream)
+  line = stream.get_line()
+
+  m = line.match(RE_REQUEST_LINE)
+  return nil if !m
+
+  {
+    'method'   => m[1].downcase,
+    'path'     => m[2],
+    'protocol' => m[3].downcase
+  }
+end
+
+def parse_http_stream
+  rfd, wfd = UM.pipe
+  queue = UM::Queue.new
+
+  $machine.spin do
+    headers = stream_parse_headers(rfd)
+    $machine.push(queue, headers)
+  rescue Exception => e
+    p e
+    puts e.backtrace.join("\n")
+    exit!
+  end
+
+  $machine.write(wfd, HTTP_MSG)
+  $machine.shift(queue)
+ensure
+  ($machine.close(rfd) rescue nil) if rfd
+  ($machine.close(wfd) rescue nil) if wfd
+end
+
+# 10000.times { parse_http_parser }
+# 10000.times { parse_http_stringio }
+# 10000.times { parse_http_stream }
 # exit
 
-GC.disable
+# GC.disable
 
-def alloc_count
-  count0 = ObjectSpace.count_objects[:TOTAL]
-  yield
-  count1 = ObjectSpace.count_objects[:TOTAL]
-  count1 - count0
-end
+# OS = ObjectSpace
 
-X = 100
-p(
-  alloc_http_parser: alloc_count { X.times { parse_http_parser } },
-  alloc_stringio: alloc_count { X.times { parse_http_stringio } }
-)
-exit
+# def object_count
+#   counts = ObjectSpace.count_objects
+#   counts[:TOTAL] - counts[:FREE]
+# end
+
+# def alloc_count
+#   GC.start
+#   count0 = object_count
+#   yield
+#   count1 = object_count
+#   count1 - count0
+# end
+
+# X = 100
+# p(
+#   alloc_http_parser: alloc_count { X.times { parse_http_parser } },
+#   alloc_stringio: alloc_count { X.times { parse_http_stringio } },
+#   alloc_stream: alloc_count { X.times { parse_http_stream } }
+# )
+# exit
 
 Benchmark.ips do |x|
   x.config(:time => 5, :warmup => 3)
 
   x.report("http_parser") { parse_http_parser }
-  x.report("homegrown") { parse_http_stringio }
+  x.report("stringio") { parse_http_stringio }
+  x.report("stream") { parse_http_stream }
 
   x.compare!
 end

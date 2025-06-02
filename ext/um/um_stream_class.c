@@ -37,6 +37,8 @@ static VALUE Stream_allocate(VALUE klass) {
 VALUE Stream_initialize(VALUE self, VALUE machine, VALUE fd) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
 
+  stream->self = self;
+  
   stream->machine = RTYPEDDATA_DATA(machine);
   stream->fd = NUM2ULONG(fd);
   stream->buffer = rb_utf8_str_new_literal("");
@@ -54,35 +56,14 @@ VALUE Stream_get_line(VALUE self) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  while (true) {
-    char * lf_ptr = memchr(start, '\n', stream->len - stream->pos);
-    if (lf_ptr) {
-      ulong len = lf_ptr - start;
-      if (len && (start[len - 1] == '\r')) len -= 1;
-
-      VALUE str = rb_str_new(start, len);
-      stream->pos += lf_ptr - start + 1;
-      return str;
-    }
-
-    if (!stream_read_more(stream)) return Qnil;
-  }
+  return stream_get_line(stream);
 }
 
 VALUE Stream_get_string(VALUE self, VALUE len) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  ulong ulen = NUM2ULONG(len);
-
-  while (stream->len - stream->pos < ulen)
-    if (!stream_read_more(stream)) return Qnil;
-  
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  VALUE str = rb_utf8_str_new(start, ulen);
-  stream->pos += ulen;
-  return str;
+  return stream_get_string(stream, NUM2ULONG(len));
 }
 
 VALUE Stream_resp_get_line(VALUE self) {

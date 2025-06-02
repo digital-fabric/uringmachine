@@ -1,5 +1,32 @@
 #include "um.h"
 
+VALUE stream_get_line(struct um_stream *stream) {
+  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
+  while (true) {
+    char * lf_ptr = memchr(start, '\n', stream->len - stream->pos);
+    if (lf_ptr) {
+      ulong len = lf_ptr - start;
+      if (len && (start[len - 1] == '\r')) len -= 1;
+
+      VALUE str = rb_str_new(start, len);
+      stream->pos += lf_ptr - start + 1;
+      return str;
+    }
+
+    if (!stream_read_more(stream)) return Qnil;
+  }
+}
+
+VALUE stream_get_string(struct um_stream *stream, ulong len) {
+  while (stream->len - stream->pos < len)
+    if (!stream_read_more(stream)) return Qnil;
+  
+  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
+  VALUE str = rb_utf8_str_new(start, len);
+  stream->pos += len;
+  return str;
+}
+
 static inline void stream_check_truncate_buffer(struct um_stream *stream) {
   if ((stream->pos == stream->len) && (stream->len >= 1 << 12)) {
     rb_str_modify(stream->buffer);
@@ -58,6 +85,7 @@ VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
         VALUE str = rb_str_new(start, len + 1);
         rb_str_set_len(str, len);
         RSTRING_PTR(str)[len] = 0;
+        RB_GC_GUARD(str);
         return str;
       }
 
