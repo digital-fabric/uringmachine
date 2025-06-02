@@ -1,3 +1,7 @@
+# 2025-06-02 Version 0.11.1
+
+- Fix `UM::Stream` behaviour on GC
+
 # 2025-06-02 Version 0.11
 
 - Implement `UM::Stream` class for read streams
