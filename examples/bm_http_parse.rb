@@ -165,7 +165,7 @@ def parse_http_stream
   rfd, wfd = UM.pipe
   queue = UM::Queue.new
 
-  $machine.spin do
+  f = $machine.spin do
     headers = stream_parse_headers(rfd)
     $machine.push(queue, headers)
   rescue Exception => e
@@ -181,42 +181,43 @@ ensure
   ($machine.close(wfd) rescue nil) if wfd
 end
 
-# 10000.times { parse_http_parser }
-# 10000.times { parse_http_stringio }
-# 10000.times { parse_http_stream }
-# exit
-
-# GC.disable
-
-# OS = ObjectSpace
-
-# def object_count
-#   counts = ObjectSpace.count_objects
-#   counts[:TOTAL] - counts[:FREE]
-# end
-
-# def alloc_count
-#   GC.start
-#   count0 = object_count
-#   yield
-#   count1 = object_count
-#   count1 - count0
-# end
-
-# X = 100
-# p(
-#   alloc_http_parser: alloc_count { X.times { parse_http_parser } },
-#   alloc_stringio: alloc_count { X.times { parse_http_stringio } },
-#   alloc_stream: alloc_count { X.times { parse_http_stream } }
-# )
-# exit
-
-Benchmark.ips do |x|
-  x.config(:time => 5, :warmup => 3)
-
-  x.report("http_parser") { parse_http_parser }
-  x.report("stringio") { parse_http_stringio }
-  x.report("stream") { parse_http_stream }
-
-  x.compare!
+def compare_allocs
+  GC.disable
+  x = 1000
+  p(
+    alloc_http_parser:  alloc_count { x.times { parse_http_parser } },
+    alloc_stringio:     alloc_count { x.times { parse_http_stringio } },
+    alloc_stream:       alloc_count { x.times { parse_http_stream } }
+  )
+ensure
+  GC.enable
 end
+
+def object_count
+  counts = ObjectSpace.count_objects
+  counts[:TOTAL] - counts[:FREE]
+end
+
+def alloc_count
+  GC.start
+  count0 = object_count
+  yield
+  # GC.start
+  count1 = object_count
+  count1 - count0
+end
+
+def benchmark
+  Benchmark.ips do |x|
+    x.config(:time => 5, :warmup => 3)
+
+    x.report("http_parser") { parse_http_parser }
+    x.report("stringio") { parse_http_stringio }
+    x.report("stream") { parse_http_stream }
+
+    x.compare!
+  end
+end
+
+compare_allocs
+benchmark
