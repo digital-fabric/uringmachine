@@ -1313,8 +1313,8 @@ class ForkTest < UMBaseTest
       # we cannot use the same machine after fork
       m = UM.new
       buf = +''
-      ret = m.read(child_rfd, buf, 8192)
-      ret = m.write(child_wfd, buf, buf.bytesize)
+      m.read(child_rfd, buf, 8192)
+      m.write(child_wfd, buf, buf.bytesize)
       m.close(child_wfd)
     rescue Exception => e
       puts 'c' * 40

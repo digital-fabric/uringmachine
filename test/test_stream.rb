@@ -71,7 +71,7 @@ class StreamRespTest < StreamBaseTest
     assert_equal 123, @stream.resp_decode
 
     machine.write(@wfd, ":-123\r\n")
-    assert_equal -123, @stream.resp_decode
+    assert_equal(-123, @stream.resp_decode)
 
     machine.write(@wfd, ",123.321\r\n")
     assert_equal 123.321, @stream.resp_decode
