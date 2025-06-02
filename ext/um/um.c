@@ -356,6 +356,22 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
   return raise_if_exception(ret);
 }
 
+inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_READ);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_read(sqe, fd, buffer, maxlen, -1);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op)) {
+    return op.result.res;
+
+  }
+
+  raise_if_exception(ret);
+  return 0;
+}
+
 VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   struct um_op op;
   um_prep_op(machine, &op, OP_WRITE);

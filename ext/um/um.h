@@ -164,6 +164,13 @@ struct um_stream {
   int eof;
 };
 
+struct um_write_buffer {
+  VALUE str;
+  size_t capa;
+  size_t len;
+  char *ptr;
+};
+
 extern VALUE cUM;
 extern VALUE cMutex;
 extern VALUE cQueue;
@@ -221,6 +228,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_periodically(struct um *machine, double interval);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset);
+size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE str, int len);
 VALUE um_close(struct um *machine, int fd);
@@ -261,6 +269,16 @@ VALUE um_queue_push(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
+
+int stream_read_more(struct um_stream *stream);
+
+VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer);
+VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer);
+VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
+void resp_encode(struct um_write_buffer *buf, VALUE obj);
+
+void write_buffer_init(struct um_write_buffer *buf, VALUE str);
+void write_buffer_update_len(struct um_write_buffer *buf);
 
 void um_define_net_constants(VALUE mod);
 

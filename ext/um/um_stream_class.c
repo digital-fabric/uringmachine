@@ -1,16 +1,17 @@
 #include "um.h"
-#include <arpa/inet.h>
 
 VALUE cStream;
 
 static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
   rb_gc_mark_movable(stream->self);
+  rb_gc_mark_movable(stream->buffer);
 }
 
 static void Stream_compact(void *ptr) {
   struct um_stream *stream = ptr;
   stream->self = rb_gc_location(stream->self);
+  stream->buffer = rb_gc_location(stream->buffer);
 }
 
 static void Stream_free(void *ptr) {
@@ -40,41 +41,13 @@ VALUE Stream_initialize(VALUE self, VALUE machine, VALUE fd) {
   stream->fd = NUM2ULONG(fd);
   stream->buffer = rb_utf8_str_new_literal("");
   rb_str_resize(stream->buffer, 1 << 16); // 64KB
+  rb_str_set_len(stream->buffer, 0);
 
   stream->len = 0;
   stream->pos = 0;
   stream->eof = 0;
 
   return self;
-}
-
-static inline void Stream_check_truncate_buffer(struct um_stream *stream) {
-  if ((stream->pos == stream->len) && (stream->len >= 1 << 12)) {
-    rb_str_set_len(stream->buffer, 0);
-    stream->len = stream->pos = 0;
-  }
-  if (stream->pos >= 1 << 12) {
-    char *base = RSTRING_PTR(stream->buffer);
-    int len_rest = stream->len - stream->pos;
-    memmove(base, base + stream->pos, len_rest);
-    rb_str_set_len(stream->buffer, len_rest);
-    stream->len = len_rest;
-    stream->pos = 0;
-  }
-}
-
-static inline int Stream_read_more(struct um_stream *stream) {
-  Stream_check_truncate_buffer(stream);
-
-  int ofs = (stream->pos == 0) ? 0 : -1;
-  VALUE ret = um_read(stream->machine, stream->fd, stream->buffer, 1 << 12, ofs);
-
-  uint read_count = NUM2ULONG(ret);
-
-  if (read_count == 0) return 0;
-
-  stream->len += read_count;
-  return 1;
 }
 
 VALUE Stream_get_line(VALUE self) {
@@ -93,7 +66,7 @@ VALUE Stream_get_line(VALUE self) {
       return str;
     }
 
-    if (!Stream_read_more(stream)) return Qnil;
+    if (!stream_read_more(stream)) return Qnil;
   }
 }
 
@@ -104,10 +77,10 @@ VALUE Stream_get_string(VALUE self, VALUE len) {
   ulong ulen = NUM2ULONG(len);
 
   while (stream->len - stream->pos < ulen)
-    if (!Stream_read_more(stream)) return Qnil;
+    if (!stream_read_more(stream)) return Qnil;
   
   char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  VALUE str = rb_str_new(start, ulen);
+  VALUE str = rb_utf8_str_new(start, ulen);
   stream->pos += ulen;
   return str;
 }
@@ -116,34 +89,36 @@ VALUE Stream_resp_get_line(VALUE self) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  while (true) {
-    char * lf_ptr = memchr(start, '\r', stream->len - stream->pos);
-    if (lf_ptr) {
-      ulong len = lf_ptr - start;
-
-      VALUE str = rb_str_new(start, len);
-      stream->pos += lf_ptr - start + 2;
-      return str;
-    }
-
-    if (!Stream_read_more(stream)) return Qnil;
-  }
+  VALUE line = resp_get_line(stream, Qnil);
+  RB_GC_GUARD(line);
+  return line;
 }
 
 VALUE Stream_resp_get_string(VALUE self, VALUE len) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  ulong ulen = NUM2ULONG(len);
-  ulong read_len = ulen + 2;
+  VALUE str = resp_get_string(stream, NUM2ULONG(len), Qnil);
+  RB_GC_GUARD(str);
+  return str;
+}
 
-  while (stream->len - stream->pos < read_len)
-    if (!Stream_read_more(stream)) return Qnil;
-  
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  VALUE str = rb_str_new(start, ulen);
-  stream->pos += read_len;
+VALUE Stream_resp_decode(VALUE self) {
+  struct um_stream *stream = RTYPEDDATA_DATA(self);
+  if (unlikely(stream->eof)) return Qnil;
+
+  VALUE out_buffer = rb_utf8_str_new_literal("");
+  VALUE obj = resp_decode(stream, out_buffer);
+  RB_GC_GUARD(out_buffer);
+  return obj;
+}
+
+VALUE Stream_resp_encode(VALUE self, VALUE str, VALUE obj) {
+  struct um_write_buffer buf;
+  write_buffer_init(&buf, str);
+  rb_str_modify(str);
+  resp_encode(&buf, obj);
+  write_buffer_update_len(&buf);
   return str;
 }
 
@@ -158,4 +133,8 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "resp_get_line", Stream_resp_get_line, 0);
   rb_define_method(cStream, "resp_get_string", Stream_resp_get_string, 1);
+
+  rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
+  
+  rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
 }
