@@ -282,38 +282,6 @@ inline void write_buffer_update_len(struct um_write_buffer *buf) {
   rb_str_set_len(buf->str, buf->len);
 }
 
-// static inline void buffer_append(VALUE buf, const char *ptr, ulong len) {
-//   rb_str_cat(buf, ptr, len);
-// }
-
-// static inline void buffer_append_cstr(VALUE buf, const char *str) {
-//   rb_str_cat_cstr(buf, str);
-// }
-
-// static inline void buffer_append_bulk_string(VALUE buf, VALUE str) {
-//   size_t buf_capa = rb_str_capacity(buf);
-//   size_t buf_len = RSTRING_LEN(buf);
-//   size_t str_len = RSTRING_LEN(str);
-//   size_t total_len = buf_len + str_len + 16; // leave room for prefix and crlf
-
-//   if (buf_capa < total_len) {
-//     int additional = total_len - buf_capa;
-//     if (additional < 1 << 12) additional = 1 << 12;
-//     rb_str_modify_expand(buf, additional);
-//   }
-
-//   char *ptr = RSTRING_PTR(buf) + buf_len;
-//   int prefix_len = sprintf(ptr, "$%ld\r\n", str_len);
-//   memcpy(ptr + prefix_len, RSTRING_PTR(str), str_len);
-//   char *postfix_ptr = ptr + prefix_len + str_len;
-//   postfix_ptr[0] = '\r';
-//   postfix_ptr[1] = '\n';
-
-//   // calculate actual total length
-//   total_len = buf_len + prefix_len + str_len + 2;
-//   rb_str_set_len(buf, total_len);
-// }
-
 struct resp_encode_hash_ctx {
   struct um_write_buffer *buf;
   VALUE obj;
