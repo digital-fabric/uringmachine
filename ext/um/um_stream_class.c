@@ -52,36 +52,18 @@ VALUE Stream_initialize(VALUE self, VALUE machine, VALUE fd) {
   return self;
 }
 
-VALUE Stream_get_line(VALUE self) {
+VALUE Stream_get_line(VALUE self, VALUE buf, VALUE limit) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  return stream_get_line(stream);
+  return stream_get_line(stream, buf, NUM2LONG(limit));
 }
 
-VALUE Stream_get_string(VALUE self, VALUE len) {
+VALUE Stream_get_string(VALUE self, VALUE buf, VALUE len) {
   struct um_stream *stream = RTYPEDDATA_DATA(self);
   if (unlikely(stream->eof)) return Qnil;
 
-  return stream_get_string(stream, NUM2ULONG(len));
-}
-
-VALUE Stream_resp_get_line(VALUE self) {
-  struct um_stream *stream = RTYPEDDATA_DATA(self);
-  if (unlikely(stream->eof)) return Qnil;
-
-  VALUE line = resp_get_line(stream, Qnil);
-  RB_GC_GUARD(line);
-  return line;
-}
-
-VALUE Stream_resp_get_string(VALUE self, VALUE len) {
-  struct um_stream *stream = RTYPEDDATA_DATA(self);
-  if (unlikely(stream->eof)) return Qnil;
-
-  VALUE str = resp_get_string(stream, NUM2ULONG(len), Qnil);
-  RB_GC_GUARD(str);
-  return str;
+  return stream_get_string(stream, buf, NUM2LONG(len));
 }
 
 VALUE Stream_resp_decode(VALUE self) {
@@ -109,11 +91,8 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "initialize", Stream_initialize, 2);
   
-  rb_define_method(cStream, "get_line", Stream_get_line, 0);
-  rb_define_method(cStream, "get_string", Stream_get_string, 1);
-
-  rb_define_method(cStream, "resp_get_line", Stream_resp_get_line, 0);
-  rb_define_method(cStream, "resp_get_string", Stream_resp_get_string, 1);
+  rb_define_method(cStream, "get_line", Stream_get_line, 2);
+  rb_define_method(cStream, "get_string", Stream_get_string, 2);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
   

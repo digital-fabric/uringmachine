@@ -1,31 +1,5 @@
 #include "um.h"
-
-VALUE stream_get_line(struct um_stream *stream) {
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  while (true) {
-    char * lf_ptr = memchr(start, '\n', stream->len - stream->pos);
-    if (lf_ptr) {
-      ulong len = lf_ptr - start;
-      if (len && (start[len - 1] == '\r')) len -= 1;
-
-      VALUE str = rb_str_new(start, len);
-      stream->pos += lf_ptr - start + 1;
-      return str;
-    }
-
-    if (!stream_read_more(stream)) return Qnil;
-  }
-}
-
-VALUE stream_get_string(struct um_stream *stream, ulong len) {
-  while (stream->len - stream->pos < len)
-    if (!stream_read_more(stream)) return Qnil;
-  
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  VALUE str = rb_utf8_str_new(start, len);
-  stream->pos += len;
-  return str;
-}
+#include <stdlib.h>
 
 static inline void stream_check_truncate_buffer(struct um_stream *stream) {
   if ((stream->pos == stream->len) && (stream->len >= 1 << 12)) {
@@ -67,10 +41,67 @@ int stream_read_more(struct um_stream *stream) {
   return 1;
 }
 
-// ensure string can hold at least len bytes
+// ensures given string can hold at least given len bytes (+trailing null)
 static inline void str_expand(VALUE str, size_t len) {
-  size_t capa = rb_str_capacity(str);
-  if (capa < len + 1) rb_str_modify_expand(str, len + 1 - capa);
+  rb_str_resize(str, len);
+}
+
+static inline void str_copy_bytes(VALUE dest, const char *src, ssize_t len) {
+  str_expand(dest, len + 1);
+  char *dest_ptr = RSTRING_PTR(dest);
+  memcpy(dest_ptr, src, len);
+  dest_ptr[len] = 0;
+  rb_str_set_len(dest, len);
+}
+
+VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen) {
+  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
+  while (true) {
+    ssize_t pending_len = stream->len - stream->pos;
+    ssize_t search_len = pending_len;
+    ssize_t absmax_len = labs(maxlen);
+    int should_limit_len = (absmax_len > 0) && (search_len > maxlen);
+    if (should_limit_len) search_len = absmax_len;
+
+    char * lf_ptr = memchr(start, '\n', search_len);
+    if (lf_ptr) {
+      ssize_t len = lf_ptr - start;
+      if (len && (start[len - 1] == '\r')) len -= 1;
+
+      stream->pos += lf_ptr - start + 1;
+      if (NIL_P(buf)) return rb_utf8_str_new(start, len);
+
+      str_copy_bytes(buf, start, len);
+      return buf;
+    }
+    else if (should_limit_len && pending_len > search_len)
+      // maxlen
+      return Qnil;
+
+    if (!stream_read_more(stream))
+      return Qnil;
+    else
+      // update start ptr (it might have changed after reading)
+      start = RSTRING_PTR(stream->buffer) + stream->pos;
+  }
+}
+
+VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len) {
+  size_t abslen = labs(len);
+  while (stream->len - stream->pos < abslen)
+    if (!stream_read_more(stream)) {
+      if (len > 0) return Qnil;
+
+      abslen = stream->len - stream->pos;
+    }
+  
+  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
+  stream->pos += abslen;
+
+  if (NIL_P(buf)) return rb_utf8_str_new(start, abslen);
+
+  str_copy_bytes(buf, start, len);
+  return buf;
 }
 
 VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
@@ -89,11 +120,7 @@ VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
         return str;
       }
 
-      str_expand(out_buffer, len + 1);
-      char *dest_ptr = RSTRING_PTR(out_buffer);
-      memcpy(dest_ptr, start, len);
-      dest_ptr[len] = 0; // add null at end
-      rb_str_set_len(out_buffer, len);
+      str_copy_bytes(out_buffer, start, len);
       return out_buffer;
     }
 
@@ -116,11 +143,7 @@ VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
 
   if (NIL_P(out_buffer)) return rb_utf8_str_new(start, len);
 
-  str_expand(out_buffer, len + 1);
-  char *dest_ptr = RSTRING_PTR(out_buffer);
-  memcpy(dest_ptr, start, len);
-  dest_ptr[len] = 0; // add null at end
-  rb_str_set_len(out_buffer, len);
+  str_copy_bytes(out_buffer, start, len);
   return out_buffer;
 }
 

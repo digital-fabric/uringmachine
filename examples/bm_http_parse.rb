@@ -132,11 +132,12 @@ end
 def stream_parse_headers(fd)
   stream = UM::Stream.new($machine, fd)
 
-  headers = stream_get_request_line(stream)
+  buf = String.new(capacity: 65536)
+  headers = stream_get_request_line(stream, buf)
   return nil if !headers
 
   while true
-    line = stream.get_line()
+    line = stream.get_line(buf, 0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -148,8 +149,8 @@ def stream_parse_headers(fd)
   headers
 end
 
-def stream_get_request_line(stream)
-  line = stream.get_line()
+def stream_get_request_line(stream, buf)
+  line = stream.get_line(buf, 0)
 
   m = line.match(RE_REQUEST_LINE)
   return nil if !m
@@ -165,7 +166,7 @@ def parse_http_stream
   rfd, wfd = UM.pipe
   queue = UM::Queue.new
 
-  f = $machine.spin do
+  $machine.spin do
     headers = stream_parse_headers(rfd)
     $machine.push(queue, headers)
   rescue Exception => e

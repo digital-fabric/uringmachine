@@ -15,41 +15,92 @@ class StreamTest < StreamBaseTest
     machine.write(@wfd, "foo\nbar\r\nbaz")
     machine.close(@wfd)
 
-    assert_equal 'foo', @stream.get_line
-    assert_equal 'bar', @stream.get_line
-    assert_nil @stream.get_line
+    assert_equal 'foo', @stream.get_line(nil, 0)
+    assert_equal 'bar', @stream.get_line(nil, 0)
+    assert_nil @stream.get_line(nil, 0)
+  end
+
+  def test_get_line_with_buf
+    machine.write(@wfd, "foo\nbar\r\nbaz")
+    machine.close(@wfd)
+
+    buf = +''
+    ret = @stream.get_line(buf, 0)
+    assert_equal 'foo', buf
+    assert_equal ret, buf
+
+    ret = @stream.get_line(buf, 0)
+    assert_equal 'bar', buf
+    assert_equal ret, buf
+  end
+
+  def test_get_line_with_positive_maxlen
+    machine.write(@wfd, "foobar\r\n")
+    machine.close(@wfd)
+
+    buf = +''
+    ret = @stream.get_line(buf, 3)
+    assert_nil ret
+    assert_equal '', buf
+
+    # verify that stream pos has not changed
+    ret = @stream.get_line(buf, 0)
+    assert_equal 'foobar', buf
+    assert_equal ret, buf
+  end
+
+  def test_get_line_with_negative_maxlen
+    machine.write(@wfd, "foobar\r\n")
+    machine.close(@wfd)
+
+    buf = +''
+    ret = @stream.get_line(buf, -3)
+    assert_nil ret
+    assert_equal '', buf
+
+    # verify that stream pos has not changed
+    ret = @stream.get_line(buf, 0)
+    assert_equal 'foobar', buf
+    assert_equal ret, buf
   end
 
   def test_get_string
     machine.write(@wfd, "foobarbazblahzzz")
     machine.close(@wfd)
 
-    assert_equal 'foobar', @stream.get_string(6)
-    assert_equal 'baz', @stream.get_string(3)
-    assert_equal 'blah', @stream.get_string(4)
-    assert_nil @stream.get_string(4)
+    assert_equal 'foobar', @stream.get_string(nil, 6)
+    assert_equal 'baz', @stream.get_string(nil, 3)
+    assert_equal 'blah', @stream.get_string(nil, 4)
+    assert_nil @stream.get_string(nil, 4)
+  end
+
+  def test_get_string_with_buf
+    machine.write(@wfd, "foobarbazblahzzz")
+    machine.close(@wfd)
+
+    buf = +''
+    ret = @stream.get_string(buf, 6)
+    assert_equal 'foobar', buf
+    assert_equal ret, buf
+
+    ret = @stream.get_string(buf, 3)
+    assert_equal 'baz', buf
+    assert_equal ret, buf
+  end
+
+  def test_get_string_with_negative_len
+    machine.write(@wfd, "foobar")
+    machine.close(@wfd)
+
+    ret = @stream.get_string(nil, -12)
+    assert_equal 'foobar', ret
+
+    ret = @stream.get_string(nil, -4)
+    assert_nil ret
   end
 end
 
 class StreamRespTest < StreamBaseTest
-  def test_trdp_get_line
-    machine.write(@wfd, "foo\r\nbarbar\r\nbaz\n")
-    machine.close(@wfd)
-    
-    assert_equal 'foo', @stream.resp_get_line
-    assert_equal 'barbar', @stream.resp_get_line
-    assert_nil @stream.resp_get_line
-  end
-
-  def test_resp_get_string
-    machine.write(@wfd, "foo\r\nbarbar\r\nbaz\n")
-    machine.close(@wfd)
-
-    assert_equal 'foo', @stream.resp_get_string(3)
-    assert_equal 'barbar', @stream.resp_get_string(6)
-    assert_nil @stream.resp_get_string(3)
-  end
-
   def test_resp_decode
     machine.write(@wfd, "+foo bar\r\n")
     assert_equal "foo bar", @stream.resp_decode

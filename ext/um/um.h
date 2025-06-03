@@ -270,11 +270,8 @@ VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
-int stream_read_more(struct um_stream *stream);
-VALUE stream_get_line(struct um_stream *stream);
-VALUE stream_get_string(struct um_stream *stream, ulong len);
-VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer);
-VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer);
+VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen);
+VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 
