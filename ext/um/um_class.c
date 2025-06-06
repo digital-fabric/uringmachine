@@ -24,27 +24,28 @@ static void UM_free(void *ptr) {
   free(ptr);
 }
 
-static size_t UM_size(const void *ptr) {
-  return sizeof(struct um);
-}
-
-static const rb_data_type_t UM_type = {
-    "UringMachine",
-    {UM_mark, UM_free, UM_size, UM_compact},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
+static const rb_data_type_t UringMachine_type = {
+  .wrap_struct_name = "UringMachine",
+  .function = {
+    .dmark = UM_mark,
+    .dfree = UM_free,
+    .dsize = NULL,
+    .dcompact = UM_compact
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE UM_allocate(VALUE klass) {
-  struct um *machine = ALLOC(struct um);
-
-  return TypedData_Wrap_Struct(klass, &UM_type, machine);
+  struct um *um;
+  return TypedData_Make_Struct(klass, struct um, &UringMachine_type, um);
 }
 
 inline struct um *um_get_machine(VALUE self) {
-  struct um *machine = RTYPEDDATA_DATA(self);
-  if (!machine->ring_initialized)
-    rb_raise(rb_eRuntimeError, "Machine not initialized");
-  return machine;
+  struct um *um;
+  TypedData_Get_Struct(self, struct um, &UringMachine_type, um);
+  if (!um->ring_initialized) rb_raise(rb_eRuntimeError, "Machine not initialized");
+  
+  return um;
 }
 
 VALUE UM_initialize(VALUE self) {
