@@ -16,29 +16,32 @@ static void AsyncOp_compact(void *ptr) {
   async_op->self = rb_gc_location(async_op->self);
 }
 
-static size_t AsyncOp_size(const void *ptr) {
-  return sizeof(struct um_async_op);
-}
-
 static void AsyncOp_free(void *ptr) {
   struct um_async_op *async_op = ptr;
   um_op_free(async_op->machine, async_op->op);
-  free(ptr);
+  // free(ptr);
 }
 
 static const rb_data_type_t AsyncOp_type = {
-    "UringMachine::AsyncOp",
-    {AsyncOp_mark, AsyncOp_free, AsyncOp_size, AsyncOp_compact},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
+  .wrap_struct_name = "UringMachine::AsyncOp",
+  .function = {
+    .dmark = AsyncOp_mark,
+    .dfree = AsyncOp_free,
+    .dsize = NULL,
+    .dcompact = AsyncOp_compact
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
 };
 
 static VALUE AsyncOp_allocate(VALUE klass) {
-  struct um_async_op *async_op = malloc(sizeof(struct um_async_op));
-  return TypedData_Wrap_Struct(klass, &AsyncOp_type, async_op);
+  struct um_async_op *async_op;
+  return TypedData_Make_Struct(klass, struct um_async_op, &AsyncOp_type, async_op);
 }
 
-inline struct um_async_op *AsyncOp_data(VALUE self) {
-  return RTYPEDDATA_DATA(self);
+static inline struct um_async_op *AsyncOp_data(VALUE self) {
+  struct um_async_op *async_op;
+  TypedData_Get_Struct(self, struct um_async_op, &AsyncOp_type, async_op);
+  return async_op;
 }
 
 VALUE AsyncOp_initialize(VALUE self) {
