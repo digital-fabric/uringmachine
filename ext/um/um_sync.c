@@ -73,24 +73,28 @@ inline void um_mutex_unlock(struct um *machine, uint32_t *state) {
 
 struct sync_ctx {
   struct um *machine;
+  VALUE mutex;
   uint32_t *state;
 };
 
-VALUE synchronize_begin(VALUE arg) {
+VALUE synchronize_start(VALUE arg) {
   struct sync_ctx *ctx = (struct sync_ctx *)arg;
   um_mutex_lock(ctx->machine, ctx->state);
   return rb_yield(Qnil);
 }
 
-VALUE synchronize_ensure(VALUE arg) {
+VALUE synchronize_complete(VALUE arg) {
   struct sync_ctx *ctx = (struct sync_ctx *)arg;
+  // Mutex is an embedded data class, so it might have moved while the operation
+  // was ongoing. We need to update the pointer to the embedded state variable.
+  ctx->state = &Mutex_data(ctx->mutex)->state;
   um_mutex_unlock(ctx->machine, ctx->state);
   return Qnil;
 }
 
-inline VALUE um_mutex_synchronize(struct um *machine, uint32_t *state) {
-  struct sync_ctx ctx = { .machine = machine, .state = state };
-  return rb_ensure(synchronize_begin, (VALUE)&ctx, synchronize_ensure, (VALUE)&ctx);
+inline VALUE um_mutex_synchronize(struct um *machine, VALUE mutex, uint32_t *state) {
+  struct sync_ctx ctx = { .machine = machine, .mutex = mutex, .state = state };
+  return rb_ensure(synchronize_start, (VALUE)&ctx, synchronize_complete, (VALUE)&ctx);
 }
 
 #define QUEUE_EMPTY 0
@@ -116,8 +120,6 @@ inline void um_queue_free(struct um_queue *queue) {
     free(entry);
     entry = next;
   }
-
-  free(queue);
 }
 
 inline void um_queue_mark(struct um_queue *queue) {
@@ -226,11 +228,12 @@ enum queue_op { QUEUE_POP, QUEUE_SHIFT };
 
 struct queue_wait_ctx {
   struct um *machine;
+  VALUE queue_obj;
   struct um_queue *queue;
   enum queue_op op;
 };
 
-VALUE um_queue_remove_begin(VALUE arg) {
+VALUE um_queue_remove_start(VALUE arg) {
   struct queue_wait_ctx *ctx = (struct queue_wait_ctx *)arg;
 
   ctx->queue->num_waiters++;
@@ -247,8 +250,12 @@ VALUE um_queue_remove_begin(VALUE arg) {
   return (ctx->op == QUEUE_POP ? queue_remove_tail : queue_remove_head)(ctx->queue);
 }
 
-VALUE um_queue_remove_ensure(VALUE arg) {
+VALUE um_queue_remove_complete(VALUE arg) {
   struct queue_wait_ctx *ctx = (struct queue_wait_ctx *)arg;
+
+  // the um_queue struct is embedded, so it might have been moved while the op
+  // was ongoing, so we need to get it again on op completion
+  ctx->queue = Queue_data(ctx->queue_obj);
 
   ctx->queue->num_waiters--;
 
@@ -263,11 +270,11 @@ VALUE um_queue_remove_ensure(VALUE arg) {
 }
 
 VALUE um_queue_pop(struct um *machine, struct um_queue *queue) {
-  struct queue_wait_ctx ctx = { .machine = machine, .queue = queue, .op = QUEUE_POP };
-  return rb_ensure(um_queue_remove_begin, (VALUE)&ctx, um_queue_remove_ensure, (VALUE)&ctx);
+  struct queue_wait_ctx ctx = { .machine = machine, .queue_obj = queue->self, .queue = queue, .op = QUEUE_POP };
+  return rb_ensure(um_queue_remove_start, (VALUE)&ctx, um_queue_remove_complete, (VALUE)&ctx);
 }
 
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue) {
-  struct queue_wait_ctx ctx = { .machine = machine, .queue = queue, .op = QUEUE_SHIFT };
-  return rb_ensure(um_queue_remove_begin, (VALUE)&ctx, um_queue_remove_ensure, (VALUE)&ctx);
+  struct queue_wait_ctx ctx = { .machine = machine, .queue_obj = queue->self, .queue = queue, .op = QUEUE_SHIFT };
+  return rb_ensure(um_queue_remove_start, (VALUE)&ctx, um_queue_remove_complete, (VALUE)&ctx);
 }

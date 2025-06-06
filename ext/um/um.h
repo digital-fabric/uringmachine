@@ -124,7 +124,6 @@ struct um {
 };
 
 struct um_mutex {
-  VALUE self;
   uint32_t state;
 };
 
@@ -259,7 +258,7 @@ struct um_mutex *Mutex_data(VALUE self);
 struct um_queue *Queue_data(VALUE self);
 
 void um_mutex_init(struct um_mutex *mutex);
-VALUE um_mutex_synchronize(struct um *machine, uint32_t *state);
+VALUE um_mutex_synchronize(struct um *machine, VALUE mutex, uint32_t *state);
 
 void um_queue_init(struct um_queue *queue);
 void um_queue_free(struct um_queue *queue);

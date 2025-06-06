@@ -244,7 +244,7 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
   struct um *machine = um_get_machine(self);
   struct um_mutex *mutex_data = Mutex_data(mutex);
-  return um_mutex_synchronize(machine, &mutex_data->state);
+  return um_mutex_synchronize(machine, mutex, &mutex_data->state);
 }
 
 VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {
@@ -278,7 +278,7 @@ struct um_open_ctx {
   VALUE fd;
 };
 
-VALUE UM_open_ensure(VALUE arg) {
+VALUE UM_open_complete(VALUE arg) {
   struct um_open_ctx *ctx = (struct um_open_ctx *)arg;
   UM_close(ctx->self, ctx->fd);
   return ctx->self;
@@ -290,7 +290,7 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
   VALUE fd = um_open(machine, pathname, NUM2INT(flags), 0666);
   if (rb_block_given_p()) {
     struct um_open_ctx ctx = { self, fd };
-    return rb_ensure(rb_yield, fd, UM_open_ensure, (VALUE)&ctx);
+    return rb_ensure(rb_yield, fd, UM_open_complete, (VALUE)&ctx);
   }
   else
     return fd;

@@ -18,23 +18,42 @@ static void Queue_free(void *ptr) {
   um_queue_free(queue);
 }
 
-static size_t Queue_size(const void *ptr) {
-  return sizeof(struct um_queue);
-}
+// static size_t Queue_size(const void *ptr) {
+//   return sizeof(struct um_queue);
+// }
 
 static const rb_data_type_t Queue_type = {
-    "UringMachineQueue",
-    {Queue_mark, Queue_free, Queue_size, Queue_compact},
-    0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
+  .wrap_struct_name = "UringMachine::Queue",
+  .function = {
+    .dmark = Queue_mark,
+    .dfree = Queue_free,
+    .dsize = NULL,
+    .dcompact = Queue_compact
+  },
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
 };
 
+// static const rb_data_type_t Queue_type = {
+//     "UringMachineQueue",
+//     {Queue_mark, Queue_free, Queue_size, Queue_compact},
+//     0, 0, RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
+// };
+
 static VALUE Queue_allocate(VALUE klass) {
-  struct um_queue *queue = malloc(sizeof(struct um_queue));
-  return TypedData_Wrap_Struct(klass, &Queue_type, queue);
+  struct um_queue *queue;
+  return TypedData_Make_Struct(klass, struct um_queue, &Queue_type, queue);
+
+
+
+  // struct um_queue *queue = malloc(sizeof(struct um_queue));
+  // return TypedData_Wrap_Struct(klass, &Queue_type, queue);
 }
 
 inline struct um_queue *Queue_data(VALUE self) {
-  return RTYPEDDATA_DATA(self);
+  // return RTYPEDDATA_DATA(self);
+  struct um_queue *queue;
+  TypedData_Get_Struct(self, struct um_queue, &Queue_type, queue);
+  return queue;
 }
 
 VALUE Queue_initialize(VALUE self) {

@@ -285,7 +285,7 @@ struct op_ctx {
   int flags;
 };
 
-VALUE um_timeout_ensure(VALUE arg) {
+VALUE um_timeout_complete(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
 
   if (!um_op_completed_p(ctx->op)) {
@@ -311,7 +311,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   io_uring_prep_timeout(sqe, &op->ts, 0, 0);
 
   struct op_ctx ctx = { .machine = machine, .op = op };
-  return rb_ensure(rb_yield, Qnil, um_timeout_ensure, (VALUE)&ctx);
+  return rb_ensure(rb_yield, Qnil, um_timeout_complete, (VALUE)&ctx);
 }
 
 /*******************************************************************************
@@ -653,7 +653,7 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
                             multishot ops
 *******************************************************************************/
 
-VALUE accept_each_begin(VALUE arg) {
+VALUE accept_each_start(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
@@ -684,7 +684,7 @@ VALUE accept_each_begin(VALUE arg) {
   return Qnil;
 }
 
-VALUE multishot_ensure(VALUE arg) {
+VALUE multishot_complete(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
   if (ctx->op->multishot_result_count) {
     int more = ctx->op->multishot_result_tail->flags & IORING_CQE_F_MORE;
@@ -706,7 +706,7 @@ VALUE um_accept_each(struct um *machine, int fd) {
   um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
-  return rb_ensure(accept_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+  return rb_ensure(accept_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
 int um_read_each_singleshot_loop(struct op_ctx *ctx) {
@@ -771,7 +771,7 @@ void read_recv_each_prep(struct io_uring_sqe *sqe, struct op_ctx *ctx) {
   }
 }
 
-VALUE read_recv_each_begin(VALUE arg) {
+VALUE read_recv_each_start(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   read_recv_each_prep(sqe, ctx);
@@ -809,7 +809,7 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
   um_prep_op(machine, &op, OP_READ_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL };
-  return rb_ensure(read_recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+  return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
@@ -817,10 +817,10 @@ VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
   um_prep_op(machine, &op, OP_RECV_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
-  return rb_ensure(read_recv_each_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+  return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
-VALUE periodically_begin(VALUE arg) {
+VALUE periodically_start(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   io_uring_prep_timeout(sqe, &ctx->ts, 0, IORING_TIMEOUT_MULTISHOT);
@@ -857,6 +857,6 @@ VALUE um_periodically(struct um *machine, double interval) {
   op.ts = um_double_to_timespec(interval);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .ts = op.ts, .read_buf = NULL };
-  return rb_ensure(periodically_begin, (VALUE)&ctx, multishot_ensure, (VALUE)&ctx);
+  return rb_ensure(periodically_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
