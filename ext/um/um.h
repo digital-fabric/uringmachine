@@ -146,15 +146,11 @@ struct um_queue {
 };
 
 struct um_async_op {
-  VALUE self;
-
   struct um *machine;
   struct um_op *op;
 };
 
 struct um_stream {
-  VALUE self;
-
   struct um *machine;
   int fd;
   VALUE buffer;

@@ -7,19 +7,13 @@ VALUE SYM_timeout;
 
 static void AsyncOp_mark(void *ptr) {
   struct um_async_op *async_op = ptr;
-  rb_gc_mark_movable(async_op->self);
   rb_gc_mark_movable(async_op->machine->self);
-}
-
-static void AsyncOp_compact(void *ptr) {
-  struct um_async_op *async_op = ptr;
-  async_op->self = rb_gc_location(async_op->self);
 }
 
 static void AsyncOp_free(void *ptr) {
   struct um_async_op *async_op = ptr;
-  um_op_free(async_op->machine, async_op->op);
-  // free(ptr);
+  if (async_op->op)
+    um_op_free(async_op->machine, async_op->op);
 }
 
 static const rb_data_type_t AsyncOp_type = {
@@ -28,7 +22,7 @@ static const rb_data_type_t AsyncOp_type = {
     .dmark = AsyncOp_mark,
     .dfree = AsyncOp_free,
     .dsize = NULL,
-    .dcompact = AsyncOp_compact
+    .dcompact = NULL
   },
   .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
 };
@@ -47,7 +41,6 @@ static inline struct um_async_op *AsyncOp_data(VALUE self) {
 VALUE AsyncOp_initialize(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   memset(async_op, 0, sizeof(struct um_async_op));
-  async_op->self = self;
   return self;
 }
 
