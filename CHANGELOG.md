@@ -1,3 +1,7 @@
+# 2025-06-07 Version 0.12.1
+
+- Improve portability of `UM` constants
+
 # 2025-06-03 Version 0.12
 
 - Add buffer, maxlen params to `Stream#get_line`
