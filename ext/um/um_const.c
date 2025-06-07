@@ -39,18 +39,24 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, STATX_BASIC_STATS);
   DEF_CONST_INT(mod, STATX_BTIME);
   DEF_CONST_INT(mod, STATX_ALL);
+  #ifdef STATX_MNT_ID
   DEF_CONST_INT(mod, STATX_MNT_ID);
+  #endif
+  #ifdef STATX_DIOALIGN
   DEF_CONST_INT(mod, STATX_DIOALIGN);
+  #endif
+  #ifdef STATX_MNT_ID_UNIQUE
   DEF_CONST_INT(mod, STATX_MNT_ID_UNIQUE);
-#ifdef STATX_SUBVOL
+  #endif
+  #ifdef STATX_SUBVOL
   DEF_CONST_INT(mod, STATX_SUBVOL);
-#endif
-#ifdef STATX_WRITE_ATOMIC
+  #endif
+  #ifdef STATX_WRITE_ATOMIC
   DEF_CONST_INT(mod, STATX_WRITE_ATOMIC);
-#endif
-#ifdef STATX_DIO_READ_ALIGN
+  #endif
+  #ifdef STATX_DIO_READ_ALIGN
   DEF_CONST_INT(mod, STATX_DIO_READ_ALIGN);
-#endif
+  #endif
 
   DEF_CONST_INT(mod, MSG_CONFIRM);
   DEF_CONST_INT(mod, MSG_DONTROUTE);
