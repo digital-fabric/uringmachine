@@ -1,3 +1,7 @@
+# 2025-06-07 Version 0.13
+
+- Add `#write_async`
+
 # 2025-06-07 Version 0.12.1
 
 - Improve portability of `UM` constants
