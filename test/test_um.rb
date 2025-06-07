@@ -532,6 +532,30 @@ class WriteTest < UMBaseTest
   end
 end
 
+class WriteAsyncTest < UMBaseTest
+  def test_write_async
+    r, w = IO.pipe
+
+    assert_equal 0, machine.pending_count
+    machine.write_async(w.fileno, 'foo')
+    assert_equal 1, machine.pending_count
+
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    assert_equal 'foo', r.readpartial(3)
+  end
+
+  def test_write_async_bad_fd
+    r, _w = IO.pipe
+
+    assert_equal 0, machine.pending_count
+    machine.write_async(r.fileno, 'foo')
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+  end
+end
+
 class CloseTest < UMBaseTest
   def test_close
     r, w = IO.pipe

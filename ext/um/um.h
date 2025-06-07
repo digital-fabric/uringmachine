@@ -28,6 +28,7 @@ enum op_kind {
   OP_OPEN,
   OP_READ,
   OP_WRITE,
+  OP_WRITE_ASYNC,
   OP_CLOSE,
   OP_STATX,
 
@@ -59,6 +60,7 @@ enum op_kind {
 #define OP_F_ASYNC            (1U << 2) // op belongs to an AsyncOp
 #define OP_F_IGNORE_CANCELED  (1U << 3) // CQE with -ECANCEL should be ignored
 #define OP_F_MULTISHOT        (1U << 4) // op is multishot
+#define OP_F_FREE_ON_COMPLETE (1U << 5) // op should be freed on receiving CQE
 
 struct um_op_result {
   __s32 res;
@@ -230,6 +232,7 @@ VALUE um_close(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_waitpid(struct um *machine, int pid, int options);
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
+VALUE um_write_async(struct um *machine, int fd, VALUE str);
 
 VALUE um_accept(struct um *machine, int fd);
 VALUE um_accept_each(struct um *machine, int fd);

@@ -72,6 +72,11 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   //   op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count
   // );
 
+  if (op->flags & OP_F_FREE_ON_COMPLETE) {
+    um_op_free(machine, op);
+    return;
+  }
+
   if (unlikely((cqe->res == -ECANCELED) && (op->flags & OP_F_IGNORE_CANCELED))) return;
 
   op->flags |= OP_F_COMPLETED;
@@ -388,6 +393,19 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   RB_GC_GUARD(str);
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
+}
+
+VALUE um_write_async(struct um *machine, int fd, VALUE str) {
+  struct um_op *op = um_op_alloc(machine);
+  memset(op, 0, sizeof(struct um_op));
+  op->kind = OP_WRITE_ASYNC;
+  op->flags = OP_F_FREE_ON_COMPLETE;
+  op->fiber = Qnil;
+  RB_OBJ_WRITE(machine->self, &op->value, str);
+
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_write(sqe, fd, RSTRING_PTR(str), RSTRING_LEN(str), -1);
+  return str;
 }
 
 VALUE um_close(struct um *machine, int fd) {
