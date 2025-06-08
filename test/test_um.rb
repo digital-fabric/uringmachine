@@ -25,6 +25,12 @@ class SpinTest < UMBaseTest
 
     assert_equal :foo, x
   end
+
+  def test_spin_with_unhandled_exception
+    f = machine.spin { raise 'foo' }
+    result = machine.join(f)
+    assert_kind_of RuntimeError, result
+  end
 end
 
 class SnoozeTest < UMBaseTest

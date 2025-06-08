@@ -35,14 +35,15 @@ class UringMachine
         f.add_done_listener(queue)
       end
     end
-    return results.values if !pending
-
-    while !pending.empty?
-      f = self.shift(queue)
-      pending.delete(f)
-      results[f] = f.result
+    if pending
+      while !pending.empty?
+        f = self.shift(queue)
+        pending.delete(f)
+        results[f] = f.result
+      end
     end
-    results.values
+    values = results.values
+    fibers.size == 1 ? values.first : values
   end
 
   def resolve(hostname, type = :A)

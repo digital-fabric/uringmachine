@@ -88,7 +88,7 @@ class FiberJoinTest < UMBaseTest
     res = machine.join(f)
     assert_equal 0, x
     assert_equal 3, machine.shift(q)
-    assert_equal [42], res
+    assert_equal 42, res
   end
 
   def test_join_multiple
@@ -125,7 +125,7 @@ class FiberJoinTest < UMBaseTest
     f = machine.shift(q)
     assert_kind_of Fiber, f
     res = machine.join(f)
-    assert_equal [:foo], res
+    assert_equal :foo, res
   ensure
     t2.join
   end
@@ -135,8 +135,7 @@ class FiberJoinTest < UMBaseTest
       raise "Foobar"
     end
 
-    res = machine.join(f)
-    e = res.first
+    e = machine.join(f)
     assert_kind_of RuntimeError, e
     assert_equal 'Foobar', e.message
   end
