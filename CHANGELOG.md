@@ -1,3 +1,7 @@
+# 2025-06-09 Version 0.14
+
+- Add `#close_async`, `#shutdown_async`
+
 # 2025-06-07 Version 0.13
 
 - Add `#write_async`
