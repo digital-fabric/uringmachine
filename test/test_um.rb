@@ -277,7 +277,7 @@ class PeriodicallyTest < UMBaseTest
     rescue Cancel
       cancel = 1
     end
-    2.times { machine.snooze }
+    5.times { machine.snooze }
     assert_equal 0, machine.pending_count
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
@@ -575,25 +575,31 @@ class CloseTest < UMBaseTest
 
     assert_raises(Errno::EBADF) { machine.close(w.fileno) }
   end
+
+  def test_close_bad_fd
+    r, w = IO.pipe
+    machine.close(w.fileno)
+    
+    assert_raises(Errno::EBADF) { machine.close(w.fileno) }
+  end
+end
+
+class CloseAsyncTest < UMBaseTest
+  def test_close_async
+    r, w = IO.pipe
+    machine.write(w.fileno, 'foo')
+    assert_equal 'foo', r.readpartial(3)
+
+    assert_equal 0, machine.pending_count
+    machine.close_async(w.fileno)
+    assert_equal 1, machine.pending_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    assert_equal '', r.read
+  end
 end
 
 class ShutdownTest < UMBaseTest
-  def make_socket_pair
-    port = 10000 + rand(30000)
-    server_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    @machine.setsockopt(server_fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
-    @machine.bind(server_fd, '127.0.0.1', port)
-    @machine.listen(server_fd, UM::SOMAXCONN)
-
-    client_conn_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    @machine.connect(client_conn_fd, '127.0.0.1', port)
-
-    server_conn_fd = @machine.accept(server_fd)
-
-    @machine.close(server_fd)
-    [client_conn_fd, server_conn_fd]
-  end
-
   def test_shutdown
     c_fd, s_fd = make_socket_pair
     res = @machine.send(c_fd, 'abc', 3, 0)
@@ -619,6 +625,37 @@ class ShutdownTest < UMBaseTest
     assert_equal 0, res
 
     assert_raises(Errno::EINVAL) { @machine.shutdown(c_fd, -9999) }
+  ensure
+    @machine.close(c_fd)
+    @machine.close(s_fd)
+  end
+end
+
+class ShutdownAsyncTest < UMBaseTest
+  def test_shutdown_async
+    c_fd, s_fd = make_socket_pair
+    res = @machine.send(c_fd, 'abc', 3, 0)
+    assert_equal 3, res
+
+    buf = +''
+    res = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 3, res
+    assert_equal 'abc', buf
+
+    res = @machine.shutdown_async(c_fd, UM::SHUT_WR)
+    assert_equal c_fd, res
+
+    machine.sleep(0.01)
+    assert_raises(Errno::EPIPE) { @machine.send(c_fd, 'abc', 3, 0) }
+
+    res = @machine.shutdown_async(s_fd, UM::SHUT_RD)
+    assert_equal s_fd, res
+
+    res = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 0, res
+
+    res = @machine.shutdown_async(c_fd, UM::SHUT_RDWR)
+    assert_equal c_fd, res
   ensure
     @machine.close(c_fd)
     @machine.close(s_fd)

@@ -6,9 +6,8 @@ VALUE um_prep_timeout(struct um *machine, double interval) {
   if (!ID_new) ID_new = rb_intern("new");
 
   struct um_op *op = malloc(sizeof(struct um_op));
-  um_prep_op(machine, op, OP_TIMEOUT);
+  um_prep_op(machine, op, OP_TIMEOUT, OP_F_TRANSIENT | OP_F_ASYNC);
   op->ts = um_double_to_timespec(interval);
-  op->flags = OP_F_TRANSIENT | OP_F_ASYNC;
 
   VALUE obj = rb_funcall(cAsyncOp, rb_intern_const("new"), 0);
   um_async_op_set(obj, machine, op);

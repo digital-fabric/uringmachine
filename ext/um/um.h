@@ -30,6 +30,7 @@ enum op_kind {
   OP_WRITE,
   OP_WRITE_ASYNC,
   OP_CLOSE,
+  OP_CLOSE_ASYNC,
   OP_STATX,
 
   OP_ACCEPT,
@@ -42,6 +43,7 @@ enum op_kind {
   OP_GETSOCKOPT,
   OP_SETSOCKOPT,
   OP_SHUTDOWN,
+  OP_SHUTDOWN_ASYNC,
   
   OP_WAITPID,
 
@@ -202,7 +204,7 @@ VALUE um_raise_exception(VALUE v);
 
 #define raise_if_exception(v) (um_value_is_exception_p(v) ? um_raise_exception(v) : v)
 
-void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind);
+void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags);
 void um_raise_on_error_result(int result);
 void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
@@ -229,6 +231,7 @@ size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE str, int len);
 VALUE um_close(struct um *machine, int fd);
+VALUE um_close_async(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_waitpid(struct um *machine, int pid, int options);
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
@@ -246,6 +249,7 @@ VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
 VALUE um_shutdown(struct um *machine, int fd, int how);
+VALUE um_shutdown_async(struct um *machine, int fd, int how);
 
 void um_async_op_set(VALUE self, struct um *machine, struct um_op *op);
 VALUE um_async_op_await(struct um_async_op *async_op);

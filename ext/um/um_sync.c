@@ -6,7 +6,7 @@
 
 void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_FUTEX_WAIT);
+  um_prep_op(machine, &op, OP_FUTEX_WAIT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_futex_wait(
     sqe, (uint32_t *)futex, expect, FUTEX_BITSET_MATCH_ANY,
@@ -27,7 +27,7 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
 
 void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_FUTEX_WAKE);
+  um_prep_op(machine, &op, OP_FUTEX_WAKE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   // submit futex_wait
   io_uring_prep_futex_wake(

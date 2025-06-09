@@ -146,6 +146,11 @@ VALUE UM_close(VALUE self, VALUE fd) {
   return um_close(machine, NUM2INT(fd));
 }
 
+VALUE UM_close_async(VALUE self, VALUE fd) {
+  struct um *machine = um_get_machine(self);
+  return um_close_async(machine, NUM2INT(fd));
+}
+
 VALUE UM_accept(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
   return um_accept(machine, NUM2INT(fd));
@@ -164,7 +169,11 @@ VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flag
 VALUE UM_shutdown(VALUE self, VALUE fd, VALUE how) {
   struct um *machine = um_get_machine(self);
   return um_shutdown(machine, NUM2INT(fd), NUM2INT(how));
+}
 
+VALUE UM_shutdown_async(VALUE self, VALUE fd, VALUE how) {
+  struct um *machine = um_get_machine(self);
+  return um_shutdown_async(machine, NUM2INT(fd), NUM2INT(how));
 }
 
 VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
@@ -347,6 +356,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "yield", UM_yield, 0);
 
   rb_define_method(cUM, "close", UM_close, 1);
+  rb_define_method(cUM, "close_async", UM_close_async, 1);
   rb_define_method(cUM, "open", UM_open, 2);
   rb_define_method(cUM, "read", UM_read, -1);
   rb_define_method(cUM, "read_each", UM_read_each, 2);
@@ -370,6 +380,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
   rb_define_method(cUM, "shutdown", UM_shutdown, 2);
+  rb_define_method(cUM, "shutdown_async", UM_shutdown_async, 2);
 
   rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 

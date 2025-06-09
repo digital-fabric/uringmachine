@@ -252,20 +252,14 @@ inline VALUE um_await(struct um *machine) {
   return raise_if_exception(v);
 }
 
-inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind) {
+inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags) {
   memset(op, 0, sizeof(struct um_op));
   op->kind = kind;
-  switch (kind) {
-    case OP_ACCEPT_MULTISHOT:
-    case OP_READ_MULTISHOT:
-    case OP_RECV_MULTISHOT:
-    case OP_TIMEOUT_MULTISHOT:
-    case OP_SLEEP_MULTISHOT:
-      op->flags |= OP_F_MULTISHOT;
-    default:
-  }
-  RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
-  op->value = Qnil;
+  op->flags = flags;
+
+  VALUE fiber = (flags & OP_F_FREE_ON_COMPLETE) ? Qnil : rb_fiber_current();
+  RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
+  RB_OBJ_WRITE(machine->self, &op->value, Qnil);
 }
 
 inline void um_schedule(struct um *machine, VALUE fiber, VALUE value) {
@@ -307,7 +301,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   if (!ID_new) ID_new = rb_intern("new");
 
   struct um_op *op = um_op_alloc(machine);
-  um_prep_op(machine, op, OP_TIMEOUT);
+  um_prep_op(machine, op, OP_TIMEOUT, 0);
   op->ts = um_double_to_timespec(NUM2DBL(interval));
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
   RB_OBJ_WRITE(machine->self, &op->value, rb_funcall(class, ID_new, 0));
@@ -325,7 +319,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
 
 VALUE um_sleep(struct um *machine, double duration) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_SLEEP);
+  um_prep_op(machine, &op, OP_SLEEP, 0);
   op.ts = um_double_to_timespec(duration);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_timeout(sqe, &op.ts, 0, 0);
@@ -344,7 +338,7 @@ VALUE um_sleep(struct um *machine, double duration) {
 
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_READ);
+  um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
   io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
@@ -363,7 +357,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
 
 inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_READ);
+  um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_read(sqe, fd, buffer, maxlen, -1);
 
@@ -379,7 +373,7 @@ inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) 
 
 VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_WRITE);
+  um_prep_op(machine, &op, OP_WRITE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   const int str_len = RSTRING_LEN(str);
   if (len > str_len) len = str_len;
@@ -397,10 +391,7 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
 
 VALUE um_write_async(struct um *machine, int fd, VALUE str) {
   struct um_op *op = um_op_alloc(machine);
-  memset(op, 0, sizeof(struct um_op));
-  op->kind = OP_WRITE_ASYNC;
-  op->flags = OP_F_FREE_ON_COMPLETE;
-  op->fiber = Qnil;
+  um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_FREE_ON_COMPLETE);
   RB_OBJ_WRITE(machine->self, &op->value, str);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
@@ -410,7 +401,7 @@ VALUE um_write_async(struct um *machine, int fd, VALUE str) {
 
 VALUE um_close(struct um *machine, int fd) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_CLOSE);
+  um_prep_op(machine, &op, OP_CLOSE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_close(sqe, fd);
 
@@ -422,9 +413,19 @@ VALUE um_close(struct um *machine, int fd) {
   return raise_if_exception(ret);
 }
 
+VALUE um_close_async(struct um *machine, int fd) {
+  struct um_op *op = um_op_alloc(machine);
+  um_prep_op(machine, op, OP_CLOSE_ASYNC, OP_F_FREE_ON_COMPLETE);
+  
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_close(sqe, fd);
+
+  return INT2NUM(fd);
+}
+
 VALUE um_accept(struct um *machine, int fd) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_ACCEPT);
+  um_prep_op(machine, &op, OP_ACCEPT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
 
@@ -438,7 +439,7 @@ VALUE um_accept(struct um *machine, int fd) {
 
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_SOCKET);
+  um_prep_op(machine, &op, OP_SOCKET, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
 
@@ -452,7 +453,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
 
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_CONNECT);
+  um_prep_op(machine, &op, OP_CONNECT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_connect(sqe, fd, addr, addrlen);
 
@@ -466,7 +467,7 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
 
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_SEND);
+  um_prep_op(machine, &op, OP_SEND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
 
@@ -481,7 +482,7 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
 
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_RECV);
+  um_prep_op(machine, &op, OP_RECV, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
@@ -499,7 +500,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
 
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_BIND);
+  um_prep_op(machine, &op, OP_BIND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_bind(sqe, fd, addr, addrlen);
 
@@ -513,7 +514,7 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
 
 VALUE um_listen(struct um *machine, int fd, int backlog) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_BIND);
+  um_prep_op(machine, &op, OP_BIND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_listen(sqe, fd, backlog);
 
@@ -531,7 +532,7 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
 
 #ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
-  um_prep_op(machine, &op, OP_GETSOCKOPT);
+  um_prep_op(machine, &op, OP_GETSOCKOPT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
 
@@ -555,7 +556,7 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
 
 #ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
-  um_prep_op(machine, &op, OP_SETSOCKOPT);
+  um_prep_op(machine, &op, OP_SETSOCKOPT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
 
@@ -577,7 +578,7 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
   VALUE ret = Qnil;
 
   struct um_op op;
-  um_prep_op(machine, &op, OP_SHUTDOWN);
+  um_prep_op(machine, &op, OP_SHUTDOWN, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_shutdown(sqe, fd, how);
 
@@ -589,9 +590,19 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
   return raise_if_exception(ret);
 }
 
+VALUE um_shutdown_async(struct um *machine, int fd, int how) {
+  struct um_op *op = um_op_alloc(machine);
+  um_prep_op(machine, op, OP_SHUTDOWN_ASYNC, OP_F_FREE_ON_COMPLETE);
+  
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_shutdown(sqe, fd, how);
+
+  return INT2NUM(fd);
+}
+
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_OPEN);
+  um_prep_op(machine, &op, OP_OPEN, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_open(sqe, StringValueCStr(pathname), flags, mode);
 
@@ -605,7 +616,7 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
 
 VALUE um_waitpid(struct um *machine, int pid, int options) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_WAITPID);
+  um_prep_op(machine, &op, OP_WAITPID, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   siginfo_t infop;
@@ -646,7 +657,7 @@ VALUE statx_to_hash(struct statx *stat) {
 
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_STATX);
+  um_prep_op(machine, &op, OP_STATX, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   struct statx stat;
@@ -721,7 +732,7 @@ VALUE multishot_complete(VALUE arg) {
 
 VALUE um_accept_each(struct um *machine, int fd) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT);
+  um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT, OP_F_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
   return rb_ensure(accept_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
@@ -734,7 +745,7 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
   int total = 0;
 
   while (1) {
-    um_prep_op(ctx->machine, ctx->op, OP_READ);
+    um_prep_op(ctx->machine, ctx->op, OP_READ, 0);
     struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
 
@@ -824,7 +835,7 @@ VALUE read_recv_each_start(VALUE arg) {
 
 VALUE um_read_each(struct um *machine, int fd, int bgid) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_READ_MULTISHOT);
+  um_prep_op(machine, &op, OP_READ_MULTISHOT, OP_F_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL };
   return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
@@ -832,7 +843,7 @@ VALUE um_read_each(struct um *machine, int fd, int bgid) {
 
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_RECV_MULTISHOT);
+  um_prep_op(machine, &op, OP_RECV_MULTISHOT, OP_F_MULTISHOT);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
   return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
@@ -871,7 +882,7 @@ VALUE periodically_start(VALUE arg) {
 
 VALUE um_periodically(struct um *machine, double interval) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_SLEEP_MULTISHOT);
+  um_prep_op(machine, &op, OP_SLEEP_MULTISHOT, OP_F_MULTISHOT);
   op.ts = um_double_to_timespec(interval);
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .ts = op.ts, .read_buf = NULL };
