@@ -1,3 +1,7 @@
+# 2025-06-24 Version 0.15
+
+- Add support for sleeping forever when sleep duration is lte 0
+
 # 2025-06-09 Version 0.14
 
 - Add `#close_async`, `#shutdown_async`
