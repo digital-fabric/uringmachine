@@ -44,7 +44,7 @@ inline struct um *um_get_machine(VALUE self) {
   struct um *um;
   TypedData_Get_Struct(self, struct um, &UringMachine_type, um);
   if (!um->ring_initialized) rb_raise(rb_eRuntimeError, "Machine not initialized");
-  
+
   return um;
 }
 

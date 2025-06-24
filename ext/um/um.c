@@ -1,3 +1,4 @@
+#include <float.h>
 #include "um.h"
 #include "ruby/thread.h"
 
@@ -317,7 +318,11 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
                          blocking singleshot ops
 *******************************************************************************/
 
+#define SLEEP_FOREVER_DURATION (86400*10000)
+
 VALUE um_sleep(struct um *machine, double duration) {
+  if (duration <= 0) duration = SLEEP_FOREVER_DURATION;
+
   struct um_op op;
   um_prep_op(machine, &op, OP_SLEEP, 0);
   op.ts = um_double_to_timespec(duration);
@@ -416,7 +421,7 @@ VALUE um_close(struct um *machine, int fd) {
 VALUE um_close_async(struct um *machine, int fd) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_CLOSE_ASYNC, OP_F_FREE_ON_COMPLETE);
-  
+
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_close(sqe, fd);
 
@@ -593,7 +598,7 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
 VALUE um_shutdown_async(struct um *machine, int fd, int how) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_SHUTDOWN_ASYNC, OP_F_FREE_ON_COMPLETE);
-  
+
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_shutdown(sqe, fd, how);
 
@@ -888,4 +893,3 @@ VALUE um_periodically(struct um *machine, double interval) {
   struct op_ctx ctx = { .machine = machine, .op = &op, .ts = op.ts, .read_buf = NULL };
   return rb_ensure(periodically_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
-

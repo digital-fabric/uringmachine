@@ -234,6 +234,20 @@ class SleepTest < UMBaseTest
     assert_in_range 0.02..0.04, t1 - t0
     assert_kind_of D, ret
   end
+
+  def test_sleep_forever
+    t0 = monotonic_clock
+    ret = begin
+      machine.timeout(0.03, D) do
+        machine.sleep 0
+      end
+    rescue => e
+      e
+    end
+    t1 = monotonic_clock
+    assert_in_range 0.02..0.04, t1 - t0
+    assert_kind_of D, ret
+  end
 end
 
 class PeriodicallyTest < UMBaseTest
@@ -579,7 +593,7 @@ class CloseTest < UMBaseTest
   def test_close_bad_fd
     r, w = IO.pipe
     machine.close(w.fileno)
-    
+
     assert_raises(Errno::EBADF) { machine.close(w.fileno) }
   end
 end
@@ -1316,7 +1330,7 @@ class WaitTest < UMBaseTest
     ret = machine.read(rfd, buf, 8192)
     assert_equal msg.bytesize, ret
     assert_equal msg, buf
-    
+
   ensure
     Process.wait(pid) rescue Errno::ECHILD
   end
