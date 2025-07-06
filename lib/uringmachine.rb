@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-require_relative './um_ext'
-require_relative 'uringmachine/dns_resolver'
+require 'um_ext'
+require 'uringmachine/version'
+require 'uringmachine/dns_resolver'
 
 UM = UringMachine
 
@@ -63,7 +64,7 @@ class UringMachine
     # cleanup
     @@fiber_map.delete(fiber)
     self.notify_done_listeners(fiber)
-    
+
     # transfer control to UM scheduler
     self.yield
   end

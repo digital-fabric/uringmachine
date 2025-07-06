@@ -93,6 +93,5 @@ void Init_Stream(void) {
   rb_define_method(cStream, "get_string", Stream_get_string, 2);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
-  
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
 }
