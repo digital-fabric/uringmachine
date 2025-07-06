@@ -1,3 +1,7 @@
+# 2025-07-06 Version 0.16
+
+- Load UM version on require
+
 # 2025-06-24 Version 0.15
 
 - Add support for sleeping forever when sleep duration is lte 0
