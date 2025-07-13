@@ -1417,5 +1417,29 @@ class ForkTest < UMBaseTest
   ensure
     Process.wait(child_pid) rescue Errno::ECHILD
   end
+end
 
+class SendBundleTest < UMBaseTest
+  def setup
+    super
+    @client_fd, @server_fd = make_socket_pair
+  end
+
+  def test_send_bundle
+    skip if UringMachine.kernel_version < 610
+
+    bgid = machine.setup_buffer_ring(0, 8)
+    assert_equal 0, bgid
+
+    strs = ['foo', 'bar', 'bazzzzz']
+    len = strs.inject(0) { |len, s| len + s.bytesize }
+
+    ret = machine.send_bundle(@client_fd, bgid, *strs)
+    assert_equal len, ret
+
+    buf = +''
+    ret = machine.recv(@server_fd, buf, 8192, 0)
+    assert_equal len, ret
+    assert_equal strs.join, buf
+  end
 end

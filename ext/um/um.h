@@ -36,6 +36,7 @@ enum op_kind {
   OP_ACCEPT,
   OP_RECV,
   OP_SEND,
+  OP_SEND_BUNDLE,
   OP_SOCKET,
   OP_CONNECT,
   OP_BIND,
@@ -210,6 +211,7 @@ void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs);
 void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags);
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
+void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
@@ -242,6 +244,7 @@ VALUE um_accept_each(struct um *machine, int fd);
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags);
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags);
+VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags);
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags);
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);

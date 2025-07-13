@@ -193,6 +193,15 @@ VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
   return um_send(machine, NUM2INT(fd), buffer, NUM2INT(len), NUM2INT(flags));
 }
 
+VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
+  struct um *machine = um_get_machine(self);
+  VALUE fd;
+  VALUE bgid;
+  VALUE strings;
+  rb_scan_args(argc, argv, "2*", &fd, &bgid, &strings);
+  return um_send_bundle(machine, NUM2INT(fd), NUM2INT(bgid), strings);
+}
+
 VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
@@ -377,6 +386,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "recv", UM_recv, 4);
   rb_define_method(cUM, "recv_each", UM_recv_each, 3);
   rb_define_method(cUM, "send", UM_send, 4);
+  rb_define_method(cUM, "send_bundle", UM_send_bundle, -1);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
   rb_define_method(cUM, "shutdown", UM_shutdown, 2);

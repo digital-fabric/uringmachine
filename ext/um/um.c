@@ -485,6 +485,28 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
   return raise_if_exception(ret);
 }
 
+VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
+  um_add_strings_to_buffer_ring(machine, bgid, strings);
+
+  struct um_op op;
+  um_prep_op(machine, &op, OP_SEND_BUNDLE, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+	io_uring_prep_send_bundle(sqe, fd, 0, MSG_WAITALL);
+	sqe->flags |= IOSQE_BUFFER_SELECT;
+	sqe->buf_group = bgid;
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RB_GC_GUARD(ret);
+  return raise_if_exception(ret);
+
+
+  return ret;
+}
+
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   struct um_op op;
   um_prep_op(machine, &op, OP_RECV, 0);

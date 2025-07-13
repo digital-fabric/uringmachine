@@ -1,3 +1,15 @@
+# send bundle
+
+```ruby
+def send_http_response(machine, fd, headers, body)
+  bgid = machine.machine.setup_buffer_ring(0, 0)
+  s1 = format_headers(headers, body)
+  s2 = body
+  s3 = format_tail(body)
+  ret = machine.send_bundle(fd, bgid, s1, s2, s3)
+end
+```
+
 # ops
 
 - [ ] multishot timeout
@@ -16,6 +28,13 @@
 - madvise
 - getxattr / setxattr
 - send_bundle / recv_bundle (kernel >= 6.10)
+
+- Automatic management of buffer rings
+- Unused buffer rings are put on a "free list", reused when there's a need
+
+# recv bundle
+
+
 
 # actors
 

@@ -65,11 +65,11 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
   struct buf_ring_descriptor *desc = machine->buffer_rings + machine->buffer_ring_count;
   desc->buf_count = count;
   desc->buf_size = size;
-
   desc->br_size = sizeof(struct io_uring_buf) * desc->buf_count;
+  desc->buf_mask = io_uring_buf_ring_mask(desc->buf_count);
+
 	void *mapped = mmap(
-    NULL, desc->br_size, PROT_READ | PROT_WRITE,
-		MAP_ANONYMOUS | MAP_PRIVATE, 0, 0
+    NULL, desc->br_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0
   );
   if (mapped == MAP_FAILED)
     rb_raise(rb_eRuntimeError, "Failed to allocate buffer ring");
@@ -82,21 +82,22 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
   desc->br = io_uring_setup_buf_ring(&machine->ring, count, bg_id, 0, &ret);
   if (!desc->br) {
     munmap(desc->br, desc->br_size);
-    rb_syserr_fail(ret, strerror(ret));
+    rb_syserr_fail(-ret, strerror(-ret));
   }
 
-  if (posix_memalign(&desc->buf_base, 4096, desc->buf_count * desc->buf_size)) {
-    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, bg_id);
-    rb_raise(rb_eRuntimeError, "Failed to allocate buffers");
-  }
+  if (size > 0) {
+    if (posix_memalign(&desc->buf_base, 4096, desc->buf_count * desc->buf_size)) {
+      io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, bg_id);
+      rb_raise(rb_eRuntimeError, "Failed to allocate buffers");
+    }
 
-  desc->buf_mask = io_uring_buf_ring_mask(desc->buf_count);
-  void *ptr = desc->buf_base;
-  for (unsigned i = 0; i < desc->buf_count; i++) {
-		io_uring_buf_ring_add(desc->br, ptr, desc->buf_size, i, desc->buf_mask, i);
-    ptr += desc->buf_size;
-	}
-	io_uring_buf_ring_advance(desc->br, desc->buf_count);
+    void *ptr = desc->buf_base;
+    for (unsigned i = 0; i < desc->buf_count; i++) {
+	  	io_uring_buf_ring_add(desc->br, ptr, desc->buf_size, i, desc->buf_mask, i);
+      ptr += desc->buf_size;
+	  }
+	  io_uring_buf_ring_advance(desc->br, desc->buf_count);
+  }
   machine->buffer_ring_count++;
   return bg_id;
 }
@@ -119,4 +120,15 @@ inline VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 
 
   RB_GC_GUARD(buf);
   return buf;
+}
+
+inline void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings) {
+  struct buf_ring_descriptor *desc = machine->buffer_rings + bgid;
+  ulong count = RARRAY_LEN(strings);
+  
+  for (ulong i = 0; i < count; i++) {
+    VALUE str = rb_ary_entry(strings, i);
+    io_uring_buf_ring_add(desc->br, RSTRING_PTR(str), RSTRING_LEN(str), i, desc->buf_mask, i);
+  }
+  io_uring_buf_ring_advance(desc->br, count);
 }
