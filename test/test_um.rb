@@ -1425,7 +1425,7 @@ class SendBundleTest < UMBaseTest
     @client_fd, @server_fd = make_socket_pair
   end
 
-  def test_send_bundle
+  def test_send_bundle_splat
     skip if UringMachine.kernel_version < 610
 
     bgid = machine.setup_buffer_ring(0, 8)
@@ -1441,5 +1441,41 @@ class SendBundleTest < UMBaseTest
     ret = machine.recv(@server_fd, buf, 8192, 0)
     assert_equal len, ret
     assert_equal strs.join, buf
+  end
+
+  def test_send_bundle_array
+    skip if UringMachine.kernel_version < 610
+
+    bgid = machine.setup_buffer_ring(0, 8)
+    assert_equal 0, bgid
+
+    strs = ['foo', 'bar', 'bazzzzz']
+    len = strs.inject(0) { |len, s| len + s.bytesize }
+
+    ret = machine.send_bundle(@client_fd, bgid, strs)
+    assert_equal len, ret
+
+    buf = +''
+    ret = machine.recv(@server_fd, buf, 8192, 0)
+    assert_equal len, ret
+    assert_equal strs.join, buf
+  end
+
+  def test_send_bundle_non_strings
+    skip if UringMachine.kernel_version < 610
+
+    bgid = machine.setup_buffer_ring(0, 8)
+    assert_equal 0, bgid
+
+    strs = [42, 'bar', false]
+    len = strs.inject(0) { |len, s| len + s.to_s.bytesize }
+
+    ret = machine.send_bundle(@client_fd, bgid, strs)
+    assert_equal len, ret
+
+    buf = +''
+    ret = machine.recv(@server_fd, buf, 8192, 0)
+    assert_equal len, ret
+    assert_equal strs.map(&:to_s).join, buf
   end
 end

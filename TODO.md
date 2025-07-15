@@ -4,6 +4,7 @@
   - [v] machine.periodically(interval) { ... }
   - [ ] machine.prep_timeout_multishot(interval)
 
+- writev
 - splice / - tee
 - sendto
 - recvfrom
@@ -16,9 +17,6 @@
 - madvise
 - getxattr / setxattr
 - send_bundle / recv_bundle (kernel >= 6.10)
-
-- Automatic management of buffer rings
-- Unused buffer rings are put on a "free list", reused when there's a need
 
 # actors
 

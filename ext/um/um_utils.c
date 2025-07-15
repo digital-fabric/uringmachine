@@ -123,12 +123,23 @@ inline VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 
 }
 
 inline void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings) {
+  static ID ID_to_s = 0;
+
   struct buf_ring_descriptor *desc = machine->buffer_rings + bgid;
   ulong count = RARRAY_LEN(strings);
+  VALUE str = Qnil;
+  VALUE converted = Qnil;
   
   for (ulong i = 0; i < count; i++) {
-    VALUE str = rb_ary_entry(strings, i);
+    str = rb_ary_entry(strings, i);
+    if (TYPE(str) != T_STRING) {
+      if (!ID_to_s) ID_to_s = rb_intern("to_s");
+      if (NIL_P(converted)) converted = rb_ary_new();
+      str = rb_funcall(str, ID_to_s, 0);
+      rb_ary_push(converted, str);
+    }
     io_uring_buf_ring_add(desc->br, RSTRING_PTR(str), RSTRING_LEN(str), i, desc->buf_mask, i);
   }
+  RB_GC_GUARD(converted);
   io_uring_buf_ring_advance(desc->br, count);
 }
