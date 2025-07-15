@@ -199,6 +199,13 @@ VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
   VALUE bgid;
   VALUE strings;
   rb_scan_args(argc, argv, "2*", &fd, &bgid, &strings);
+
+  if (RARRAY_LEN(strings) == 1) {
+    VALUE first = rb_ary_entry(strings, 0);
+    if (TYPE(first) == T_ARRAY)
+      strings = first;
+  }
+
   return um_send_bundle(machine, NUM2INT(fd), NUM2INT(bgid), strings);
 }
 
