@@ -1,3 +1,7 @@
+# 0.17 2025-07-15
+
+- Add `#send_bundle` method
+
 # 2025-07-06 Version 0.16
 
 - Load UM version on require
