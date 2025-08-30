@@ -74,6 +74,9 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   // );
 
   if (op->flags & OP_F_FREE_ON_COMPLETE) {
+    if (op->flags & OP_F_TRANSIENT)
+      um_op_transient_remove(machine, op);
+
     um_op_free(machine, op);
     return;
   }
@@ -396,11 +399,13 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
 
 VALUE um_write_async(struct um *machine, int fd, VALUE str) {
   struct um_op *op = um_op_alloc(machine);
-  um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_FREE_ON_COMPLETE);
+  um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_TRANSIENT | OP_F_FREE_ON_COMPLETE);
   RB_OBJ_WRITE(machine->self, &op->value, str);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_write(sqe, fd, RSTRING_PTR(str), RSTRING_LEN(str), -1);
+  um_op_transient_add(machine, op);
+
   return str;
 }
 

@@ -1,4 +1,12 @@
-# ops
+## useful concurrency tools
+
+- debounce
+
+  ```ruby
+  debouncer = UM.debounce { }
+  ```
+
+## ops
 
 - [ ] multishot timeout
   - [v] machine.periodically(interval) { ... }
@@ -18,12 +26,12 @@
 - getxattr / setxattr
 - send_bundle / recv_bundle (kernel >= 6.10)
 
-# actors
+## actors
 
 When doing a `call`, we need to provide a mailbox for the response. can this be
 automatic?
 
-# streams
+## streams
 
 We're still missing:
 

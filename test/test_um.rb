@@ -565,6 +565,22 @@ class WriteAsyncTest < UMBaseTest
     assert_equal 'foo', r.readpartial(3)
   end
 
+  def test_write_async_dynamic_string
+    r, w = IO.pipe
+
+    assert_equal 0, machine.pending_count
+    str = "foo#{123}#{'bar' * 48}"
+    len = str.bytesize
+    machine.write_async(w.fileno, str)
+    str = nil
+    GC.start
+    assert_equal 1, machine.pending_count
+
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    assert_equal "foo#{123}#{'bar' * 48}", r.readpartial(len)
+  end
+
   def test_write_async_bad_fd
     r, _w = IO.pipe
 
