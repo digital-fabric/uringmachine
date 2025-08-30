@@ -1,3 +1,7 @@
+# 0.18 2025-08-30
+
+- Fix `#write_async` to properly mark the given string
+
 # 0.17 2025-07-15
 
 - Add `#send_bundle` method
