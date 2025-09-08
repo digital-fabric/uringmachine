@@ -169,6 +169,17 @@ class ScheduleTest < UMBaseTest
     assert_equal 0, machine.pending_count
   end
 
+  def test_timeout_with_no_timeout
+    _r, w = UM.pipe
+    v = machine.timeout(0.1, TOError) { machine.write(w, 'foo') }
+
+    assert_equal 3, v
+
+    assert_equal 1, machine.pending_count
+    machine.sleep 0.01 # wait for cancelled CQE
+    assert_equal 0, machine.pending_count
+  end
+
   class TO2Error < RuntimeError; end
   class TO3Error < RuntimeError; end
 
@@ -1296,6 +1307,37 @@ class PipeTest < UMBaseTest
 
     ret = machine.close(rfd)
     assert_equal rfd, ret
+  end
+end
+
+class PollTest < UMBaseTest
+  def test_poll
+    rfd, wfd = UM.pipe
+
+    events = []
+    f1 = machine.spin do
+      events << :pre
+      events << machine.poll(rfd, UM::POLLIN)
+      events << :post
+    end
+
+    machine.snooze
+    assert_equal [:pre], events
+
+    machine.write(wfd, 'foo')
+    machine.snooze
+    assert_equal [:pre, UM::POLLIN, :post], events
+
+    ret = machine.poll(wfd, UM::POLLOUT)
+    assert_equal UM::POLLOUT, ret
+
+    machine.close(rfd)
+    ret = machine.poll(wfd, UM::POLLOUT | UM::POLLERR)
+    assert_equal UM::POLLOUT | UM::POLLERR, ret
+  end
+
+  def test_poll_bad_fd
+    assert_raises(Errno::EBADF) { machine.poll(9876, POLLIN) }
   end
 end
 

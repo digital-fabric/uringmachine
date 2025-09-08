@@ -327,6 +327,11 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
     return fd;
 }
 
+VALUE UM_poll(VALUE self, VALUE fd, VALUE mask) {
+  struct um *machine = um_get_machine(self);
+  return um_poll(machine, NUM2INT(fd), NUM2UINT(mask));
+}
+
 VALUE UM_waitpid(VALUE self, VALUE pid, VALUE options) {
   struct um *machine = um_get_machine(self);
   return um_waitpid(machine, NUM2INT(pid), NUM2INT(options));
@@ -382,6 +387,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "write_async", UM_write_async, 2);
   rb_define_method(cUM, "statx", UM_statx, 4);
 
+  rb_define_method(cUM, "poll", UM_poll, 2);
   rb_define_method(cUM, "waitpid", UM_waitpid, 2);
 
   rb_define_method(cUM, "accept", UM_accept, 1);

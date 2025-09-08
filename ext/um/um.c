@@ -625,7 +625,6 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
 VALUE um_shutdown_async(struct um *machine, int fd, int how) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_SHUTDOWN_ASYNC, OP_F_FREE_ON_COMPLETE);
-
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_shutdown(sqe, fd, how);
 
@@ -644,6 +643,22 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
 
   RB_GC_GUARD(ret);
   return raise_if_exception(ret);
+}
+
+VALUE um_poll(struct um *machine, int fd, unsigned mask) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_POLL, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_poll_add(sqe, fd, mask);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RB_GC_GUARD(ret);
+  raise_if_exception(ret);
+
+  return ret;
 }
 
 VALUE um_waitpid(struct um *machine, int pid, int options) {

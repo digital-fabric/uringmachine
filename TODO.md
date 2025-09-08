@@ -16,7 +16,7 @@
 - splice / - tee
 - sendto
 - recvfrom
-- poll_add / poll_remove / poll_multishot / poll_update
+- poll_multishot
 - fsync
 - mkdir / mkdirat
 - link / linkat / unlink / unlinkat / symlink

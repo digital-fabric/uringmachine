@@ -12,7 +12,7 @@
 #include <netinet/udp.h>
 #include <netdb.h>
 #include <net/if.h>
-
+#include <poll.h>
 
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
@@ -258,6 +258,10 @@ void um_define_net_constants(VALUE mod) {
 
   DEF_CONST_INT(mod, SOMAXCONN);
 
+  DEF_CONST_INT(mod, POLLIN);
+  DEF_CONST_INT(mod, POLLOUT);
+  DEF_CONST_INT(mod, POLLERR);
+
   DEF_CONST_INT(mod, EPERM);
   DEF_CONST_INT(mod, ENOENT);
   DEF_CONST_INT(mod, ESRCH);
@@ -387,5 +391,4 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, EKEYREJECTED);
   DEF_CONST_INT(mod, EOWNERDEAD);
   DEF_CONST_INT(mod, ENOTRECOVERABLE);
-
 }
