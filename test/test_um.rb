@@ -1438,6 +1438,17 @@ class StatxTest < UMBaseTest
     io.close
   end
 
+  def test_statx_mask
+    fd = @machine.open(__FILE__, UM::O_RDONLY)
+    ustat = machine.statx(fd, nil, UM::AT_EMPTY_PATH, UM::STATX_MTIME | UM::STATX_SIZE)
+    rstat = File.stat(__FILE__)
+
+    assert_equal rstat.size,        ustat[:size]
+    assert_equal rstat.mtime.to_i,  ustat[:mtime].to_i
+  ensure
+    @machine.close_async(fd)
+  end
+
   def test_statx_bad_path
     assert_raises(Errno::ENOENT) { machine.statx(UM::AT_FDCWD, 'foobar', 0, UM::STATX_ALL) }
   end

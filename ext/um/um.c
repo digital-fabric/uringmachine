@@ -703,17 +703,16 @@ VALUE statx_to_hash(struct statx *stat) {
 }
 
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask) {
+  static char empty_path[] = "";
+
   struct um_op op;
   um_prep_op(machine, &op, OP_STATX, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
+  char *path_ptr = NIL_P(path) ? empty_path : StringValueCStr(path);
   struct statx stat;
   memset(&stat, 0, sizeof(stat));
-
-  if (NIL_P(path))
-    path = rb_str_new_literal("");
-
-  io_uring_prep_statx(sqe, dirfd, StringValueCStr(path), flags, mask, &stat);
+  io_uring_prep_statx(sqe, dirfd, path_ptr, flags, mask, &stat);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
