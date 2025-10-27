@@ -204,7 +204,7 @@ double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
 
-#define raise_if_exception(v) (um_value_is_exception_p(v) ? um_raise_exception(v) : v)
+#define RAISE_IF_EXCEPTION(v) if (um_value_is_exception_p(v)) { um_raise_exception(v); }
 
 void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags);
 void um_raise_on_error_result(int result);

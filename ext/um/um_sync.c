@@ -21,8 +21,8 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
       um_raise_on_error_result(op.result.res);
   }
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  raise_if_exception(ret);
 }
 
 void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
@@ -38,8 +38,8 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
   VALUE ret = um_fiber_switch(machine);
   um_check_completion(machine, &op);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  raise_if_exception(ret);
 }
 
 void um_futex_wake_transient(struct um *machine, uint32_t *futex, uint32_t num_waiters) {

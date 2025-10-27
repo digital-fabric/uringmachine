@@ -30,7 +30,8 @@ VALUE um_async_op_await(struct um_async_op *async_op) {
   if (!um_op_completed_p(async_op->op))
     um_cancel_and_wait(async_op->machine, async_op->op);
 
-  raise_if_exception(ret);
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
   return INT2NUM(async_op->op->result.res);
 }
 

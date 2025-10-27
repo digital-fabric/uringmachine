@@ -252,8 +252,10 @@ inline int um_check_completion(struct um *machine, struct um_op *op) {
 }
 
 inline VALUE um_await(struct um *machine) {
-  VALUE v = um_fiber_switch(machine);
-  return raise_if_exception(v);
+  VALUE ret = um_fiber_switch(machine);
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return ret;
 }
 
 inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags) {
@@ -340,8 +342,9 @@ VALUE um_sleep(struct um *machine, double duration) {
     ret = DBL2NUM(duration);
   }
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
@@ -357,10 +360,11 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
     ret = INT2NUM(op.result.res);
 
   }
-
   RB_GC_GUARD(buffer);
+
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) {
@@ -375,7 +379,8 @@ inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) 
 
   }
 
-  raise_if_exception(ret);
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
   return 0;
 }
 
@@ -393,8 +398,10 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
     ret = INT2NUM(op.result.res);
 
   RB_GC_GUARD(str);
+  
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_write_async(struct um *machine, int fd, VALUE str) {
@@ -419,8 +426,9 @@ VALUE um_close(struct um *machine, int fd) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(fd);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_close_async(struct um *machine, int fd) {
@@ -443,8 +451,9 @@ VALUE um_accept(struct um *machine, int fd) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags) {
@@ -457,8 +466,9 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen) {
@@ -471,8 +481,9 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
@@ -486,8 +497,10 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
     ret = INT2NUM(op.result.res);
 
   RB_GC_GUARD(buffer);
+
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
@@ -505,10 +518,8 @@ VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
-
-
   return ret;
 }
 
@@ -526,8 +537,10 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
   }
 
   RB_GC_GUARD(buffer);
+
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen) {
@@ -540,8 +553,9 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_listen(struct um *machine, int fd, int backlog) {
@@ -554,8 +568,9 @@ VALUE um_listen(struct um *machine, int fd, int backlog) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
@@ -579,8 +594,9 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   ret = INT2NUM(value);
 #endif
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
@@ -602,8 +618,9 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   ret = INT2NUM(0);
 #endif
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_shutdown(struct um *machine, int fd, int how) {
@@ -618,8 +635,9 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_shutdown_async(struct um *machine, int fd, int how) {
@@ -641,8 +659,9 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  return raise_if_exception(ret);
+  return ret;
 }
 
 VALUE um_poll(struct um *machine, int fd, unsigned mask) {
@@ -655,9 +674,8 @@ VALUE um_poll(struct um *machine, int fd, unsigned mask) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  raise_if_exception(ret);
-
   return ret;
 }
 
@@ -673,8 +691,8 @@ VALUE um_waitpid(struct um *machine, int pid, int options) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  raise_if_exception(ret);
 
   return rb_ary_new_from_args(2, INT2NUM(infop.si_pid), INT2NUM(infop.si_status));
 }
@@ -718,9 +736,9 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
+  RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  raise_if_exception(ret);
-
+  
   return statx_to_hash(&stat);
 }
 
@@ -735,8 +753,11 @@ VALUE accept_each_start(VALUE arg) {
 
   while (true) {
     VALUE ret = um_fiber_switch(ctx->machine);
-    if (!um_op_completed_p(ctx->op))
-      return raise_if_exception(ret);
+    if (!um_op_completed_p(ctx->op)) {
+      RAISE_IF_EXCEPTION(ret);
+      return ret;
+    }
+    RB_GC_GUARD(ret);
 
     int more = false;
     struct um_op_result *result = &ctx->op->result;
@@ -805,8 +826,11 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
       rb_yield(buf);
       RB_GC_GUARD(buf);
     }
-    else
-      return raise_if_exception(ret);
+    else {
+      RAISE_IF_EXCEPTION(ret);
+      return ret;
+    }
+    RB_GC_GUARD(ret);
   }
 }
 
@@ -854,8 +878,11 @@ VALUE read_recv_each_start(VALUE arg) {
 
   while (true) {
     VALUE ret = um_fiber_switch(ctx->machine);
-    if (!um_op_completed_p(ctx->op))
-      return raise_if_exception(ret);
+    if (!um_op_completed_p(ctx->op)) {
+      RAISE_IF_EXCEPTION(ret);
+      return ret;
+    }
+    RB_GC_GUARD(ret);
 
     int more = false;
     struct um_op_result *result = &ctx->op->result;
@@ -902,8 +929,11 @@ VALUE periodically_start(VALUE arg) {
 
   while (true) {
     VALUE ret = um_fiber_switch(ctx->machine);
-    if (!um_op_completed_p(ctx->op))
-      return raise_if_exception(ret);
+    if (!um_op_completed_p(ctx->op)) {
+      RAISE_IF_EXCEPTION(ret);
+      return ret;
+    }
+    RB_GC_GUARD(ret);
 
     int more = false;
     struct um_op_result *result = &ctx->op->result;
