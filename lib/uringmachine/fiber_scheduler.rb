@@ -99,6 +99,6 @@ class UringMachine
     #   Thread.new do
     #     Process::Status.wait(pid, flags)
     #   end.value
-    # end  
+    # end
   end
 end

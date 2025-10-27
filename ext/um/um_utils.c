@@ -129,7 +129,7 @@ inline void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE st
   ulong count = RARRAY_LEN(strings);
   VALUE str = Qnil;
   VALUE converted = Qnil;
-  
+
   for (ulong i = 0; i < count; i++) {
     str = rb_ary_entry(strings, i);
     if (TYPE(str) != T_STRING) {

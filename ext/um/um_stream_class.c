@@ -88,7 +88,7 @@ void Init_Stream(void) {
   rb_define_alloc_func(cStream, Stream_allocate);
 
   rb_define_method(cStream, "initialize", Stream_initialize, 2);
-  
+
   rb_define_method(cStream, "get_line", Stream_get_line, 2);
   rb_define_method(cStream, "get_string", Stream_get_string, 2);
 

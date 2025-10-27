@@ -7,7 +7,7 @@ class StreamBaseTest < UMBaseTest
     super
     @rfd, @wfd = UM.pipe
     @stream = UM::Stream.new(@machine, @rfd)
-  end  
+  end
 end
 
 class StreamTest < StreamBaseTest
@@ -166,7 +166,7 @@ class StreamRespTest < StreamBaseTest
   end
 
   def test_resp_encode
-    s = UM::Stream    
+    s = UM::Stream
     assert_equal "_\r\n",             s.resp_encode(+'', nil)
     assert_equal "#t\r\n",            s.resp_encode(+'', true)
     assert_equal "#f\r\n",            s.resp_encode(+'', false)
@@ -174,7 +174,7 @@ class StreamRespTest < StreamBaseTest
     assert_equal ",42.1\r\n",         s.resp_encode(+'', 42.1)
     assert_equal "$6\r\nfoobar\r\n",  s.resp_encode(+'', 'foobar')
     assert_equal "$10\r\nפובאר\r\n",  s.resp_encode(+'', 'פובאר')
-    
+
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
       s.resp_encode(+'', ['foo', 'bar'])
 

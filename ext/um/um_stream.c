@@ -26,7 +26,7 @@ int stream_read_more(struct um_stream *stream) {
   size_t capa = rb_str_capacity(stream->buffer);
   if (capa - stream->pos < maxlen)
     rb_str_modify_expand(stream->buffer, maxlen - (capa - stream->pos));
-  
+
   rb_str_modify(stream->buffer);
   char *ptr = RSTRING_PTR(stream->buffer) + stream->pos;
   size_t ret = um_read_raw(stream->machine, stream->fd, ptr, maxlen);
@@ -94,7 +94,7 @@ VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len) {
 
       abslen = stream->len - stream->pos;
     }
-  
+
   char *start = RSTRING_PTR(stream->buffer) + stream->pos;
   stream->pos += abslen;
 
@@ -137,7 +137,7 @@ VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
 
   while (stream->len - stream->pos < read_len)
     if (!stream_read_more(stream)) return Qnil;
-  
+
   char *start = RSTRING_PTR(stream->buffer) + stream->pos;
   stream->pos += read_len;
 
@@ -198,7 +198,7 @@ static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, V
 
 static inline VALUE resp_decode_integer(char *ptr) {
   long value = strtol(ptr + 1, NULL, 10);
-  return LONG2NUM(value);    
+  return LONG2NUM(value);
 }
 
 static inline VALUE resp_decode_float(char *ptr) {
@@ -234,13 +234,13 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
   ulong len = RSTRING_LEN(msg);
   ulong data_len;
   if (len == 0) return Qnil;
-  
+
   switch (ptr[0]) {
     case '%': // hash
     case '|': // attributes hash
       data_len = resp_parse_length_field(ptr, len);
       return resp_decode_hash(stream, out_buffer, data_len);
-    
+
     case '*': // array
     case '~': // set
     case '>': // pub/sub push
@@ -276,7 +276,7 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
     default:
       rb_raise(rb_eRuntimeError, "Invalid character encountered");
   }
-  
+
   RB_GC_GUARD(msg);
 }
 
@@ -284,7 +284,7 @@ void write_buffer_init(struct um_write_buffer *buf, VALUE str) {
   size_t capa = 1 << 12;
   size_t len = RSTRING_LEN(str);
   while (capa < len) capa += 1 << 12;
-  
+
   rb_str_resize(str, capa);
   rb_str_set_len(str, len);
   buf->str = str;

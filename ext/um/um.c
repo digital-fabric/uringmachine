@@ -398,7 +398,7 @@ VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
     ret = INT2NUM(op.result.res);
 
   RB_GC_GUARD(str);
-  
+
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
@@ -738,7 +738,7 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
-  
+
   return statx_to_hash(&stat);
 }
 

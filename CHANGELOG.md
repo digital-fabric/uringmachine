@@ -1,3 +1,7 @@
+# 0.19 2025-10-27
+
+- Fix usage of `RAISE_IF_EXCEPTION` after `RB_GC_GUARD`
+
 # 0.18 2025-08-30
 
 - Fix `#write_async` to properly mark the given string

@@ -45,7 +45,7 @@ enum op_kind {
   OP_SETSOCKOPT,
   OP_SHUTDOWN,
   OP_SHUTDOWN_ASYNC,
-  
+
   OP_POLL,
   OP_WAITPID,
 
