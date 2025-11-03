@@ -194,7 +194,10 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   if (unlikely(op->flags & OP_F_TRANSIENT))
     um_op_free(machine, op);
 
-  return rb_fiber_transfer(fiber, 1, &value);
+  VALUE ret = rb_fiber_transfer(fiber, 1, &value);
+  RB_GC_GUARD(value);
+  RB_GC_GUARD(ret);
+  return ret;
 }
 
 inline VALUE um_fiber_switch(struct um *machine) {
