@@ -1,3 +1,7 @@
+# 0.19.1 2025-01-03
+
+- Add `RB_GC_GUARD` in `process_runqueue_op`
+
 # 0.19 2025-10-27
 
 - Fix usage of `RAISE_IF_EXCEPTION` after `RB_GC_GUARD`
