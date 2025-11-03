@@ -142,6 +142,31 @@ class ScheduleTest < UMBaseTest
     assert_kind_of TOError, e
   end
 
+  def test_timeout_stress
+    skip
+    # GC.stress = true
+    c = 0
+    fs = 100.times.map {
+      machine.spin {
+        q = UM::Queue.new
+        1000.times {
+          machine.sleep rand(0.001..0.005)
+          begin
+            machine.timeout(rand(0.001..0.06), TOError) do
+              machine.shift(q)
+            end
+          rescue => _e
+            c += 1
+            STDOUT << '*' if c % 1000 == 0
+          end
+        }
+      }
+    }
+    machine.join(*fs)
+  ensure
+    GC.stress = false    
+  end
+
   def test_timeout_with_raising_block
     e = nil
     begin
