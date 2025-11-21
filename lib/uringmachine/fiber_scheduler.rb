@@ -4,29 +4,47 @@ class UringMachine
   class FiberScheduler
     def initialize(machine)
       @machine = machine
+      @ios = ObjectSpace::WeakMap.new
+      @running_fibers = ObjectSpace::WeakMap.new
     end
 
-    def p(o)
-      @machine.write(1, "#{o.inspect}\n")
-    rescue Errno::EINTR
-      retry
+    def method_missing(sym, *a, **b)
+      @machine.write(1, "method_missing: #{sym.inspect} #{a.inspect} #{b.inspect}\n")
+      @machine.write(1, "#{caller.inspect}\n")
     end
 
-    def join(*)
-      @machine.join(*)
+    def scheduler_close
+      fibers = @running_fibers.keys
+      # p(fiber_count: fibers.size)
+      @machine.join(*fibers)
+      @machine.write(1, "scheduler done\n");
     end
 
-    def block(blocker, timeout)
-      p block: [blocker, timeout]
+    def fiber_interrupt(fiber, exception)
+      # p(fiber_interrput: fiber, exception:)
+    end
 
+    def p(o) = @machine.write(1, "#{o.inspect}\n")
+
+    def join(*fibers)
+      if fibers.empty?
+        fibers = @running_fibers.keys
+        # p(join: fibers, done: fibers.map(&:done?))
+        @running_fibers = ObjectSpace::WeakMap.new
+      end
+
+      @machine.join(*fibers)
+    end
+
+    def block(blocker, timeout = nil)
+      @machine.yield
     end
 
     def unblock(blocker, fiber)
-      p unblock: [blocker, fiber]
+      @machine.schedule(fiber, nil)
     end
 
     def kernel_sleep(duration = nil)
-      # p sleep: [duration]
       if duration
         @machine.sleep(duration)
       else
@@ -36,15 +54,11 @@ class UringMachine
 
     def io_wait(io, events, timeout = nil)
       timeout ||= io.timeout
-      p timeout: timeout
       if timeout
-        p 1
         @machine.timeout(timeout, Timeout::Error) {
-          p 2
           @machine.poll(io.fileno, events).tap { p 3 }
-      }.tap { p 4 }
+        }
       else
-        p 5
         @machine.poll(io.fileno, events).tap { p 6 }
 
       end
@@ -54,51 +68,39 @@ class UringMachine
     end
 
     def fiber(&block)
-      f = @machine.spin(&block)
+      f = Fiber.new(blocking: false) { @machine.run(f, &block) }
+      @running_fibers[f] = true
+      @machine.schedule(f, nil)
       @machine.snooze
+      # p(spin: f)
       f
     end
 
     def io_write(io, buffer, length, offset)
-      p io_write: [io, buffer.get_string, length, offset]
+      reset_nonblock(io)
       @machine.write(io.fileno, buffer.get_string)
+    rescue Errno::EINTR
+      retry
     end
 
     def io_read(io, buffer, length, offset)
-      # p io_read: [io, buffer, length, offset]
+      reset_nonblock(io)
       s = +''
       length = buffer.size if length == 0
       bytes = @machine.read(io.fileno, s, length)
       buffer.set_string(s)
       bytes
-    rescue SystemCallError => e
-      -e.errno
+    rescue Errno::EINTR
+      retry
     end
 
-    def io_pwrite(io, buffer, from, length, offset)
-      p io_pwrite: [io, buffer, from, length, offset]
+    private
+
+    def reset_nonblock(io)
+      return if @ios.key?(io)
+        
+      @ios[io] = true
+      UM.io_set_nonblock(io, false)  
     end
-
-    def io_pread(io, buffer, from, length, offset)
-      p io_pread: [io, buffer, from, length, offset]
-    end
-
-    # def fiber(&block)
-    #   fiber = Fiber.new(blocking: false, &block)
-    #   unblock(nil, fiber)
-    #   # fiber.resume
-    #   return fiber
-    # end
-
-    # def kernel_sleep(duration = nil)
-    #   block(:sleep, duration)
-    # end
-
-    # def process_wait(pid, flags)
-    #   # This is a very simple way to implement a non-blocking wait:
-    #   Thread.new do
-    #     Process::Status.wait(pid, flags)
-    #   end.value
-    # end
   end
 end

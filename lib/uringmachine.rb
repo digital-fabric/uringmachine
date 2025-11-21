@@ -23,6 +23,12 @@ class UringMachine
     @@fiber_map[fiber] = fiber
   end
 
+  def run(fiber, &block)
+    run_block_in_fiber(block, fiber, nil)
+    self.schedule(fiber, nil)
+    @@fiber_map[fiber] = fiber
+  end
+
   def join(*fibers)
     results = fibers.inject({}) { |h, f| h[f] = nil; h }
     queue = nil
