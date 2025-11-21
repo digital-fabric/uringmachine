@@ -15,37 +15,19 @@ ITERATIONS = 1000
 
 $machine = UringMachine.new
 
-def run_snooze
+def run_snooze_um
   count = 0
-  main = Fiber.current
 
-  f1 = Fiber.new do
-    loop do
-      count += 1
-      if count == ITERATIONS
-        $machine.schedule(main, nil)
-        break
-      else
-        $machine.snooze
-      end
-    end
-  end
+  f1 = $machine.spin {
+    ITERATIONS.times { count += 1; $machine.snooze }
+  }
+  f2 = $machine.spin {
+    ITERATIONS.times { count += 1; $machine.snooze }
+  }
 
-  f2 = Fiber.new do
-    loop do
-      count += 1
-      if count == ITERATIONS
-        $machine.schedule(main, nil)
-        break
-      else
-        $machine.snooze
-      end
-    end
-  end
+  $machine.join(f1, f2)
 
-  $machine.schedule(f1, nil)
-  $machine.schedule(f2, nil)
-  $machine.yield
+  count
 end
 
 def run_raw_transfer
@@ -53,36 +35,32 @@ def run_raw_transfer
   main = Fiber.current
   f2 = nil
   f1 = Fiber.new do
-    loop do
+    ITERATIONS.times do
       count += 1
-      if count == ITERATIONS
-        main.transfer(nil)
-        break
-      else
-        f2.transfer(nil)
-      end
+      f2.transfer(nil)
     end
   end
 
   f2 = Fiber.new do
-    loop do
+    ITERATIONS.times do
       count += 1
-      if count == ITERATIONS
-        main.transfer(nil)
-        break
-      else
-        f1.transfer(nil)
-      end
+      f1.transfer(nil)
     end
+    main.transfer(nil)
   end
 
   f1.transfer(nil)
+
+  count
 end
+
+p run_snooze_um:    run_snooze_um
+p run_raw_transfer: run_raw_transfer
 
 bm = Benchmark.ips do |x|
   x.config(:time => 5, :warmup => 2)
 
-  x.report("snooze")        { run_snooze }
+  x.report("snooze_um")     { run_snooze_um }
   x.report("raw transfer")  { run_raw_transfer }
 
   x.compare!

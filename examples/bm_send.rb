@@ -71,10 +71,6 @@ def um_send_bundle
   @machine.send_bundle(@server_fd, @bgid, @parts)
 end
 
-# um_send_bundle
-# 10.times { @machine.snooze }
-# exit
-
 p(STR_COUNT:, STR_SIZE:)
 
 Benchmark.ips do |x|
@@ -82,5 +78,6 @@ Benchmark.ips do |x|
   x.report('UM#write')       { um_write }
   x.report('UM#send')        { um_send }
   x.report('UM#send_bundle') { um_send_bundle }
-  x.compare!
+
+  x.compare!(order: :baseline)
 end
