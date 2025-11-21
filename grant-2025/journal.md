@@ -1,6 +1,6 @@
-## 2025-11-14
+# 2025-11-14
 
-### Call with Samuel
+## Call with Samuel
 
 - I explained the tasks that I want to do:
 
@@ -83,3 +83,59 @@ and modernizes Ruby’s internal I/O lifecycle.
 
 GDB/LLDB extensions: https://github.com/socketry/toolbox
 
+# 2025-11-17
+
+## Work on io-event Uring selector
+
+I added an implementation of `process_wait` using `io_uring_prep_waitid`. This
+necessitates being able to create instances of `Process::Status`. For this, I've
+submitted a PR for exposing `rb_process_status_new`:
+https://github.com/ruby/ruby/pull/15213. Hopefully, this PR will be merged
+before the release of Ruby 4.0.
+
+# 2025-11-21
+
+## Work on UringMachine Fiber Scheduler
+
+I've finally made some progress on the UringMachine fiber scheduler. This was a
+process of learning the mchanics of how the scheduler is integrated with the
+Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
+
+- When you call `Kernel.puts`, the trailing newline character is actually
+  written separately, which can lead to unexpected output if for example you
+  have multiple fibers writing to STDOUT at the same time. To prevent this, Ruby
+  uses a mutex (per IO instance) to synchronize writes to the same IO.
+- There are inconsistencies in how different kinds of IO objects are handled,
+  with regards to blocking/non-blocking operation
+  ([O_NONBLOCK](https://linux.die.net/man/2/fcntl)):
+
+  - Files and standard I/O are blocking.
+  - Pipes are non-blocking.
+  - Sockets are non-blocking.
+  - OpenSSL sockets are non-blocking.
+
+  The problem is that for io_uring to function properly, the fds passed to it
+  should always be in blocking mode. To rectify this, I've added code to the
+  fiber scheduler implementation that makes sure the IO instance is blocking:
+
+  ```ruby
+  def io_write(io, buffer, length, offset)
+    reset_nonblock(io)
+    @machine.write(io.fileno, buffer.get_string)
+  rescue Errno::EINTR
+    retry
+  end
+
+  def reset_nonblock(io)
+    return if @ios.key?(io)
+        
+    @ios[io] = true
+    UM.io_set_nonblock(io, false)  
+  end
+
+  ```
+
+- A phenomenon I've observed is that in some situations of multiple fibers doing
+  I/O, some of those I/O operations would raise an `EINTR`, which should mean
+  the I/O operation was interrupted because of a signal sent to the process.
+  Weird!
