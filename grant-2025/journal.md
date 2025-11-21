@@ -139,3 +139,22 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   I/O, some of those I/O operations would raise an `EINTR`, which should mean
   the I/O operation was interrupted because of a signal sent to the process.
   Weird!
+
+- There's some interesting stuff going on when calling `IO#close`. Apparently
+  there's a mutex involved, and I noticed two scheduler hooks are being called:
+  `#blocking_operation_wait` which means a blocking operation that should be ran
+  on a separate thread, and `#block`, which means a mutex is being locked. I
+  still need to figure out what is going on there and why it is so complex. FWIW, UringMachine has a `#close_async` method which, as its name suggests, submits a close operation, but does not wait for it to complete.
+
+- I've added some basic documentation to the `FiberScheduler` class, and started
+  writing some tests. Now that I have a working fiber scheduler implementation
+  and I'm beginning to understand the mechanics of it, I can start TDD'ing...
+
+## Work on io-event Uring selector
+
+- I've submitted a [PR](https://github.com/socketry/io-event/pull/154) for using
+  `io_uring_prep_waitid` in the `process_wait` implementation. This relies on
+  having a recent Linux kernel (>=6.7) and the afore-mentioned Ruby
+  [PR](https://github.com/ruby/ruby/pull/15213) for exposing
+  `rb_process_status_new` being merged. Hopefully this will happen in time for
+  the Ruby 4.0 release.
