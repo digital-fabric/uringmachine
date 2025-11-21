@@ -37,7 +37,6 @@ Some resources:
 - https://github.com/socketry/async/blob/main/context/getting-started.md
 - https://github.com/socketry/async/blob/main/context/scheduler.md
 - https://github.com/socketry/async/blob/main/lib/async/scheduler.rb#L28
-- 
 
 ## useful concurrency tools
 
