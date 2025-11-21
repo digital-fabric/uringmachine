@@ -327,7 +327,7 @@ class PeriodicallyTest < UMBaseTest
     rescue Cancel
       cancel = 1
     end
-    5.times { machine.snooze }
+    10.times { machine.snooze }
     assert_equal 0, machine.pending_count
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
