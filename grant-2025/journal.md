@@ -132,7 +132,6 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
     @ios[io] = true
     UM.io_set_nonblock(io, false)  
   end
-
   ```
 
 - A phenomenon I've observed is that in some situations of multiple fibers doing

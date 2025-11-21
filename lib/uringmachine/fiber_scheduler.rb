@@ -64,34 +64,11 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
-      start_blocking_operation_thread
+      start_blocking_operation_thread if !@blocking_op_queue
 
       queue = UM::Queue.new
       @machine.push(@blocking_op_queue, [queue, blocking_operation])
       @machine.shift(queue)
-
-      # UM.debug("block_operation_wait #{Fiber.current.inspect} >>")
-      # UM.debug("  #{blocking_operation.inspect}")
-      # Thread.new do
-      #   UM.debug("th >>"); blocking_operation.(); UM.debug("th <<")
-      # end.join
-      # UM.debug("block_operation_wait <<")
-    end
-
-    def start_blocking_operation_thread
-      @blocking_op_queue ||= UM::Queue.new      
-      @blocking_op_thread ||= Thread.new do
-        m = UM.new
-        loop do
-          q, op = m.shift(@blocking_op_queue)
-          res = begin
-            op.()
-          rescue Exception => e
-            e
-          end
-          m.push(q, res)
-        end
-      end
     end
 
     # block hook: blocks the current fiber by yielding to the machine. This hook
@@ -208,5 +185,25 @@ class UringMachine
       @ios[io] = true
       UM.io_set_nonblock(io, false)  
     end
+
+    # Starts a background thread for running blocking operations.
+    #
+    # @return [void]
+    def start_blocking_operation_thread
+      @blocking_op_queue = UM::Queue.new      
+      @blocking_op_thread = Thread.new do
+        m = UM.new
+        loop do
+          q, op = m.shift(@blocking_op_queue)
+          res = begin
+            op.()
+          rescue Exception => e
+            e
+          end
+          m.push(q, res)
+        end
+      end
+    end
+
   end
 end
