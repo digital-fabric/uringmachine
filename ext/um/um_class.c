@@ -1,7 +1,10 @@
 #include "um.h"
 #include <arpa/inet.h>
+#include <ruby/io.h>
 
 VALUE cUM;
+
+static ID id_fileno;
 
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
@@ -353,6 +356,34 @@ VALUE UM_pipe(VALUE self) {
   return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
 }
 
+VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
+  int fd = rb_io_descriptor(io);
+  int oflags = fcntl(fd, F_GETFL);
+  if (oflags == -1) return Qnil;
+
+  return (oflags & O_NONBLOCK) ? Qtrue : Qfalse;
+}
+
+VALUE UM_io_set_nonblock(VALUE self, VALUE io, VALUE nonblock) {
+  int fd = rb_io_descriptor(io);
+  int oflags = fcntl(fd, F_GETFL);
+  if (oflags == -1) return Qnil;
+
+  if (RTEST(nonblock)) {
+    if (!(oflags & O_NONBLOCK)) {
+      oflags |= O_NONBLOCK;
+      fcntl(fd, F_SETFL, oflags);
+    }
+  }
+  else {
+    if (oflags & O_NONBLOCK) {
+      oflags &= ~O_NONBLOCK;
+      fcntl(fd, F_SETFL, oflags);
+    }
+  }
+  return nonblock;
+}
+
 VALUE UM_kernel_version(VALUE self) {
   return INT2NUM(UM_KERNEL_VERSION);
 }
@@ -368,6 +399,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
   rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
+  rb_define_singleton_method(cUM, "io_nonblock?", UM_io_nonblock_p, 1);
+  rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
 
 
@@ -416,4 +449,6 @@ void Init_UM(void) {
   #endif
 
   um_define_net_constants(cUM);
+
+  id_fileno = rb_intern_const("fileno");
 }

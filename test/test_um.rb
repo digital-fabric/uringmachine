@@ -1573,3 +1573,20 @@ class SendBundleTest < UMBaseTest
     assert_equal strs.map(&:to_s).join, buf
   end
 end
+
+class NonBlockTest < UMBaseTest
+  def test_io_nonblock?
+    assert_equal false, UM.io_nonblock?(STDIN)
+  end
+
+  def test_io_set_nonblock
+    r, w = IO.pipe
+    assert_equal true, UM.io_nonblock?(r)
+    
+    UM.io_set_nonblock(r, false)
+    assert_equal false, UM.io_nonblock?(r)
+    
+    UM.io_set_nonblock(r, true)
+    assert_equal true, UM.io_nonblock?(r)
+  end
+end
