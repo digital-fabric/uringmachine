@@ -388,6 +388,11 @@ VALUE UM_kernel_version(VALUE self) {
   return INT2NUM(UM_KERNEL_VERSION);
 }
 
+VALUE UM_debug(VALUE self, VALUE str) {
+  printf("%s\n", StringValueCStr(str));
+  return Qnil;
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -402,6 +407,7 @@ void Init_UM(void) {
   rb_define_singleton_method(cUM, "io_nonblock?", UM_io_nonblock_p, 1);
   rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
+  rb_define_singleton_method(cUM, "debug", UM_debug, 1);
 
 
   rb_define_method(cUM, "schedule", UM_schedule, 2);
