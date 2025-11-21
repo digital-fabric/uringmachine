@@ -7,8 +7,13 @@ class FiberSchedulerTest < UMBaseTest
   def setup
     super
     @scheduler = UM::FiberScheduler.new(@machine)
-    Fiber.set_scheduler @scheduler
-  end  
+    Fiber.set_scheduler(@scheduler)
+  end
+
+  def teardown
+    Fiber.set_scheduler(nil)
+    GC.start
+  end
 
   def test_fiber_scheduler_spinning
     f1 = Fiber.schedule do
@@ -42,8 +47,8 @@ class FiberSchedulerTest < UMBaseTest
     f2 = Fiber.schedule do
       sleep 0.002
       o.write 'bar'
-      o.close
       buffer << :f2
+      o.close
     end
 
     f3 = Fiber.schedule do
@@ -54,6 +59,9 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
     assert_equal [true] * 3, [f1, f2, f3].map(&:done?)
     assert_equal [:f1, :f2, 'foobar'], buffer
+  ensure
+    i.close rescue nil
+    o.close rescue nil
   end
 
   def test_fiber_scheduler_sleep

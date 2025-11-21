@@ -25,6 +25,7 @@ class UringMachine
     def method_missing(sym, *a, **b)
       @machine.write(1, "method_missing: #{sym.inspect} #{a.inspect} #{b.inspect}\n")
       @machine.write(1, "#{caller.inspect}\n")
+      super
     end
 
     # scheduler_close hook: Waits for all fiber to terminate. Called upon thread
@@ -41,7 +42,7 @@ class UringMachine
     end
 
     # For debugging purposes
-    def p(o) = @machine.write(1, "#{o.inspect}\n")
+    def p(o) = UM.debug(o.inspect)
 
     # Waits for the given fibers to terminate. If no fibers are given, waits for
     # all fibers to terminate.
@@ -55,6 +56,42 @@ class UringMachine
       end
 
       @machine.join(*fibers)
+    end
+
+    # blocking_operation_wait hook: runs the given operation in a separate
+    # thread, so as not to block other fibers.
+    #
+    # @param blocking_operation [callable] blocking operation
+    # @return [void]
+    def blocking_operation_wait(blocking_operation)
+      start_blocking_operation_thread
+
+      queue = UM::Queue.new
+      @machine.push(@blocking_op_queue, [queue, blocking_operation])
+      @machine.shift(queue)
+
+      # UM.debug("block_operation_wait #{Fiber.current.inspect} >>")
+      # UM.debug("  #{blocking_operation.inspect}")
+      # Thread.new do
+      #   UM.debug("th >>"); blocking_operation.(); UM.debug("th <<")
+      # end.join
+      # UM.debug("block_operation_wait <<")
+    end
+
+    def start_blocking_operation_thread
+      @blocking_op_queue ||= UM::Queue.new      
+      @blocking_op_thread ||= Thread.new do
+        m = UM.new
+        loop do
+          q, op = m.shift(@blocking_op_queue)
+          res = begin
+            op.()
+          rescue Exception => e
+            e
+          end
+          m.push(q, res)
+        end
+      end
     end
 
     # block hook: blocks the current fiber by yielding to the machine. This hook
