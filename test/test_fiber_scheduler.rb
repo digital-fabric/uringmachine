@@ -76,7 +76,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 2, machine.pending_count
     @scheduler.join
     t1 = monotonic_clock
-    assert_in_range 0.01..0.025, t1 - t0
+    assert_in_range 0.02..0.025, t1 - t0
   end
 
   def test_fiber_scheduler_lock
