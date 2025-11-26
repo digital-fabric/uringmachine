@@ -724,7 +724,7 @@ VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
 
   return rb_process_status_new(infop.si_pid, (infop.si_status & 0xff) << 8, 0);
 #else
-  rb_raise(rb_eNotImplementedError, "Missing rb_process_status_new");
+  rb_raise(rb_eNotImpError, "Missing rb_process_status_new");
 #endif
 }
 
