@@ -1,6 +1,8 @@
 #include "um.h"
 #include <arpa/inet.h>
 #include <ruby/io.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 VALUE cUM;
 VALUE eUMError;
@@ -356,6 +358,28 @@ VALUE UM_pipe(VALUE self) {
   return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
 }
 
+VALUE UM_pidfd_open(VALUE self, VALUE pid) {
+  int fd = syscall(SYS_pidfd_open, NUM2INT(pid), 0);
+  if (fd == -1) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+  
+  return INT2NUM(fd);
+}
+
+VALUE UM_pidfd_send_signal(VALUE self, VALUE fd, VALUE sig) {
+  int ret = syscall(
+    SYS_pidfd_send_signal, NUM2INT(fd), NUM2INT(sig), NULL, 0
+  );
+  if (ret) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+
+  return fd;
+}
+
 VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
   int fd = rb_io_descriptor(io);
   int oflags = fcntl(fd, F_GETFL);
@@ -404,6 +428,9 @@ void Init_UM(void) {
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
   rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
+  rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
+  rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
+
   rb_define_singleton_method(cUM, "io_nonblock?", UM_io_nonblock_p, 1);
   rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);

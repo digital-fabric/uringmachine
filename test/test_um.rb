@@ -1560,6 +1560,61 @@ class PipeTest < UMBaseTest
   end
 end
 
+class PidfdTest < UMBaseTest
+  def test_pidfd_open
+    pid = fork { exit 13 }
+    fd = UM.pidfd_open(pid)
+    assert_kind_of Integer, fd
+
+    pid2, status = machine.waitid(P_PIDFD, fd, UM::WEXITED)
+    assert_equal pid, pid2
+    assert_equal 13, status
+  ensure
+    machine.close(fd) rescue nil
+    Process.wait(pid) rescue nil
+  end
+
+  def test_pidfd_open_invalid_pid
+    assert_raises(Errno::ESRCH) { UM.pidfd_open(Process.pid + 1) }
+  end
+
+  def test_pidfd_send_signal
+    fd = UM.pidfd_open(Process.pid)
+    buf = []
+    trap('SIGUSR1') { buf << :SIGUSR1 }
+
+    ret = UM.pidfd_send_signal(fd, UM::SIGUSR1)
+    assert_equal fd, ret
+    sleep 0.01
+
+    assert_equal [:SIGUSR1], buf
+  ensure
+    machine.close(fd) rescue nil
+  end
+
+  def test_pidfd_send_signal_test
+    fd = UM.pidfd_open(Process.pid)
+    buf = []
+    trap('SIGUSR1') { buf << :SIGUSR1 }
+
+    ret = UM.pidfd_send_signal(fd, 0)
+    assert_equal fd, ret
+    sleep 0.01
+    assert_equal [], buf
+
+    pid = fork { exit 13 }
+    fd2 = UM.pidfd_open(pid)
+    assert_kind_of Integer, fd2
+
+    Process.wait(pid)
+    assert_raises(Errno::ESRCH) { UM.pidfd_send_signal(fd2, 0) }
+  ensure
+    machine.close(fd) rescue nil
+    machine.close(fd2) rescue nil
+    Process.wait(pid) rescue nil
+  end
+end
+
 class PollTest < UMBaseTest
   def test_poll
     rfd, wfd = UM.pipe

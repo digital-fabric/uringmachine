@@ -13,6 +13,7 @@
 #include <netdb.h>
 #include <net/if.h>
 #include <poll.h>
+#include <signal.h>
 
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
@@ -403,4 +404,39 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, CLD_STOPPED);
   DEF_CONST_INT(mod, CLD_TRAPPED);
   DEF_CONST_INT(mod, CLD_CONTINUED);
+
+  DEF_CONST_INT(mod, SIGHUP);
+  DEF_CONST_INT(mod, SIGINT);
+  DEF_CONST_INT(mod, SIGQUIT);
+  DEF_CONST_INT(mod, SIGILL);
+  DEF_CONST_INT(mod, SIGTRAP);
+  DEF_CONST_INT(mod, SIGABRT);
+  DEF_CONST_INT(mod, SIGIOT);
+  DEF_CONST_INT(mod, SIGFPE);
+  DEF_CONST_INT(mod, SIGKILL);
+  DEF_CONST_INT(mod, SIGBUS);
+  DEF_CONST_INT(mod, SIGSEGV);
+  DEF_CONST_INT(mod, SIGSYS);
+  DEF_CONST_INT(mod, SIGPIPE);
+  DEF_CONST_INT(mod, SIGALRM);
+  DEF_CONST_INT(mod, SIGTERM);
+  DEF_CONST_INT(mod, SIGURG);
+  DEF_CONST_INT(mod, SIGSTOP);
+  DEF_CONST_INT(mod, SIGTSTP);
+  DEF_CONST_INT(mod, SIGCONT);
+  DEF_CONST_INT(mod, SIGCHLD);
+  DEF_CONST_INT(mod, SIGCLD);
+  DEF_CONST_INT(mod, SIGTTIN);
+  DEF_CONST_INT(mod, SIGTTOU);
+  DEF_CONST_INT(mod, SIGIO);
+  DEF_CONST_INT(mod, SIGXCPU);
+  DEF_CONST_INT(mod, SIGXFSZ);
+  DEF_CONST_INT(mod, SIGVTALRM);
+  DEF_CONST_INT(mod, SIGPROF);
+  DEF_CONST_INT(mod, SIGWINCH);
+  DEF_CONST_INT(mod, SIGUSR1);
+  DEF_CONST_INT(mod, SIGUSR2);
+  DEF_CONST_INT(mod, SIGPWR);
+  DEF_CONST_INT(mod, SIGPOLL);
+
 }

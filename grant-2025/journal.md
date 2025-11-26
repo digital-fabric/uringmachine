@@ -210,6 +210,20 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 - Added two new low-level APIs for waiting on processes, instead of
   `UM#waitpid`, using the io_uring version of `waitid`. The vanilla version
   `UM#waitid` returns an array containing the terminated process pid, exit
-  status and code. The `UM#waitpid_status` method returns a `Process::Status`
+  status and code. The `UM#waitid_status` method returns a `Process::Status`
   with the pid and exit status. This method is present only if the
   `rb_process_status_new` function is available (see above).
+
+- Implemented `FiberScheduler#process_wait` hook using `#waitid_status`.
+
+- For the sake of completeness, I also added `UM.pidfd_open` and
+  `UM.pidfd_send_signal` for working with PID. A simple example:
+
+  ```ruby
+  child_pid = fork { ... }
+  fd = UM.pidfd_open(child_pid)
+  ...
+  UM.pidfd_send_signal(fd, UM::SIGUSR1)
+  ...
+  pid2, status = machine.waitid(P_PIDFD, fd, UM::WEXITED)
+  ```
