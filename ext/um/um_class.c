@@ -439,13 +439,11 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 
-  #ifdef HAVE_IO_URING_PREP_FUTEX
   rb_define_method(cUM, "pop", UM_queue_pop, 1);
   rb_define_method(cUM, "push", UM_queue_push, 2);
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
-  #endif
 
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 
