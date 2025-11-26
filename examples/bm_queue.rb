@@ -12,8 +12,8 @@ require 'benchmark/ips'
 require 'uringmachine'
 
 COUNT = 1000
-NUM_PRODUCERS = 2
-NUM_CONSUMERS = 2
+NUM_PRODUCERS = 8
+NUM_CONSUMERS = 8
 
 @queue = Queue.new
 @done = Queue.new
@@ -89,7 +89,6 @@ def run_um
   total
 end
 
-
 # puts "running"
 # res = run_threads
 # p threads: res
@@ -99,14 +98,13 @@ end
 #   p fibers: res
 # }
 
-
 # __END__
 
 Benchmark.ips do |x|
-  x.config(:time => 5, :warmup => 2)
+  x.config(:time => 10, :warmup => 3)
 
   x.report("threads") { run_threads }
   x.report("UM")      { run_um }
 
-  x.compare!
+  x.compare!(order: :baseline)
 end

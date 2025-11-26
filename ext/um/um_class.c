@@ -278,7 +278,7 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
 VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
   struct um *machine = um_get_machine(self);
   struct um_mutex *mutex_data = Mutex_data(mutex);
-  return um_mutex_synchronize(machine, mutex, &mutex_data->state);
+  return um_mutex_synchronize(machine, mutex_data);
 }
 
 VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {

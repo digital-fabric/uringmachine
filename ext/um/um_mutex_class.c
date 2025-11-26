@@ -11,7 +11,7 @@ static const rb_data_type_t Mutex_type = {
     .dsize = NULL,
     .dcompact = NULL
   },
-  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE Mutex_allocate(VALUE klass) {

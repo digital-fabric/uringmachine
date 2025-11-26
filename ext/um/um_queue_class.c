@@ -26,7 +26,7 @@ static const rb_data_type_t Queue_type = {
     .dsize = NULL,
     .dcompact = Queue_compact
   },
-  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
+  .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED
 };
 
 static VALUE Queue_allocate(VALUE klass) {

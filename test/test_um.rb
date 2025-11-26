@@ -1119,6 +1119,25 @@ class SynchronizeTest < UMBaseTest
     assert_equal [11, 12, 13, 21, 22, 23], buf
     assert_equal 0, machine.pending_count
   end
+
+  def test_synchronize_multi
+    mutex = UM::Mutex.new
+    buf = []
+    fibers = (1..8).map { |i|
+      machine.spin do
+        machine.synchronize(mutex) do
+          buf << (i * 10) + 1
+          machine.sleep(0.01)
+          buf << (i * 10) + 2
+        end
+        machine.snooze
+        buf << (i * 10) + 3
+      end
+    }
+
+    machine.join(*fibers)
+    assert_equal [11, 12, 21, 13, 22, 31, 23, 32, 41, 33, 42, 51, 43, 52, 61, 53, 62, 71, 63, 72, 81, 73, 82, 83], buf
+  end
 end
 
 class QueueTest < UMBaseTest
