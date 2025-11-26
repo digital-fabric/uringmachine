@@ -143,7 +143,9 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   there's a mutex involved, and I noticed two scheduler hooks are being called:
   `#blocking_operation_wait` which means a blocking operation that should be ran
   on a separate thread, and `#block`, which means a mutex is being locked. I
-  still need to figure out what is going on there and why it is so complex. FWIW, UringMachine has a `#close_async` method which, as its name suggests, submits a close operation, but does not wait for it to complete.
+  still need to figure out what is going on there and why it is so complex.
+  FWIW, UringMachine has a `#close_async` method which, as its name suggests,
+  submits a close operation, but does not wait for it to complete.
 
 - I've added some basic documentation to the `FiberScheduler` class, and started
   writing some tests. Now that I have a working fiber scheduler implementation
@@ -157,3 +159,21 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   [PR](https://github.com/ruby/ruby/pull/15213) for exposing
   `rb_process_status_new` being merged. Hopefully this will happen in time for
   the Ruby 4.0 release.
+
+# 2025-11-26
+
+- Added some benchmarks for measuring mutex performance vs stock Ruby Mutex
+  class. It turns out the `UM#synchronize` was much slower than core Ruby
+  `Mutex#synchronize`. This was because the UM version was always performing a
+  futex wake before returning, even if no fiber was waiting to lock the mutex. I
+  rectified this by adding a `num_waiters` field to `struct um_mutex`, which
+  indicates the number of fibers currently waiting to lock the mutex, and
+  avoiding calling `um_futex_wake` if it's 0.
+- I also noticed that the `UM::Mutex` and `UM::Queue` classes were marked as
+  `RUBY_TYPED_EMBEDDABLE`, which means the underlying `struct um_mutex` and
+  `struct um_queue` were subject to moving. Obviously, you cannot just move a
+  futex var while the kernel is potentially waiting on it to change. I fixed
+  this by removing the `RUBY_TYPED_EMBEDDABLE` flag. This is a possible
+  explanation for the segfaults I've been seeing in Syntropy when doing lots of
+  cancelled `UM#shift` ops (watching for file changes).
+  
