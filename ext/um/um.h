@@ -177,9 +177,11 @@ struct um_write_buffer {
 };
 
 extern VALUE cUM;
+extern VALUE eUMError;
 extern VALUE cMutex;
 extern VALUE cQueue;
 extern VALUE cAsyncOp;
+extern VALUE eStreamRESPError;
 
 struct um *um_get_machine(VALUE self);
 void um_setup(VALUE self, struct um *machine);
@@ -286,6 +288,8 @@ VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen);
 VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
+
+__attribute__((noreturn)) void um_raise_internal_error(const char *msg);
 
 void write_buffer_init(struct um_write_buffer *buf, VALUE str);
 void write_buffer_update_len(struct um_write_buffer *buf);

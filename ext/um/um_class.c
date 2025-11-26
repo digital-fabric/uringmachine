@@ -3,6 +3,7 @@
 #include <ruby/io.h>
 
 VALUE cUM;
+VALUE eUMError;
 
 static ID id_fileno;
 
@@ -46,7 +47,7 @@ static VALUE UM_allocate(VALUE klass) {
 inline struct um *um_get_machine(VALUE self) {
   struct um *um;
   TypedData_Get_Struct(self, struct um, &UringMachine_type, um);
-  if (!um->ring_initialized) rb_raise(rb_eRuntimeError, "Machine not initialized");
+  if (!um->ring_initialized) um_raise_internal_error("Machine not initialized");
 
   return um;
 }
@@ -119,7 +120,7 @@ VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
   struct um *machine = um_get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
 #else
-  rb_raise(rb_eRuntimeError, "Not supported by kernel");
+  um_raise_internal_error("Not supported by kernel");
 #endif
 }
 
@@ -453,6 +454,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
   #endif
+
+  eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 
   um_define_net_constants(cUM);
 

@@ -28,7 +28,7 @@ inline struct um_buffer *um_buffer_checkout(struct um *machine, int len) {
 
     buffer->len = buffer_size(len);
     if (posix_memalign(&buffer->ptr, 4096, buffer->len))
-      rb_raise(rb_eRuntimeError, "Failed to allocate buffer");
+      um_raise_internal_error("Failed to allocate buffer");
   }
   return buffer;
 }

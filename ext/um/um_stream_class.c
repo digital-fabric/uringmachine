@@ -1,6 +1,7 @@
 #include "um.h"
 
 VALUE cStream;
+VALUE eStreamRESPError;
 
 static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
@@ -94,4 +95,6 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
+
+  eStreamRESPError = rb_define_class_under(cStream, "RESPError", rb_eStandardError);
 }

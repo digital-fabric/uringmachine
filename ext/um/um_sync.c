@@ -242,9 +242,9 @@ VALUE um_queue_remove_start(VALUE arg) {
   }
 
   if (ctx->queue->state != QUEUE_READY)
-    rb_raise(rb_eRuntimeError, "Internal error: queue should be in ready state!");
+    um_raise_internal_error("Internal error: queue should be in ready state!");
   if (!ctx->queue->tail)
-    rb_raise(rb_eRuntimeError, "Internal error: queue should be in ready state!");
+    um_raise_internal_error("Internal error: queue should be in ready state!");
 
   ctx->queue->count--;
   return (ctx->op == QUEUE_POP ? queue_remove_tail : queue_remove_head)(ctx->queue);

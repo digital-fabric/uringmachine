@@ -211,7 +211,7 @@ static inline VALUE resp_decode_simple_error(char *ptr, ulong len) {
   if (!ID_new) ID_new = rb_intern("new");
 
   VALUE msg = rb_str_new(ptr + 1, len - 1);
-  VALUE err = rb_funcall(rb_eRuntimeError, ID_new, 1, msg);
+  VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
@@ -221,7 +221,7 @@ static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer
   if (!ID_new) ID_new = rb_intern("new");
 
   VALUE msg = resp_decode_string(stream, out_buffer, len);
-  VALUE err = rb_funcall(rb_eRuntimeError, ID_new, 1, msg);
+  VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
@@ -264,7 +264,7 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
     case ':': // integer
       return resp_decode_integer(ptr);
     case '(': // big integer
-      rb_raise(rb_eRuntimeError, "Big integers are not supported");
+      um_raise_internal_error("Big integers are not supported");
     case ',': // float
       return resp_decode_float(ptr);
 
@@ -274,7 +274,7 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
       data_len = resp_parse_length_field(ptr, len);
       return resp_decode_error(stream, out_buffer, data_len);
     default:
-      rb_raise(rb_eRuntimeError, "Invalid character encountered");
+      um_raise_internal_error("Invalid character encountered");
   }
 
   RB_GC_GUARD(msg);
@@ -390,6 +390,6 @@ void resp_encode(struct um_write_buffer *buf, VALUE obj) {
         return;
       }
     default:
-      rb_raise(rb_eRuntimeError, "Can't encode object");
+      um_raise_internal_error("Can't encode object");
   }
 }

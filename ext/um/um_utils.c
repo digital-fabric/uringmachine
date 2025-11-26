@@ -61,7 +61,7 @@ inline void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs) {
     return base + ofs;
   }
   else
-    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
+    um_raise_internal_error("Invalid buffer provided");
 }
 
 static inline void adjust_read_buffer_len(VALUE buffer, int result, ssize_t ofs) {
@@ -91,12 +91,12 @@ inline void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, siz
   else if (IO_BUFFER_P(buffer))
     rb_io_buffer_get_bytes_for_reading(buffer, base, size); // reading *from* buffer
   else
-    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
+    um_raise_internal_error("Invalid buffer provided");
 }
 
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
   if (machine->buffer_ring_count == BUFFER_RING_MAX_COUNT)
-    rb_raise(rb_eRuntimeError, "Cannot setup more than BUFFER_RING_MAX_COUNT buffer rings");
+    um_raise_internal_error("Cannot setup more than BUFFER_RING_MAX_COUNT buffer rings");
 
   struct buf_ring_descriptor *desc = machine->buffer_rings + machine->buffer_ring_count;
   desc->buf_count = count;
@@ -108,7 +108,7 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
     NULL, desc->br_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0
   );
   if (mapped == MAP_FAILED)
-    rb_raise(rb_eRuntimeError, "Failed to allocate buffer ring");
+    um_raise_internal_error("Failed to allocate buffer ring");
 
   desc->br = (struct io_uring_buf_ring *)mapped;
   io_uring_buf_ring_init(desc->br);
@@ -124,7 +124,7 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
   if (size > 0) {
     if (posix_memalign(&desc->buf_base, 4096, desc->buf_count * desc->buf_size)) {
       io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, bg_id);
-      rb_raise(rb_eRuntimeError, "Failed to allocate buffers");
+      um_raise_internal_error("Failed to allocate buffers");
     }
 
     void *ptr = desc->buf_base;
@@ -178,4 +178,8 @@ inline void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE st
   }
   RB_GC_GUARD(converted);
   io_uring_buf_ring_advance(desc->br, count);
+}
+
+inline void um_raise_internal_error(const char *msg) {
+  rb_raise(eUMError, "UringMachine error: %s", msg);
 }

@@ -52,7 +52,7 @@ void um_async_op_set(VALUE self, struct um *machine, struct um_op *op) {
 
 inline void raise_on_missing_op(struct um_async_op *async_op) {
   if (!async_op->op)
-    rb_raise(rb_eRuntimeError, "Missing op");
+    um_raise_internal_error("Missing op");
 }
 
 inline int async_op_is_done(struct um_async_op *async_op) {
@@ -67,7 +67,7 @@ VALUE AsyncOp_kind(VALUE self) {
     case OP_TIMEOUT:
       return SYM_timeout;
     default:
-      rb_raise(rb_eRuntimeError, "Invalid op kind");
+      um_raise_internal_error("Invalid op kind");
   }
 }
 

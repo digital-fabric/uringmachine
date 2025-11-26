@@ -460,7 +460,7 @@ class ReadTest < UMBaseTest
 
   def test_read_invalid_buffer
     r, w = UM.pipe
-    assert_raises(RuntimeError) {
+    assert_raises(UM::Error) {
       machine.read(r, [])
     }
   end
@@ -675,7 +675,7 @@ def test_write_io_buffer
 
   def test_write_invalid_buffer
     r, w = UM.pipe
-    assert_raises(RuntimeError) {
+    assert_raises(UM::Error) {
       machine.write(w, [])
     }
   end
@@ -739,7 +739,7 @@ class WriteAsyncTest < UMBaseTest
   def test_write_async_invalid_buffer
     r, w = UM.pipe
 
-    assert_raises(RuntimeError) { machine.write_async(w, []) }
+    assert_raises(UM::Error) { machine.write_async(w, []) }
   end
 end
 
@@ -1085,7 +1085,7 @@ class SendTest < UMBaseTest
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
-    assert_raises(RuntimeError) { machine.send(fd, [], -1, 0) }
+    assert_raises(UM::Error) { machine.send(fd, [], -1, 0) }
   ensure
     t&.kill
   end

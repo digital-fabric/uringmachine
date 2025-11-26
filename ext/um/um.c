@@ -43,7 +43,7 @@ inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
 
-  rb_raise(rb_eRuntimeError, "Failed to get SQE");
+  um_raise_internal_error("Failed to get SQE");
 
   // TODO: retry getting SQE?
 
