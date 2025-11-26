@@ -116,12 +116,8 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
 }
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
-#ifdef HAVE_IO_URING_PREP_READ_MULTISHOT
   struct um *machine = um_get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
-#else
-  um_raise_internal_error("Not supported by kernel");
-#endif
 }
 
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
@@ -274,8 +270,6 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
 }
 
-#ifdef HAVE_IO_URING_PREP_FUTEX
-
 VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
   struct um *machine = um_get_machine(self);
   struct um_mutex *mutex_data = Mutex_data(mutex);
@@ -305,8 +299,6 @@ VALUE UM_queue_shift(VALUE self, VALUE queue) {
   struct um_queue *que = Queue_data(queue);
   return um_queue_shift(machine, que);
 }
-
-#endif
 
 struct um_open_ctx {
   VALUE self;

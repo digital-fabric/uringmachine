@@ -595,7 +595,6 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   VALUE ret = Qnil;
   int value;
 
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_GETSOCKOPT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -604,13 +603,6 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
     ret = INT2NUM(value);
-#else
-  socklen_t nvalue = sizeof(value);
-  int res = getsockopt(fd, level, opt, &value, &nvalue);
-  if (res)
-    rb_syserr_fail(errno, strerror(errno));
-  ret = INT2NUM(value);
-#endif
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
@@ -620,7 +612,6 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   VALUE ret = Qnil;
 
-#ifdef HAVE_IO_URING_PREP_CMD_SOCK
   struct um_op op;
   um_prep_op(machine, &op, OP_SETSOCKOPT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -629,12 +620,6 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
-#else
-  int res = setsockopt(fd, level, opt, &value, sizeof(value));
-  if (res)
-    rb_syserr_fail(errno, strerror(errno));
-  ret = INT2NUM(0);
-#endif
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
