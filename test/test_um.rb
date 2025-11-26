@@ -419,6 +419,51 @@ class ReadTest < UMBaseTest
     assert_equal 3, result
     assert_equal 'baz', sio.read
   end
+
+  def test_read_io_buffer
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 3)
+    assert_equal 3, res
+    assert_equal 'foo', read_buffer.get_string(0, 3)
+
+    machine.close(w)
+
+    res = machine.read(r, read_buffer)
+    assert_equal 3, res
+    assert_equal 'bar', read_buffer.get_string(0, 3)
+  end
+
+  def test_read_io_buffer_resize
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+    machine.close(w)
+
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 6)
+    assert_equal 6, res
+    assert_equal 6, read_buffer.size
+    assert_equal 'foobar', read_buffer.get_string(0, res)
+
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+    machine.close(w)
+
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 128, -1)
+    assert_equal 6, res
+    assert_equal 131, read_buffer.size
+    assert_equal 'foobar', read_buffer.get_string(3, res)
+  end
+
+  def test_read_invalid_buffer
+    r, w = UM.pipe
+    assert_raises(RuntimeError) {
+      machine.read(r, [])
+    }
+  end
 end
 
 class ReadEachTest < UMBaseTest
@@ -586,6 +631,54 @@ class WriteTest < UMBaseTest
     end
     assert_equal 0, machine.pending_count
   end
+
+def test_write_io_buffer
+    r, w = UM.pipe
+
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg, 0)
+
+    machine.write(w, write_buffer)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal msg, str
+  end
+
+  def test_write_io_buffer_with_len
+    r, w = UM.pipe
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg)
+
+    machine.write(w, write_buffer, 5)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal 'Hello', str
+
+    r, w = UM.pipe
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg)
+
+    machine.write(w, write_buffer, -1)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal 'Hello world', str
+  end
+
+  def test_write_invalid_buffer
+    r, w = UM.pipe
+    assert_raises(RuntimeError) {
+      machine.write(w, [])
+    }
+  end
 end
 
 class WriteAsyncTest < UMBaseTest
@@ -625,6 +718,28 @@ class WriteAsyncTest < UMBaseTest
     assert_equal 1, machine.pending_count
     machine.snooze
     assert_equal 0, machine.pending_count
+  end
+
+  def test_write_async_io_buffer
+    r, w = UM.pipe
+
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg)
+
+    machine.write_async(w, write_buffer)
+    3.times { machine.snooze }
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal msg, str
+  end
+
+  def test_write_async_invalid_buffer
+    r, w = UM.pipe
+
+    assert_raises(RuntimeError) { machine.write_async(w, []) }
   end
 end
 
@@ -902,6 +1017,78 @@ class SendTest < UMBaseTest
   ensure
     t&.kill
   end
+
+
+  def test_send_io_buffer
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buffer = IO::Buffer.new(6)
+    buffer.set_string('foobar')
+    res = machine.send(fd, buffer, 6, 0)
+    assert_equal 6, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 20, res
+    assert_equal 'You said: foobar (6)', buf
+  ensure
+    t&.kill
+    @server&.close
+  end
+
+  def test_send_io_buffer_negative_len
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buffer = IO::Buffer.new(6)
+    buffer.set_string('foobar')
+    res = machine.send(fd, buffer, -1, 0)
+    assert_equal 6, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 20, res
+    assert_equal 'You said: foobar (6)', buf
+  ensure
+    t&.kill
+  end
+
+  def test_send_invalid_buffer
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    assert_raises(RuntimeError) { machine.send(fd, [], -1, 0) }
+  ensure
+    t&.kill
+  end
 end
 
 class RecvTest < UMBaseTest
@@ -931,6 +1118,25 @@ class RecvTest < UMBaseTest
     res = machine.recv(fd, buf, 42, 0)
     assert_equal 6, res
     assert_equal 'foobar', buf
+  ensure
+    t&.kill
+  end
+
+  def test_recv_io_buffer
+    t = Thread.new do
+      conn = @server.accept
+      conn.write('foobar')
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buf = IO::Buffer.new(12)
+    res = machine.recv(fd, buf, 12, 0)
+    assert_equal 6, res
+    assert_equal 'foobar', buf.get_string(0, 6)
   ensure
     t&.kill
   end
@@ -1608,218 +1814,4 @@ class NonBlockTest < UMBaseTest
     UM.io_set_nonblock(r, true)
     assert_equal true, UM.io_nonblock?(r)
   end
-end
-
-class IOBufferTest < UMBaseTest
-  def test_write_io_buffer
-    r, w = UM.pipe
-
-    msg = 'Hello world'
-    write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg, 0)
-
-    machine.write(w, write_buffer)
-    machine.close(w)
-
-    str = +''
-    machine.read(r, str, 8192)
-    assert_equal msg, str
-  end
-
-  def test_write_io_buffer_with_len
-    r, w = UM.pipe
-    msg = 'Hello world'
-    write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg)
-
-    machine.write(w, write_buffer, 5)
-    machine.close(w)
-
-    str = +''
-    machine.read(r, str, 8192)
-    assert_equal 'Hello', str
-
-    r, w = UM.pipe
-    msg = 'Hello world'
-    write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg)
-
-    machine.write(w, write_buffer, -1)
-    machine.close(w)
-
-    str = +''
-    machine.read(r, str, 8192)
-    assert_equal 'Hello world', str
-  end
-
-  def test_write_async_io_buffer
-    r, w = UM.pipe
-
-    msg = 'Hello world'
-    write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg)
-
-    machine.write_async(w, write_buffer)
-    3.times { machine.snooze }
-    machine.close(w)
-
-    str = +''
-    machine.read(r, str, 8192)
-    assert_equal msg, str
-  end
-
-  def test_write_invalid_buffer
-    r, w = UM.pipe
-    assert_raises(RuntimeError) {
-      machine.write(w, [])
-    }
-  end
-
-  def test_read_io_buffer
-    r, w = UM.pipe
-    machine.write(w, 'foobar')
-
-    read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 3)
-    assert_equal 3, res
-    assert_equal 'foo', read_buffer.get_string(0, 3)
-
-    machine.close(w)
-
-    res = machine.read(r, read_buffer)
-    assert_equal 3, res
-    assert_equal 'bar', read_buffer.get_string(0, 3)
-  end
-
-  def test_read_io_buffer_resize
-    r, w = UM.pipe
-    machine.write(w, 'foobar')
-    machine.close(w)
-
-    read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 6)
-    assert_equal 6, res
-    assert_equal 6, read_buffer.size
-    assert_equal 'foobar', read_buffer.get_string(0, res)
-
-    r, w = UM.pipe
-    machine.write(w, 'foobar')
-    machine.close(w)
-
-    read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 128, -1)
-    assert_equal 6, res
-    assert_equal 131, read_buffer.size
-    assert_equal 'foobar', read_buffer.get_string(3, res)
-  end
-
-  def test_read_invalid_buffer
-    r, w = UM.pipe
-    assert_raises(RuntimeError) {
-      machine.read(r, [])
-    }
-  end
-
-  def test_send_io_buffer
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
-
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    buffer = IO::Buffer.new(6)
-    buffer.set_string('foobar')
-    res = machine.send(fd, buffer, 6, 0)
-    assert_equal 6, res
-
-    buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 20, res
-    assert_equal 'You said: foobar (6)', buf
-  ensure
-    t&.kill
-    @server&.close
-  end
-
-  def test_send_io_buffer_negative_len
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
-
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    buffer = IO::Buffer.new(6)
-    buffer.set_string('foobar')
-    res = machine.send(fd, buffer, -1, 0)
-    assert_equal 6, res
-
-    buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 20, res
-    assert_equal 'You said: foobar (6)', buf
-  ensure
-    t&.kill
-    @server&.close
-  end
-
-  def test_send_invalid_buffer
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
-
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    assert_raises(RuntimeError) { machine.send(fd, [], -1, 0) }
-  ensure
-    t&.kill
-    @server&.close
-  end
-
-  def test_recv_io_buffer
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
-
-    t = Thread.new do
-      conn = @server.accept
-      conn.write('foobar')
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    buf = IO::Buffer.new(12)
-    res = machine.recv(fd, buf, 12, 0)
-    assert_equal 6, res
-    assert_equal 'foobar', buf.get_string(0, 6)
-  ensure
-    t&.kill
-    @server&.close
-  end
-
 end
