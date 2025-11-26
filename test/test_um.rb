@@ -1798,4 +1798,28 @@ class IOBufferTest < UMBaseTest
     t&.kill
     @server&.close
   end
+
+  def test_recv_io_buffer
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+
+    t = Thread.new do
+      conn = @server.accept
+      conn.write('foobar')
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buf = IO::Buffer.new(12)
+    res = machine.recv(fd, buf, 12, 0)
+    assert_equal 6, res
+    assert_equal 'foobar', buf.get_string(0, 6)
+  ensure
+    t&.kill
+    @server&.close
+  end
+
 end

@@ -234,7 +234,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_periodically(struct um *machine, double interval);
-VALUE um_read(struct um *machine, int fd, VALUE buffer, ssize_t maxlen, ssize_t buffer_offset);
+VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset);
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len);
@@ -252,7 +252,7 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags);
 VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings);
-VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags);
+VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags);
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags);
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);
 VALUE um_listen(struct um *machine, int fd, int backlog);

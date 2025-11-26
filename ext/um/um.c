@@ -353,7 +353,7 @@ VALUE um_sleep(struct um *machine, double duration) {
   return ret;
 }
 
-VALUE um_read(struct um *machine, int fd, VALUE buffer, ssize_t maxlen, ssize_t buffer_offset) {
+VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset) {
   struct um_op op;
   um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -366,7 +366,6 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, ssize_t maxlen, ssize_t 
     ret = INT2NUM(op.result.res);
 
   }
-  RB_GC_GUARD(buffer);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
@@ -518,8 +517,6 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
-  RB_GC_GUARD(buffer);
-
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
@@ -545,11 +542,12 @@ VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
   return ret;
 }
 
-VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
+VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags) {
   struct um_op op;
   um_prep_op(machine, &op, OP_RECV, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
+  
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
 
   VALUE ret = um_fiber_switch(machine);
@@ -557,8 +555,6 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, int maxlen, int flags) {
     um_update_read_buffer(machine, buffer, 0, op.result.res, op.result.flags);
     ret = INT2NUM(op.result.res);
   }
-
-  RB_GC_GUARD(buffer);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
