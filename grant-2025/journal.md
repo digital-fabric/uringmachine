@@ -169,11 +169,40 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   rectified this by adding a `num_waiters` field to `struct um_mutex`, which
   indicates the number of fibers currently waiting to lock the mutex, and
   avoiding calling `um_futex_wake` if it's 0.
+
 - I also noticed that the `UM::Mutex` and `UM::Queue` classes were marked as
   `RUBY_TYPED_EMBEDDABLE`, which means the underlying `struct um_mutex` and
   `struct um_queue` were subject to moving. Obviously, you cannot just move a
   futex var while the kernel is potentially waiting on it to change. I fixed
   this by removing the `RUBY_TYPED_EMBEDDABLE` flag. This is a possible
-  explanation for the segfaults I've been seeing in Syntropy when doing lots of
-  cancelled `UM#shift` ops (watching for file changes).
-  
+  explanation for the occasional segfaults I've been seeing in Syntropy when
+  doing lots of cancelled `UM#shift` ops (watching for file changes). (commit 3b013407ff94f8849517b0fca19839d37e046915)
+ 
+- Added support for `IO::Buffer` in all low-level I/O APIs, which also means the
+  fiber scheduler doesn't need to convert from `IO::Buffer` to strings in order
+  to invoke the UringMachine API. (commits
+  620680d9f80b6b46cb6037a6833d9cde5a861bcd,
+  16d2008dd052e9d73df0495c16d11f52bee4fd15,
+  4b2634d018fdbc52d63eafe6b0a102c0e409ebca,
+  bc9939f25509c0432a3409efd67ff73f0b316c61,
+  a9f38d9320baac3eeaf2fcb2143294ab8d115fe9)
+
+- Added a custom `UM::Error` exception class raised on bad arguments or other
+  API misuse. I've also added a `UM::Stream::RESPError` exception class to be
+  instantiated on RESP errors. (commit 72a597d9f47d36b42977efa0f6ceb2e73a072bdf)
+
+- I explored the fiber scheduler behaviour after forking. A fork done from a
+  thread where a scheduler was set will result in a main thread with the same
+  scheduler instantance. For the scheduler to work correctly after a fork, its
+  state must be reset. This is because sharing the same io_uring instance
+  between parent and child processes is not possible
+  (https://github.com/axboe/liburing/issues/612), and also because the child
+  process keeps only the fiber from which the fork was made as its main fiber
+  (the other fibers are lost).
+
+  So, the right thing to do here would be to add a `Fiber::Scheduler` hook that
+  will be invoked automatically by Ruby after a fork, and together with Samuel
+  I'll see if I can prepare a PR for that to be merged for the Ruby 4.0 release.
+
+  For the time being, I've added a `#post_fork` method to the UM fiber scheduler
+  which should be manually called after a fork. (commit 2c7877385869c6acbdd8354e2b2909cff448651b)

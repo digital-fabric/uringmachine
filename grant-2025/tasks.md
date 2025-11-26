@@ -6,21 +6,21 @@
     - https://github.com/digital-fabric/uringmachine/blob/d5505d7fd94b800c848d186e17585e03ad9af6f2/ext/um/um.c#L697-L713
 
 - [ ] UringMachine
-  - [ ] Add support for IO::Buffer in UM API. (How can we detect an IO::Buffer object?)
+  - [v] Add support for IO::Buffer in UM API. (How can we detect an IO::Buffer object?)
         https://docs.ruby-lang.org/capi/en/master/d8/d36/group__object.html#gab1b70414d07e7de585f47ee50a64a86c
 
-  - [ ] Add `UM::Error` class to be used instead of RuntimeError
-        
-  - [ ] Add support for using IO::Buffer in association with io_uring registered buffers / buffer rings
+  - [v] Add `UM::Error` class to be used instead of RuntimeError
+
   - [ ] Do batch allocation for `struct um_op`, so they'll be adjacent
   - [ ] Add optional buffer depth argument to `UM.new` (for example, a the
     worker thread for the scheduler `blocking_operation_wait` hook does not need
     a lot of depth, so you can basically do `UM.new(4)`)
-  - [ ] Add test for mutex usage after fork
+
+  - [ ] Add support for using IO::Buffer in association with io_uring registered buffers / buffer rings
 
 - [ ] FiberScheduler implementation
-
-  - [ ] Check how scheduler interacts with `fork`.
+4
+  - [v] Check how scheduler interacts with `fork`.
   - [ ] Implement `process_wait` (with `rb_process_status_new`)
   - [ ] Implement timeouts (how do timeouts interact with blocking ops?)
   - [ ] Implement address resolution hook
