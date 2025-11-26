@@ -8,6 +8,8 @@
 - [ ] UringMachine
   - [ ] Add support for IO::Buffer in UM API. (How can we detect an IO::Buffer object?)
         https://docs.ruby-lang.org/capi/en/master/d8/d36/group__object.html#gab1b70414d07e7de585f47ee50a64a86c
+
+  - [ ] Add `UM::Error` class to be used instead of RuntimeError
         
   - [ ] Add support for using IO::Buffer in association with io_uring registered buffers / buffer rings
   - [ ] Do batch allocation for `struct um_op`, so they'll be adjacent

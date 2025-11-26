@@ -398,7 +398,7 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
   const void *base;
   size_t size;
   um_get_buffer_bytes_for_writing(buffer, &base, &size);
-  if ((len == (size_t)-1) && (len > size)) len = size;
+  if ((len == (size_t)-1) || (len > size)) len = size;
 
   io_uring_prep_write(sqe, fd, base, len, -1);
 
@@ -502,11 +502,17 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   return ret;
 }
 
-VALUE um_send(struct um *machine, int fd, VALUE buffer, int len, int flags) {
+VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
   struct um_op op;
   um_prep_op(machine, &op, OP_SEND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-  io_uring_prep_send(sqe, fd, RSTRING_PTR(buffer), len, flags);
+
+  const void *base;
+  size_t size;
+  um_get_buffer_bytes_for_writing(buffer, &base, &size);
+  if ((len == (size_t)-1) || (len > size)) len = size;
+
+  io_uring_prep_send(sqe, fd, base, len, flags);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))

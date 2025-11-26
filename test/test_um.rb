@@ -327,7 +327,7 @@ class PeriodicallyTest < UMBaseTest
     rescue Cancel
       cancel = 1
     end
-    10.times { machine.snooze }
+    20.times { machine.snooze }
     assert_equal 0, machine.pending_count
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
@@ -1628,10 +1628,9 @@ class IOBufferTest < UMBaseTest
 
   def test_write_io_buffer_with_len
     r, w = UM.pipe
-
     msg = 'Hello world'
     write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg, 0)
+    write_buffer.set_string(msg)
 
     machine.write(w, write_buffer, 5)
     machine.close(w)
@@ -1639,6 +1638,18 @@ class IOBufferTest < UMBaseTest
     str = +''
     machine.read(r, str, 8192)
     assert_equal 'Hello', str
+
+    r, w = UM.pipe
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg)
+
+    machine.write(w, write_buffer, -1)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal 'Hello world', str
   end
 
   def test_write_async_io_buffer
@@ -1646,7 +1657,7 @@ class IOBufferTest < UMBaseTest
 
     msg = 'Hello world'
     write_buffer = IO::Buffer.new(msg.bytesize)
-    write_buffer.set_string(msg, 0)
+    write_buffer.set_string(msg)
 
     machine.write_async(w, write_buffer)
     3.times { machine.snooze }
@@ -1707,5 +1718,84 @@ class IOBufferTest < UMBaseTest
     assert_raises(RuntimeError) {
       machine.read(r, [])
     }
+  end
+
+  def test_send_io_buffer
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buffer = IO::Buffer.new(6)
+    buffer.set_string('foobar')
+    res = machine.send(fd, buffer, 6, 0)
+    assert_equal 6, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 20, res
+    assert_equal 'You said: foobar (6)', buf
+  ensure
+    t&.kill
+    @server&.close
+  end
+
+  def test_send_io_buffer_negative_len
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    buffer = IO::Buffer.new(6)
+    buffer.set_string('foobar')
+    res = machine.send(fd, buffer, -1, 0)
+    assert_equal 6, res
+
+    buf = +''
+    res = machine.read(fd, buf, 42)
+    assert_equal 20, res
+    assert_equal 'You said: foobar (6)', buf
+  ensure
+    t&.kill
+    @server&.close
+  end
+
+  def test_send_invalid_buffer
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+
+    t = Thread.new do
+      conn = @server.accept
+      str = conn.readpartial(42)
+      conn.write("You said: #{str} (#{str.bytesize})")
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    assert_raises(RuntimeError) { machine.send(fd, [], -1, 0) }
+  ensure
+    t&.kill
+    @server&.close
   end
 end
