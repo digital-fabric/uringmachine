@@ -1,4 +1,15 @@
-# 0.19.1 2025-01-03
+# 0.20.0 2025-11-26
+
+- Add `UM.pidfd_open`, `UM.pidfd_send_signal` methods
+- Add `#waitid`, `#waitid_status` methods, remove `#waitpid`
+- Set minimal kernel version to 6.7
+- Add `UM::Error` exception class
+- Add support for `IO::Buffer` in all I/O methods
+- Fix and improve mutex and queue implementations
+- Add UM.debug method
+- Implement Fiber scheduler (WIP)
+
+# 0.19.1 2025-11-03
 
 - Add `RB_GC_GUARD` in `process_runqueue_op`
 
