@@ -5,7 +5,7 @@ class UringMachine
   # creating fiber-based concurrent applications in Ruby, in tight integration
   # with the standard Ruby I/O and locking APIs.
   class FiberScheduler
-    attr_reader :fiber_map
+    attr_reader :machine, :fiber_map
 
     # Instantiates a scheduler with the given UringMachine instance.
     #
@@ -13,12 +13,27 @@ class UringMachine
     #     scheduler = UM::FiberScheduler.new(machine)
     #     Fiber.set_scheduler(scheduler)
     #
-    # @param machine [UringMachine] associated UringMachine instance
+    # @param machine [UringMachine, nil] UringMachine instance
     # @return [void]
-    def initialize(machine)
-      @machine = machine
+    def initialize(machine = nil)
+      @machine = machine || UM.new
       @ios = ObjectSpace::WeakMap.new
       @fiber_map = ObjectSpace::WeakMap.new
+    end
+
+    def instance_variables_to_inspect
+      [:@machine]
+    end
+
+    # Should be called after a fork (eventually, we'll want Ruby to call this
+    # automatically after a fork).
+    #
+    # @return [self]
+    def post_fork
+      @machine = UM.new
+      @ios = ObjectSpace::WeakMap.new
+      @fiber_map = ObjectSpace::WeakMap.new
+      self
     end
 
     # For debugging purposes

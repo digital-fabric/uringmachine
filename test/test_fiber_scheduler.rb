@@ -15,6 +15,21 @@ class FiberSchedulerTest < UMBaseTest
     GC.start
   end
 
+  def test_fiber_scheduler_initialize_without_machine
+    s = UM::FiberScheduler.new
+    assert_kind_of UringMachine, s.machine
+  end
+
+  def test_fiber_scheduler_post_fork
+    f1 = Fiber.schedule {}
+    assert_equal 1, @scheduler.fiber_map.size
+    
+    machine_before = @scheduler.machine
+    @scheduler.post_fork
+    refute_equal machine_before, @scheduler.machine
+    assert_equal 0, @scheduler.fiber_map.size
+  end
+
   def test_fiber_scheduler_spinning
     f1 = Fiber.schedule do
       sleep 0.001
