@@ -1591,13 +1591,81 @@ class PollTest < UMBaseTest
   end
 end
 
-class WaitTest < UMBaseTest
-  def test_waitpid
-    skip if UM.kernel_version < 607
+class WaitidTest < UMBaseTest
+  def test_waitid
+    msg = 'hello from child'
+    _rfd, wfd = UM.pipe
+    child_pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    pid, status = machine.waitid(UM::P_PID, child_pid, UM::WEXITED)
+    assert_equal child_pid, pid
+    assert_equal 42, status
+  ensure
+    Process.wait(child_pid) rescue nil
+  end
+
+  def test_waitid_invalid_pid
+    assert_raises(Errno::ECHILD) {
+      machine.waitid(UM::P_PID, Process.pid + 1, UM::WEXITED)
+    }
+  end
+
+  def test_waitid_invalid_idtype
+    assert_raises(Errno::EINVAL) {
+      machine.waitid(1234, 0, UM::WEXITED)
+    }
+  end
+
+  def test_waitid_invalid_options
+    assert_raises(Errno::EINVAL) {
+      machine.waitid(P_ALL, 0, 1234)
+    }
+  end
+
+  def test_waitid_P_ALL
+    msg = 'hello from child'
+    _rfd, wfd = UM.pipe
+    child_pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    pid, status = machine.waitid(UM::P_ALL, 0, UM::WEXITED)
+    assert_equal child_pid, pid
+    assert_equal 42, status
+  ensure
+    Process.wait(child_pid) rescue nil
+  end
+
+  def test_waitid_P_PGID
+    msg = 'hello from child'
+    _rfd, wfd = UM.pipe
+    child_pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    pid, status = machine.waitid(UM::P_PGID, Process.getpgrp, UM::WEXITED)
+    assert_equal child_pid, pid
+    assert_equal 42, status
+  ensure
+    Process.wait(child_pid) rescue nil
+  end
+
+  def test_waitid_status
+    skip if !machine.respond_to?(:waitid_status)
 
     msg = 'hello from child'
-
-    rfd, wfd = UM.pipe
+    _rfd, wfd = UM.pipe
     pid = fork do
       m = UM.new
       m.write(wfd, msg)
@@ -1605,24 +1673,43 @@ class WaitTest < UMBaseTest
       exit 42
     end
 
-    ret = machine.waitpid(pid, UM::WEXITED)
-    assert_kind_of Array, ret
-    assert_equal [pid, 42], ret
-
-    buf = +''
-    ret = machine.read(rfd, buf, 8192)
-    assert_equal msg.bytesize, ret
-    assert_equal msg, buf
+    status = machine.waitid_status(UM::P_PID, pid, UM::WEXITED)
+    assert_kind_of Process::Status, status
+    assert_equal pid, status.pid
+    assert_equal 42, status.exitstatus
   ensure
-    Process.wait(pid) rescue Errno::ECHILD
+    Process.wait(pid) rescue nil
   end
 
-  def test_waitpid_any
-    skip if UM.kernel_version < 607
+  def test_waitid_status_invalid_pid
+    skip if !machine.respond_to?(:waitid_status)
+
+    assert_raises(Errno::ECHILD) {
+      machine.waitid_status(UM::P_PID, Process.pid + 1, UM::WEXITED)
+    }
+  end
+
+  def test_waitid_status_invalid_idtype
+    skip if !machine.respond_to?(:waitid_status)
+
+    assert_raises(Errno::EINVAL) {
+      machine.waitid_status(1234, 0, UM::WEXITED)
+    }
+  end
+
+  def test_waitid_status_invalid_options
+    skip if !machine.respond_to?(:waitid_status)
+
+    assert_raises(Errno::EINVAL) {
+      machine.waitid_status(P_ALL, 0, 1234)
+    }
+  end
+
+  def test_waitid_status_P_ALL
+    skip if !machine.respond_to?(:waitid_status)
 
     msg = 'hello from child'
-
-    rfd, wfd = UM.pipe
+    _rfd, wfd = UM.pipe
     pid = fork do
       m = UM.new
       m.write(wfd, msg)
@@ -1630,23 +1717,32 @@ class WaitTest < UMBaseTest
       exit 42
     end
 
-    ret = machine.waitpid(0, UM::WEXITED)
-    assert_kind_of Array, ret
-    assert_equal [pid, 42], ret
-
-    buf = +''
-    ret = machine.read(rfd, buf, 8192)
-    assert_equal msg.bytesize, ret
-    assert_equal msg, buf
-
+    status = machine.waitid_status(UM::P_ALL, 0, UM::WEXITED)
+    assert_kind_of Process::Status, status
+    assert_equal pid, status.pid
+    assert_equal 42, status.exitstatus
   ensure
-    Process.wait(pid) rescue Errno::ECHILD
+    Process.wait(pid) rescue nil
   end
 
-  def test_waitpid_bad_pid
-    skip if UM.kernel_version < 607
+  def test_waitid_status_P_PGID
+    skip if !machine.respond_to?(:waitid_status)
 
-    assert_raises(Errno::ECHILD) { machine.waitpid(1, UM::WEXITED) }
+    msg = 'hello from child'
+    _rfd, wfd = UM.pipe
+    pid = fork do
+      m = UM.new
+      m.write(wfd, msg)
+      m.close(wfd)
+      exit 42
+    end
+
+    status = machine.waitid_status(UM::P_PGID, Process.getpgrp, UM::WEXITED)
+    assert_kind_of Process::Status, status
+    assert_equal pid, status.pid
+    assert_equal 42, status.exitstatus
+  ensure
+    Process.wait(pid) rescue nil
   end
 end
 
@@ -1734,7 +1830,7 @@ class ForkTest < UMBaseTest
     assert_equal 3, ret
     assert_equal 'foo', buf
   ensure
-    Process.wait(child_pid) rescue Errno::ECHILD
+    Process.wait(child_pid) rescue nil
   end
 end
 

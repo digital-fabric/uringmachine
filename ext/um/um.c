@@ -686,13 +686,13 @@ VALUE um_poll(struct um *machine, int fd, unsigned mask) {
   return ret;
 }
 
-VALUE um_waitpid(struct um *machine, int pid, int options) {
+VALUE um_waitid(struct um *machine, int idtype, int id, int options) {
   struct um_op op;
-  um_prep_op(machine, &op, OP_WAITPID, 0);
+  um_prep_op(machine, &op, OP_WAITID, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   siginfo_t infop;
-  io_uring_prep_waitid(sqe, pid == 0 ? P_ALL : P_PID, pid, &infop, options, 0);
+  io_uring_prep_waitid(sqe, idtype, id, &infop, options, 0);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
@@ -701,7 +701,31 @@ VALUE um_waitpid(struct um *machine, int pid, int options) {
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
 
-  return rb_ary_new_from_args(2, INT2NUM(infop.si_pid), INT2NUM(infop.si_status));
+  return rb_ary_new_from_args(
+    3, INT2NUM(infop.si_pid), INT2NUM(infop.si_status), INT2NUM(infop.si_code)
+  );
+}
+
+VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
+#ifdef HAVE_RB_PROCESS_STATUS_NEW
+  struct um_op op;
+  um_prep_op(machine, &op, OP_WAITID, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+  siginfo_t infop;
+  io_uring_prep_waitid(sqe, idtype, id, &infop, options | WNOWAIT, 0);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+
+  return rb_process_status_new(infop.si_pid, (infop.si_status & 0xff) << 8, 0);
+#else
+  rb_raise(rb_eNotImplementedError, "Missing rb_process_status_new");
+#endif
 }
 
 #define hash_set(h, sym, v) rb_hash_aset(h, ID2SYM(rb_intern(sym)), v)

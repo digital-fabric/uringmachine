@@ -206,3 +206,10 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 
   For the time being, I've added a `#post_fork` method to the UM fiber scheduler
   which should be manually called after a fork. (commit 2c7877385869c6acbdd8354e2b2909cff448651b)
+
+- Added two new low-level APIs for waiting on processes, instead of
+  `UM#waitpid`, using the io_uring version of `waitid`. The vanilla version
+  `UM#waitid` returns an array containing the terminated process pid, exit
+  status and code. The `UM#waitpid_status` method returns a `Process::Status`
+  with the pid and exit status. This method is present only if the
+  `rb_process_status_new` function is available (see above).

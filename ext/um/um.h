@@ -50,7 +50,7 @@ enum op_kind {
   OP_SHUTDOWN_ASYNC,
 
   OP_POLL,
-  OP_WAITPID,
+  OP_WAITID,
 
   OP_FUTEX_WAIT,
   OP_FUTEX_WAKE,
@@ -245,7 +245,8 @@ VALUE um_close(struct um *machine, int fd);
 VALUE um_close_async(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_poll(struct um *machine, int fd, unsigned mask);
-VALUE um_waitpid(struct um *machine, int pid, int options);
+VALUE um_waitid(struct um *machine, int idtype, int id, int options);
+VALUE um_waitid_status(struct um *machine, int idtype, int id, int options);
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
 
 VALUE um_accept(struct um *machine, int fd);
