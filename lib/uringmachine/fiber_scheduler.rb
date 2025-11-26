@@ -193,6 +193,13 @@ class UringMachine
       retry
     end
 
+    if UM.instance_methods.include?(:waitid_status)
+      def process_wait(pid, flags)
+        flags = UM::WEXITED if flags == 0
+        @machine.waitid_status(UM::P_PID, pid, flags)
+      end
+    end
+
     private
 
     # Ensures the given IO is in blocking mode.

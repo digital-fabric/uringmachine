@@ -21,7 +21,7 @@
 - [ ] FiberScheduler implementation
 4
   - [v] Check how scheduler interacts with `fork`.
-  - [ ] Implement `process_wait` (with `rb_process_status_new`)
+  - [v] Implement `process_wait` (with `rb_process_status_new`)
   - [ ] Implement timeouts (how do timeouts interact with blocking ops?)
   - [ ] Implement address resolution hook
   - [ ] Add tests:

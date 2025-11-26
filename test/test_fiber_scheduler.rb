@@ -98,17 +98,41 @@ class FiberSchedulerTest < UMBaseTest
     mutex = Mutex.new
     buffer = []
     t0 = monotonic_clock
-    f1 = Fiber.schedule do
+    Fiber.schedule do
       10.times { sleep 0.001; buffer << it }
     end
-    f2 = Fiber.schedule do
+    Fiber.schedule do
       mutex.synchronize { sleep(0.005) }
     end
-    f3 = Fiber.schedule do
+    Fiber.schedule do
       mutex.synchronize { sleep(0.005) }
     end
     @scheduler.join
     t1 = monotonic_clock
     assert_in_range 0.01..0.015, t1 - t0
+  end
+
+  def test_fiber_scheduler_process_wait
+    child_pid = nil
+    status = nil
+    f1 = Fiber.schedule do
+      child_pid = fork {
+        Fiber.scheduler.post_fork
+        Fiber.set_scheduler nil
+        sleep(0.01);
+        exit! 42
+      }
+      status = Process::Status.wait(child_pid)
+    rescue => e
+      p e
+    end
+    @scheduler.join(f1)
+    assert_kind_of Process::Status, status
+    assert_equal child_pid, status.pid
+    assert_equal 42, status.exitstatus
+  ensure
+    if child_pid
+      Process.wait(child_pid) rescue nil
+    end
   end
 end

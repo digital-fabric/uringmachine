@@ -14,8 +14,10 @@ p parent: Fiber.scheduler
 p Fiber.current
 
 pid = fork do
-  p child: Fiber.scheduler
   Fiber.scheduler.post_fork
+  Fiber.set_scheduler nil
+  p child: Fiber.scheduler
+  # Fiber.scheduler.post_fork
 end
 
 Process.wait(pid)
