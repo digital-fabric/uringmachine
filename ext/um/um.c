@@ -1,7 +1,6 @@
 #include <float.h>
 #include "um.h"
 #include <ruby/thread.h>
-#include <ruby/io/buffer.h>
 
 void um_setup(VALUE self, struct um *machine) {
   memset(machine, 0, sizeof(struct um));
@@ -354,7 +353,7 @@ VALUE um_sleep(struct um *machine, double duration) {
   return ret;
 }
 
-inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int buffer_offset) {
+VALUE um_read(struct um *machine, int fd, VALUE buffer, ssize_t maxlen, ssize_t buffer_offset) {
   struct um_op op;
   um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -374,7 +373,7 @@ inline VALUE um_read(struct um *machine, int fd, VALUE buffer, int maxlen, int b
   return ret;
 }
 
-inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) {
+size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen) {
   struct um_op op;
   um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -391,25 +390,14 @@ inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) 
   return 0;
 }
 
-static inline void get_buffer_bytes_for_writing(VALUE buffer, void **base, size_t *size) {
-  if (TYPE(buffer) == T_STRING) {
-    *base = RSTRING_PTR(buffer);
-    *size = RSTRING_LEN(buffer);
-  }
-  else if ((TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer))
-    rb_io_buffer_get_bytes_for_writing(buffer, base, size);
-  else
-    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
-}
-
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
   struct um_op op;
   um_prep_op(machine, &op, OP_WRITE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
-  void *base;
+  const void *base;
   size_t size;
-  get_buffer_bytes_for_writing(buffer, &base, &size);
+  um_get_buffer_bytes_for_writing(buffer, &base, &size);
   if ((len == (size_t)-1) && (len > size)) len = size;
 
   io_uring_prep_write(sqe, fd, base, len, -1);
@@ -430,9 +418,9 @@ VALUE um_write_async(struct um *machine, int fd, VALUE buffer) {
   RB_OBJ_WRITE(machine->self, &op->value, buffer);
   RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
-  void *base;
+  const void *base;
   size_t size;
-  get_buffer_bytes_for_writing(buffer, &base, &size);
+  um_get_buffer_bytes_for_writing(buffer, &base, &size);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_write(sqe, fd, base, size, -1);

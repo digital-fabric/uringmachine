@@ -1,6 +1,7 @@
 #include "um.h"
 #include <sys/mman.h>
 #include <stdlib.h>
+#include <ruby/io/buffer.h>
 
 inline struct __kernel_timespec um_double_to_timespec(double value) {
   double integral;
@@ -32,30 +33,65 @@ inline void um_raise_on_error_result(int result) {
   if (unlikely(result < 0)) rb_syserr_fail(-result, strerror(-result));
 }
 
-inline void * um_prepare_read_buffer(VALUE buffer, unsigned len, int ofs) {
-  unsigned current_len = RSTRING_LEN(buffer);
-  if (ofs < 0) ofs = current_len + ofs + 1;
-  unsigned new_len = len + (unsigned)ofs;
+inline void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs) {
+  if (TYPE(buffer) == T_STRING) {
+    size_t current_len = RSTRING_LEN(buffer);
+    if (len == -1) len = current_len; 
+    if (ofs < 0) ofs = current_len + ofs + 1;
+    size_t new_len = len + (size_t)ofs;
 
-  if (current_len < new_len)
-    rb_str_modify_expand(buffer, new_len);
+    if (current_len < new_len)
+      rb_str_modify_expand(buffer, new_len);
+    else
+      rb_str_modify(buffer);
+    return RSTRING_PTR(buffer) + ofs;
+  }
+  else if (IO_BUFFER_P(buffer)) {
+    void *base;
+    size_t size;
+    rb_io_buffer_get_bytes_for_writing(buffer, &base, &size); // writing *to* buffer
+    if (len == -1) len = size;
+    if (ofs < 0) ofs = size + ofs + 1;
+    size_t new_size = len + (size_t)ofs;
+
+    if (size < new_size) {
+      rb_io_buffer_resize(buffer, new_size);
+      rb_io_buffer_get_bytes_for_writing(buffer, &base, &size);
+    }
+    return base + ofs;
+  }
   else
+    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
+}
+
+static inline void adjust_read_buffer_len(VALUE buffer, int result, ssize_t ofs) {
+  if (TYPE(buffer) == T_STRING) {
     rb_str_modify(buffer);
-  return RSTRING_PTR(buffer) + ofs;
+    unsigned len = result > 0 ? (unsigned)result : 0;
+    unsigned current_len = RSTRING_LEN(buffer);
+    if (ofs < 0) ofs = current_len + ofs + 1;
+    rb_str_set_len(buffer, len + (unsigned)ofs);
+  }
+  else if (IO_BUFFER_P(buffer)) {
+    // do nothing?
+  }
 }
 
-static inline void adjust_read_buffer_len(VALUE buffer, int result, int ofs) {
-  rb_str_modify(buffer);
-  unsigned len = result > 0 ? (unsigned)result : 0;
-  unsigned current_len = RSTRING_LEN(buffer);
-  if (ofs < 0) ofs = current_len + ofs + 1;
-  rb_str_set_len(buffer, len + (unsigned)ofs);
-}
-
-inline void um_update_read_buffer(struct um *machine, VALUE buffer, int buffer_offset, __s32 result, __u32 flags) {
+inline void um_update_read_buffer(struct um *machine, VALUE buffer, ssize_t buffer_offset, __s32 result, __u32 flags) {
   if (!result) return;
 
   adjust_read_buffer_len(buffer, result, buffer_offset);
+}
+
+inline void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size) {
+  if (TYPE(buffer) == T_STRING) {
+    *base = RSTRING_PTR(buffer);
+    *size = RSTRING_LEN(buffer);
+  }
+  else if (IO_BUFFER_P(buffer))
+    rb_io_buffer_get_bytes_for_reading(buffer, base, size); // reading *from* buffer
+  else
+    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
 }
 
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {

@@ -1657,65 +1657,55 @@ class IOBufferTest < UMBaseTest
     assert_equal msg, str
   end
 
-  #   def test_read
-  #   r, w = IO.pipe
-  #   w << 'foobar'
+  def test_write_invalid_buffer
+    r, w = UM.pipe
+    assert_raises(RuntimeError) {
+      machine.write(w, [])
+    }
+  end
 
-  #   buf = +''
-  #   assert_equal 0, machine.pending_count
-  #   res = machine.read(r.fileno, buf, 3)
-  #   assert_equal 0, machine.pending_count
-  #   assert_equal 3, res
-  #   assert_equal 'foo', buf
+  def test_read_io_buffer
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
 
-  #   buf = +''
-  #   res = machine.read(r.fileno, buf, 128)
-  #   assert_equal 3, res
-  #   assert_equal 'bar', buf
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 3)
+    assert_equal 3, res
+    assert_equal 'foo', read_buffer.get_string(0, 3)
 
-  #   w.close
-  #   buf = +''
-  #   res = machine.read(r.fileno, buf, 128)
-  #   assert_equal 0, res
-  #   assert_equal '', buf
-  # end
+    machine.close(w)
 
-  # def test_read_bad_fd
-  #   _r, w = IO.pipe
+    res = machine.read(r, read_buffer)
+    assert_equal 3, res
+    assert_equal 'bar', read_buffer.get_string(0, 3)
+  end
 
-  #   assert_raises(Errno::EBADF) do
-  #     machine.read(w.fileno, +'', 8192)
-  #   end
-  #   assert_equal 0, machine.pending_count
-  # end
+  def test_read_io_buffer_resize
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+    machine.close(w)
 
-  # def test_read_with_buffer_offset
-  #   buffer = +'foo'
-  #   r, w = IO.pipe
-  #   w << 'bar'
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 6)
+    assert_equal 6, res
+    assert_equal 6, read_buffer.size
+    assert_equal 'foobar', read_buffer.get_string(0, res)
 
-  #   result = machine.read(r.fileno, buffer, 100, buffer.bytesize)
-  #   assert_equal 3, result
-  #   assert_equal 'foobar', buffer
-  # end
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+    machine.close(w)
 
-  # def test_read_with_negative_buffer_offset
-  #   buffer = +'foo'
+    read_buffer = IO::Buffer.new(3)
+    res = machine.read(r, read_buffer, 128, -1)
+    assert_equal 6, res
+    assert_equal 131, read_buffer.size
+    assert_equal 'foobar', read_buffer.get_string(3, res)
+  end
 
-  #   r, w = IO.pipe
-  #   w << 'bar'
-
-  #   result = machine.read(r.fileno, buffer, 100, -1)
-  #   assert_equal 3, result
-  #   assert_equal 'foobar', buffer
-
-  #   buffer = +'foogrr'
-
-  #   r, w = IO.pipe
-  #   w << 'bar'
-
-  #   result = machine.read(r.fileno, buffer, 100, -4)
-  #   assert_equal 3, result
-  #   assert_equal 'foobar', buffer
-  # end
+  def test_read_invalid_buffer
+    r, w = UM.pipe
+    assert_raises(RuntimeError) {
+      machine.read(r, [])
+    }
+  end
 end

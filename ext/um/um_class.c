@@ -106,12 +106,12 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   VALUE buffer;
   VALUE maxlen;
   VALUE buffer_offset;
-  rb_scan_args(argc, argv, "31", &fd, &buffer, &maxlen, &buffer_offset);
+  rb_scan_args(argc, argv, "22", &fd, &buffer, &maxlen, &buffer_offset);
 
-  return um_read(
-    machine, NUM2INT(fd), buffer, NUM2INT(maxlen),
-    NIL_P(buffer_offset) ? 0 : NUM2INT(buffer_offset)
-  );
+  ssize_t maxlen_i = NIL_P(maxlen) ? -1 : NUM2INT(maxlen);
+  ssize_t buffer_offset_i = NIL_P(buffer_offset) ? 0 : NUM2INT(buffer_offset);
+
+  return um_read(machine, NUM2INT(fd), buffer, maxlen_i, buffer_offset_i);
 }
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
