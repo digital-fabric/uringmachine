@@ -110,12 +110,12 @@ class StreamRespTest < StreamBaseTest
 
     machine.write(@wfd, "-foobar\r\n")
     o = @stream.resp_decode
-    assert_kind_of RuntimeError, o
+    assert_kind_of UM::Stream::RESPError, o
     assert_equal "foobar", o.message
 
     machine.write(@wfd, "!3\r\nbaz\r\n")
     o = @stream.resp_decode
-    assert_kind_of RuntimeError, o
+    assert_kind_of UM::Stream::RESPError, o
     assert_equal "baz", o.message
 
     machine.write(@wfd, ":123\r\n")
