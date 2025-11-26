@@ -21,7 +21,7 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_post_fork
-    f1 = Fiber.schedule {}
+    Fiber.schedule {}
     assert_equal 1, @scheduler.fiber_map.size
     
     machine_before = @scheduler.machine
@@ -82,10 +82,10 @@ class FiberSchedulerTest < UMBaseTest
   def test_fiber_scheduler_sleep
     t0 = monotonic_clock
     assert_equal 0, machine.pending_count
-    f1 = Fiber.schedule do
+    Fiber.schedule do
       sleep(0.01)
     end
-    f2 = Fiber.schedule do
+    Fiber.schedule do
       sleep(0.02)
     end
     assert_equal 2, machine.pending_count

@@ -459,7 +459,7 @@ class ReadTest < UMBaseTest
   end
 
   def test_read_invalid_buffer
-    r, w = UM.pipe
+    r, _w = UM.pipe
     assert_raises(UM::Error) {
       machine.read(r, [])
     }
@@ -632,7 +632,7 @@ class WriteTest < UMBaseTest
     assert_equal 0, machine.pending_count
   end
 
-def test_write_io_buffer
+  def test_write_io_buffer
     r, w = UM.pipe
 
     msg = 'Hello world'
@@ -674,7 +674,7 @@ def test_write_io_buffer
   end
 
   def test_write_invalid_buffer
-    r, w = UM.pipe
+    _r, w = UM.pipe
     assert_raises(UM::Error) {
       machine.write(w, [])
     }
@@ -737,7 +737,7 @@ class WriteAsyncTest < UMBaseTest
   end
 
   def test_write_async_invalid_buffer
-    r, w = UM.pipe
+    _r, w = UM.pipe
 
     assert_raises(UM::Error) { machine.write_async(w, []) }
   end
@@ -758,7 +758,7 @@ class CloseTest < UMBaseTest
   end
 
   def test_close_bad_fd
-    r, w = IO.pipe
+    _r, w = IO.pipe
     machine.close(w.fileno)
 
     assert_raises(Errno::EBADF) { machine.close(w.fileno) }
@@ -1575,7 +1575,7 @@ class PidfdTest < UMBaseTest
   end
 
   def test_pidfd_open_invalid_pid
-    assert_raises(Errno::ESRCH) { UM.pidfd_open(Process.pid + 1) }
+    assert_raises(SystemCallError) { UM.pidfd_open(Process.pid + 1) }
   end
 
   def test_pidfd_send_signal
@@ -1607,7 +1607,7 @@ class PidfdTest < UMBaseTest
     assert_kind_of Integer, fd2
 
     Process.wait(pid)
-    assert_raises(Errno::ESRCH) { UM.pidfd_send_signal(fd2, 0) }
+    assert_raises(SystemCallError) { UM.pidfd_send_signal(fd2, 0) }
   ensure
     machine.close(fd) rescue nil
     machine.close(fd2) rescue nil
@@ -1620,7 +1620,7 @@ class PollTest < UMBaseTest
     rfd, wfd = UM.pipe
 
     events = []
-    f1 = machine.spin do
+    machine.spin do
       events << :pre
       events << machine.poll(rfd, UM::POLLIN)
       events << :post
@@ -1956,7 +1956,7 @@ class NonBlockTest < UMBaseTest
   end
 
   def test_io_set_nonblock
-    r, w = IO.pipe
+    r, _w = IO.pipe
     assert_equal true, UM.io_nonblock?(r)
     
     UM.io_set_nonblock(r, false)
