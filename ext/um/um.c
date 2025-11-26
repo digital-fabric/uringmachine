@@ -1,6 +1,7 @@
 #include <float.h>
 #include "um.h"
-#include "ruby/thread.h"
+#include <ruby/thread.h>
+#include <ruby/io/buffer.h>
 
 void um_setup(VALUE self, struct um *machine) {
   memset(machine, 0, sizeof(struct um));
@@ -390,38 +391,54 @@ inline size_t um_read_raw(struct um *machine, int fd, char *buffer, int maxlen) 
   return 0;
 }
 
-VALUE um_write(struct um *machine, int fd, VALUE str, int len) {
+static inline void get_buffer_bytes_for_writing(VALUE buffer, void **base, size_t *size) {
+  if (TYPE(buffer) == T_STRING) {
+    *base = RSTRING_PTR(buffer);
+    *size = RSTRING_LEN(buffer);
+  }
+  else if ((TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer))
+    rb_io_buffer_get_bytes_for_writing(buffer, base, size);
+  else
+    rb_raise(rb_eRuntimeError, "Invalid buffer provided");
+}
+
+VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
   struct um_op op;
   um_prep_op(machine, &op, OP_WRITE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-  const int str_len = RSTRING_LEN(str);
-  if (len > str_len) len = str_len;
 
-  io_uring_prep_write(sqe, fd, RSTRING_PTR(str), len, -1);
+  void *base;
+  size_t size;
+  get_buffer_bytes_for_writing(buffer, &base, &size);
+  if ((len == (size_t)-1) && (len > size)) len = size;
+
+  io_uring_prep_write(sqe, fd, base, len, -1);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
-
-  RB_GC_GUARD(str);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
 }
 
-VALUE um_write_async(struct um *machine, int fd, VALUE str) {
+VALUE um_write_async(struct um *machine, int fd, VALUE buffer) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_TRANSIENT | OP_F_FREE_ON_COMPLETE);
   RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->value, str);
+  RB_OBJ_WRITE(machine->self, &op->value, buffer);
   RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
+  void *base;
+  size_t size;
+  get_buffer_bytes_for_writing(buffer, &base, &size);
+
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  io_uring_prep_write(sqe, fd, RSTRING_PTR(str), RSTRING_LEN(str), -1);
+  io_uring_prep_write(sqe, fd, base, size, -1);
   um_op_transient_add(machine, op);
 
-  return str;
+  return buffer;
 }
 
 VALUE um_close(struct um *machine, int fd) {

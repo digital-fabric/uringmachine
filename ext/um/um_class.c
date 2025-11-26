@@ -130,13 +130,13 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   VALUE len;
   rb_scan_args(argc, argv, "21", &fd, &buffer, &len);
 
-  int bytes = NIL_P(len) ? RSTRING_LEN(buffer) : NUM2INT(len);
+  size_t bytes = NIL_P(len) ? (size_t)-1 : NUM2UINT(len);
   return um_write(machine, NUM2INT(fd), buffer, bytes);
 }
 
-VALUE UM_write_async(VALUE self, VALUE fd, VALUE str) {
+VALUE UM_write_async(VALUE self, VALUE fd, VALUE buffer) {
   struct um *machine = um_get_machine(self);
-  return um_write_async(machine, NUM2INT(fd), str);
+  return um_write_async(machine, NUM2INT(fd), buffer);
 }
 
 VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {

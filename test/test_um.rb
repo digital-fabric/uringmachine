@@ -1609,3 +1609,113 @@ class NonBlockTest < UMBaseTest
     assert_equal true, UM.io_nonblock?(r)
   end
 end
+
+class IOBufferTest < UMBaseTest
+  def test_write_io_buffer
+    r, w = UM.pipe
+
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg, 0)
+
+    machine.write(w, write_buffer)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal msg, str
+  end
+
+  def test_write_io_buffer_with_len
+    r, w = UM.pipe
+
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg, 0)
+
+    machine.write(w, write_buffer, 5)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal 'Hello', str
+  end
+
+  def test_write_async_io_buffer
+    r, w = UM.pipe
+
+    msg = 'Hello world'
+    write_buffer = IO::Buffer.new(msg.bytesize)
+    write_buffer.set_string(msg, 0)
+
+    machine.write_async(w, write_buffer)
+    3.times { machine.snooze }
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal msg, str
+  end
+
+  #   def test_read
+  #   r, w = IO.pipe
+  #   w << 'foobar'
+
+  #   buf = +''
+  #   assert_equal 0, machine.pending_count
+  #   res = machine.read(r.fileno, buf, 3)
+  #   assert_equal 0, machine.pending_count
+  #   assert_equal 3, res
+  #   assert_equal 'foo', buf
+
+  #   buf = +''
+  #   res = machine.read(r.fileno, buf, 128)
+  #   assert_equal 3, res
+  #   assert_equal 'bar', buf
+
+  #   w.close
+  #   buf = +''
+  #   res = machine.read(r.fileno, buf, 128)
+  #   assert_equal 0, res
+  #   assert_equal '', buf
+  # end
+
+  # def test_read_bad_fd
+  #   _r, w = IO.pipe
+
+  #   assert_raises(Errno::EBADF) do
+  #     machine.read(w.fileno, +'', 8192)
+  #   end
+  #   assert_equal 0, machine.pending_count
+  # end
+
+  # def test_read_with_buffer_offset
+  #   buffer = +'foo'
+  #   r, w = IO.pipe
+  #   w << 'bar'
+
+  #   result = machine.read(r.fileno, buffer, 100, buffer.bytesize)
+  #   assert_equal 3, result
+  #   assert_equal 'foobar', buffer
+  # end
+
+  # def test_read_with_negative_buffer_offset
+  #   buffer = +'foo'
+
+  #   r, w = IO.pipe
+  #   w << 'bar'
+
+  #   result = machine.read(r.fileno, buffer, 100, -1)
+  #   assert_equal 3, result
+  #   assert_equal 'foobar', buffer
+
+  #   buffer = +'foogrr'
+
+  #   r, w = IO.pipe
+  #   w << 'bar'
+
+  #   result = machine.read(r.fileno, buffer, 100, -4)
+  #   assert_equal 3, result
+  #   assert_equal 'foobar', buffer
+  # end
+end
