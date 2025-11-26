@@ -164,7 +164,7 @@ class ScheduleTest < UMBaseTest
     }
     machine.join(*fs)
   ensure
-    GC.stress = false    
+    GC.stress = false
   end
 
   def test_timeout_with_raising_block
@@ -1958,10 +1958,10 @@ class NonBlockTest < UMBaseTest
   def test_io_set_nonblock
     r, _w = IO.pipe
     assert_equal true, UM.io_nonblock?(r)
-    
+
     UM.io_set_nonblock(r, false)
     assert_equal false, UM.io_nonblock?(r)
-    
+
     UM.io_set_nonblock(r, true)
     assert_equal true, UM.io_nonblock?(r)
   end

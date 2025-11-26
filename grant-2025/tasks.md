@@ -40,7 +40,7 @@
     - [ ] Pipe IO raw UM / Ruby threaded / Ruby with UM fiber scheduler
     - [ ] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
     - [ ] Measure CPU (thread) time usage for above examples
-          
+
         - run each version 1M times
         - measure total real time, total CPU time
 

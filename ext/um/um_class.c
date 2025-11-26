@@ -364,7 +364,7 @@ VALUE UM_pidfd_open(VALUE self, VALUE pid) {
     int e = errno;
     rb_syserr_fail(e, strerror(e));
   }
-  
+
   return INT2NUM(fd);
 }
 

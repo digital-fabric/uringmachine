@@ -23,7 +23,7 @@ class FiberSchedulerTest < UMBaseTest
   def test_fiber_scheduler_post_fork
     Fiber.schedule {}
     assert_equal 1, @scheduler.fiber_map.size
-    
+
     machine_before = @scheduler.machine
     @scheduler.post_fork
     refute_equal machine_before, @scheduler.machine

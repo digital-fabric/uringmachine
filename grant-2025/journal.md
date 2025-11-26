@@ -21,7 +21,7 @@ Suggestion for tasks around FiberScheduler from Samuel:
 1. Add Fiber::Scheduler#io_splice + IO-uring backing for IO.copy_stream
 
 Summary:
- 
+
 Build an async-aware, zero-copy data-transfer path in Ruby by exposing Linux’s
 splice(2) through the Fiber Scheduler, and wiring it up so IO.copy_stream can
 take advantage of io_uring when available. Why it matters: Large file copies and
@@ -61,9 +61,9 @@ Summary:
 
 Define how fiber schedulers behave across fork: the child should start in a
 clean state, with hooks to reinitialize or discard scheduler data safely.
- 
+
 Why it matters:
- 
+
 fork + async currently work inconsistently. This project makes forking
 predictable, allowing libraries and apps to do post-fork setup (e.g., reconnect
 I/O, restart loops) correctly and safely.
@@ -128,9 +128,9 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 
   def reset_nonblock(io)
     return if @ios.key?(io)
-        
+
     @ios[io] = true
-    UM.io_set_nonblock(io, false)  
+    UM.io_set_nonblock(io, false)
   end
   ```
 
@@ -177,7 +177,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   this by removing the `RUBY_TYPED_EMBEDDABLE` flag. This is a possible
   explanation for the occasional segfaults I've been seeing in Syntropy when
   doing lots of cancelled `UM#shift` ops (watching for file changes). (commit 3b013407ff94f8849517b0fca19839d37e046915)
- 
+
 - Added support for `IO::Buffer` in all low-level I/O APIs, which also means the
   fiber scheduler doesn't need to convert from `IO::Buffer` to strings in order
   to invoke the UringMachine API. (commits

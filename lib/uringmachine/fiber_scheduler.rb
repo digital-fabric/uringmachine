@@ -208,16 +208,16 @@ class UringMachine
     # @return [void]
     def ensure_nonblock(io)
       return if @ios.key?(io)
-        
+
       @ios[io] = true
-      UM.io_set_nonblock(io, false)  
+      UM.io_set_nonblock(io, false)
     end
 
     # Starts a background thread for running blocking operations.
     #
     # @return [void]
     def start_blocking_operation_thread
-      @blocking_op_queue = UM::Queue.new      
+      @blocking_op_queue = UM::Queue.new
       @blocking_op_thread = Thread.new do
         m = UM.new
         loop do

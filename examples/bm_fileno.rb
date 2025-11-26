@@ -21,7 +21,7 @@ end
 @map = ObjectSpace::WeakMap.new
 
 def cached_fileno(r)
-  @map[r] ||= r.fileno 
+  @map[r] ||= r.fileno
 end
 
 Benchmark.ips do |x|

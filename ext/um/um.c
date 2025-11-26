@@ -547,7 +547,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags
   um_prep_op(machine, &op, OP_RECV, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, 0);
-  
+
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
 
   VALUE ret = um_fiber_switch(machine);

@@ -36,7 +36,7 @@ inline void um_raise_on_error_result(int result) {
 inline void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs) {
   if (TYPE(buffer) == T_STRING) {
     size_t current_len = RSTRING_LEN(buffer);
-    if (len == -1) len = current_len; 
+    if (len == -1) len = current_len;
     if (ofs < 0) ofs = current_len + ofs + 1;
     size_t new_len = len + (size_t)ofs;
 
