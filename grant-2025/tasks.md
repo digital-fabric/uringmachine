@@ -18,21 +18,26 @@
 
   - [ ] Add support for using IO::Buffer in association with io_uring registered buffers / buffer rings
 
-- [ ] FiberScheduler implementation
+- [ ] UringMachine Fiber::Scheduler implementation
 4
   - [v] Check how scheduler interacts with `fork`.
   - [v] Implement `process_wait` (with `rb_process_status_new`)
+  - [v] Add tests:
+    - [v] Sockets (only io_wait)
+    - [v] Files
+    - [v] Mutex / Queue
+    - [v] Thread.join
+    - [v] Process.wait
+    - [v] fork
+    - [v] system / exec / etc.
+    - [v] popen
   - [ ] Implement timeouts (how do timeouts interact with blocking ops?)
-  - [ ] Implement address resolution hook
-  - [ ] Add tests:
-    - [ ] Sockets
-    - [ ] Files
-    - [ ] Mutex / Queue
-    - [ ] Thread.join
-    - [ ] Process.wait
-    - [ ] fork
-    - [ ] system / exec / etc.
-    - [ ] popen
+    - [ ] Add `#timeout_after` hook
+          https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L631-L644
+    - [ ] Add timeout handling in different I/O hooks
+    - [ ] Add tests
+  - [ ] Add `#address_resolve` hook with same impl as Async:
+        https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L285-L296
 
   - [ ] Benchmarks
     - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
@@ -53,11 +58,10 @@
           while cpu_time is more. But it's just a hunch.
 
 
-  - https://github.com/ruby/ruby/blob/master/doc/fiber.md
-  - https://github.com/ruby/ruby/blob/master/test/fiber/scheduler.rb
-  - https://github.com/socketry/async/blob/main/context/getting-started.md
-- https://github.com/socketry/async/blob/main/context/scheduler.md
-- https://github.com/socketry/async/blob/main/lib/async/scheduler.rb#L28
+- [ ] Ruby Fiber::Scheduler interface
+  - [ ] Missing hooks for send/recv/sendmsg/recvmsg
+  - [ ] Writes to a file (including `IO.write`) do not invoke `#io_write` (because writes to files cannot be non-blocking.) Instead, `blocking_operation_wait` is invoked.
+
 
 - [ ] SSL
   - [ ] openssl gem: custom BIO?

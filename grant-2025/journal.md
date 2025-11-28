@@ -205,7 +205,8 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   I'll see if I can prepare a PR for that to be merged for the Ruby 4.0 release.
 
   For the time being, I've added a `#post_fork` method to the UM fiber scheduler
-  which should be manually called after a fork. (commit 2c7877385869c6acbdd8354e2b2909cff448651b)
+  which should be manually called after a fork. (commit
+  2c7877385869c6acbdd8354e2b2909cff448651b)
 
 - Added two new low-level APIs for waiting on processes, instead of
   `UM#waitpid`, using the io_uring version of `waitid`. The vanilla version
@@ -227,3 +228,29 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   ...
   pid2, status = machine.waitid(P_PIDFD, fd, UM::WEXITED)
   ```
+
+# 2025-11-28
+
+- On Samuel's suggestions, I've submitted a
+  [PR](https://github.com/ruby/ruby/pull/15342) for adding a
+  `Fiber::Scheduler#process_fork` hook that is automatically invoked after a
+  fork. This is in continuation to the `#post_fork` method. I still have a lot
+  to learn about working with the Ruby core code, but I'm really excited about
+  the possibility of this PR (and the [previous
+  one](https://github.com/ruby/ruby/pull/15213) as well) getting merged in time
+  for the Ruby 4.0 release.
+- Added a bunch of tests for `UM::FiberScheduler`: socket I/O, file I/O, mutex,
+  queue, waiting for threads. In the process I discovered a lots of things that
+  can be improved in the way Ruby invokes the fiber scheduler.
+
+  - For regular files, Ruby assumes file I/O can never be non-blocking (or
+    async), and thus invokes the `#blocking_operation_wait` hook in order to
+    perform the I/O in a separate thread. With io_uring, of course, file I/O
+    *is* asynchronous.
+  - For sockets there are no specialized hooks, like `#socket_send` etc.
+    Instead, Ruby makes the socket fd's non-blocking and invokes `#io_wait` to
+    wait for the socket to be ready.
+  
+  I find it interesting how io_uring breaks a lot of assumptions about how I/O
+  should be done.
+
