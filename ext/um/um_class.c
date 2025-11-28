@@ -68,7 +68,12 @@ VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
 
 VALUE UM_pending_count(VALUE self) {
   struct um *machine = um_get_machine(self);
-  return INT2NUM(machine->pending_count);
+  return UINT2NUM(machine->pending_count);
+}
+
+VALUE UM_total_op_count(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return UINT2NUM(machine->total_op_count);
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -425,6 +430,7 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "initialize", UM_initialize, 0);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
+  rb_define_method(cUM, "total_op_count", UM_total_op_count, 0);
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
   rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);

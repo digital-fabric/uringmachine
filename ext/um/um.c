@@ -57,7 +57,10 @@ done:
   sqe->user_data = (long long)op;
   sqe->flags = 0;
   machine->unsubmitted_count++;
-  if (op) machine->pending_count++;
+  if (op) {
+    machine->pending_count++;
+    machine->total_op_count++;
+  }
   return sqe;
 }
 

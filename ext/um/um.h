@@ -117,12 +117,13 @@ struct um {
 
   struct io_uring ring;
 
-  unsigned int    ring_initialized;
-  unsigned int    unsubmitted_count;
-  unsigned int    pending_count;
+  uint ring_initialized;
+  uint unsubmitted_count;
+  uint pending_count;
+  uint buffer_ring_count;
+  ulong total_op_count; 
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
-  unsigned int buffer_ring_count;
 
   struct um_op *transient_head;
   struct um_op *runqueue_head;
