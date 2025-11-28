@@ -29,7 +29,7 @@ class UringMachine
     # automatically after a fork).
     #
     # @return [self]
-    def post_fork
+    def process_fork
       @machine = UM.new
       @ios = ObjectSpace::WeakMap.new
       @fiber_map = ObjectSpace::WeakMap.new
@@ -108,6 +108,7 @@ class UringMachine
     # @return [void]
     def unblock(blocker, fiber)
       @machine.schedule(fiber, nil)
+      @machine.wakeup
     end
 
     # kernel_sleep hook: sleeps for the given duration.
@@ -132,15 +133,11 @@ class UringMachine
       timeout ||= io.timeout
       if timeout
         @machine.timeout(timeout, Timeout::Error) {
-          @machine.poll(io.fileno, events).tap { p 3 }
+          @machine.poll(io.fileno, events)
         }
       else
-        @machine.poll(io.fileno, events).tap { p 6 }
-
+        @machine.poll(io.fileno, events)
       end
-    rescue => e
-      p e: e
-      raise
     end
 
     # fiber hook: creates a new fiber with the given block. The created fiber is
@@ -231,6 +228,5 @@ class UringMachine
         end
       end
     end
-
   end
 end

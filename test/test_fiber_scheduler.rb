@@ -2,6 +2,7 @@
 
 require_relative 'helper'
 require 'uringmachine/fiber_scheduler'
+require 'securerandom'
 
 class FiberSchedulerTest < UMBaseTest
   def setup
@@ -20,12 +21,12 @@ class FiberSchedulerTest < UMBaseTest
     assert_kind_of UringMachine, s.machine
   end
 
-  def test_fiber_scheduler_post_fork
+  def test_fiber_scheduler_process_fork
     Fiber.schedule {}
     assert_equal 1, @scheduler.fiber_map.size
 
     machine_before = @scheduler.machine
-    @scheduler.post_fork
+    @scheduler.process_fork
     refute_equal machine_before, @scheduler.machine
     assert_equal 0, @scheduler.fiber_map.size
   end
@@ -117,7 +118,7 @@ class FiberSchedulerTest < UMBaseTest
     status = nil
     f1 = Fiber.schedule do
       child_pid = fork {
-        Fiber.scheduler.post_fork
+        Fiber.scheduler.process_fork
         Fiber.set_scheduler nil
         sleep(0.01);
         exit! 42
@@ -134,5 +135,167 @@ class FiberSchedulerTest < UMBaseTest
     if child_pid
       Process.wait(child_pid) rescue nil
     end
+  end
+
+  # Currently the fiber scheduler doesn't have hooks for send/recv. The only
+  # hook that will be invoked is `io_wait`.
+  def test_fiber_scheduler_sockets
+    s1, s2 = UNIXSocket.pair(:STREAM)
+
+    buf = +''
+    sent = nil
+
+    assert_equal 0, machine.total_op_count
+    Fiber.schedule do
+      buf = s1.recv(12)
+    end
+    Fiber.schedule do
+      sent = s2.send('foobar', 0)
+    end
+
+    # In Ruby, sockets are by default non-blocking. The recv will cause io_wait
+    # to be invoked, the send should get through without needing to poll.
+    assert_equal 1, machine.total_op_count
+    @scheduler.join
+    
+    assert_equal 6, sent
+    assert_equal 'foobar', buf
+  ensure
+    s1.close rescue nil
+    s2.close rescue nil
+  end
+
+  def test_fiber_scheduler_IO_write_IO_read
+    fn = "/tmp/#{SecureRandom.hex}"
+    Fiber.schedule do
+      IO.write(fn, 'foobar')
+    end
+    assert_equal 1, machine.total_op_count
+
+    buf = nil
+    Fiber.schedule do
+      buf = IO.read(fn)
+    end
+    assert_equal 2, machine.total_op_count
+
+    @scheduler.join
+  end
+
+  def test_fiber_scheduler_file_io
+    fn = "/tmp/#{SecureRandom.hex}"
+    Fiber.schedule do
+      File.open(fn, 'w') { it.write 'foobar' }
+    end
+    assert_equal 1, machine.total_op_count
+
+    buf = nil
+    Fiber.schedule do
+      File.open(fn, 'r') { buf = it.read }
+    end
+    assert_equal 2, machine.total_op_count
+
+    @scheduler.join
+  end
+
+  def test_fiber_scheduler_mutex
+    mutex = Mutex.new
+
+    buf = []
+    Fiber.schedule do
+      buf << 11
+      mutex.synchronize {
+        buf << [12, machine.total_op_count]
+        sleep 0.01
+        buf << [13, machine.total_op_count]
+      }
+      buf << 14
+    end
+    assert_equal 1, machine.total_op_count
+
+    Fiber.schedule do
+      buf << 21
+      mutex.synchronize {
+        buf << [22, machine.total_op_count]
+        sleep 0.01
+        buf << [23, machine.total_op_count]
+      }
+      buf << 24
+    end
+    assert_equal 1, machine.total_op_count
+
+    @scheduler.join
+    assert_equal [11, [12, 0], 21, [13, 2], 14, [22, 2], [23, 4], 24], buf
+  end
+
+  def test_fiber_scheduler_queue
+    queue = Queue.new
+
+    buf = []
+    Fiber.schedule do
+      buf << [11, machine.total_op_count]
+      buf << queue.shift
+      buf << [12, machine.total_op_count]
+    end
+    Fiber.schedule do
+      buf << [21, machine.total_op_count]
+      queue << :foo
+      buf << [22, machine.total_op_count]
+    end
+    assert_equal 0, machine.total_op_count
+    @scheduler.join
+
+    assert_equal [[11, 0], [21, 0], [22, 0], :foo, [12, 1]], buf
+  end
+
+  def test_fiber_scheduler_thread_join
+    thread = Thread.new do
+      sleep 0.1
+    end
+    Fiber.schedule do
+      thread.join
+    end
+
+    # No ops are issued, except for a NOP SQE used to wakeup the waiting thread.
+    assert_equal 0, machine.total_op_count
+
+    @scheduler.join
+    assert_equal 1, machine.total_op_count
+  end
+
+  def test_fiber_scheduler_system
+    buf = []
+    Fiber.schedule do
+      buf << system('sleep 0.01')
+    end
+    assert_equal 1, machine.total_op_count
+    @scheduler.join
+    assert_equal [true], buf
+  end
+
+  def test_fiber_scheduler_cmd
+    buf = []
+    Fiber.schedule do
+      buf << `echo 'foo'`
+    end
+    assert_equal 1, machine.total_op_count
+    @scheduler.join
+    assert_equal ["foo\n"], buf
+  end
+
+  def test_fiber_scheduler_popen
+    buf = []
+    Fiber.schedule do
+      IO.popen('ruby', 'r+') do |pipe|
+        buf << [11, machine.total_op_count]    
+        pipe.puts 'puts "bar"'
+        buf << [12, machine.total_op_count]    
+        pipe.close_write
+        buf << [13, pipe.gets.chomp, machine.total_op_count]
+      end
+    end
+    assert_equal 1, machine.total_op_count
+    @scheduler.join
+    assert_equal 6, machine.total_op_count
+    assert_equal [[11, 0], [12, 3], [13, "bar", 5]], buf
   end
 end

@@ -337,6 +337,28 @@ class PeriodicallyTest < UMBaseTest
   end
 end
 
+class StatsTest < UMBaseTest
+  def test_op_counts
+    r, w = IO.pipe
+
+    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.total_op_count
+    machine.write_async(w.fileno, 'foo')
+    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.total_op_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    assert_equal 1, machine.total_op_count
+
+    machine.write_async(w.fileno, 'foo')
+    assert_equal 1, machine.pending_count
+    assert_equal 2, machine.total_op_count
+    machine.snooze
+    assert_equal 0, machine.pending_count
+    assert_equal 2, machine.total_op_count
+  end
+end
+
 class ReadTest < UMBaseTest
   def test_read
     r, w = IO.pipe
