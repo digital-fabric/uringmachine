@@ -226,6 +226,7 @@ struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
+VALUE um_wakeup(struct um *machine);
 void um_submit_cancel_op(struct um *machine, struct um_op *op);
 void um_cancel_and_wait(struct um *machine, struct um_op *op);
 int um_check_completion(struct um *machine, struct um_op *op);

@@ -87,6 +87,11 @@ VALUE UM_yield(VALUE self) {
   return um_await(machine);
 }
 
+VALUE UM_wakeup(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return um_wakeup(machine);
+}
+
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, fiber, value);
@@ -447,6 +452,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
   rb_define_method(cUM, "yield", UM_yield, 0);
+  rb_define_method(cUM, "wakeup", UM_wakeup, 0);
 
   rb_define_method(cUM, "close", UM_close, 1);
   rb_define_method(cUM, "close_async", UM_close_async, 1);

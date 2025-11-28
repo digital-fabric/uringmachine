@@ -264,6 +264,13 @@ inline VALUE um_await(struct um *machine) {
   return ret;
 }
 
+VALUE um_wakeup(struct um *machine) {
+  struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
+  io_uring_prep_nop(sqe);
+  io_uring_submit(&machine->ring);
+  return Qnil;
+}
+
 inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags) {
   memset(op, 0, sizeof(struct um_op));
   op->kind = kind;
