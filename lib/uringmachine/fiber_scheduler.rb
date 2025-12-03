@@ -193,6 +193,11 @@ class UringMachine
       end
     end
 
+    def fiber_interrupt(fiber, exception)
+      @machine.schedule(fiber, exception)
+      @machine.wakeup
+    end
+
     private
 
     # Starts a background thread for running blocking operations.

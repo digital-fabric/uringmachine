@@ -389,5 +389,44 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
     assert_equal 6, machine.total_op_count
     assert_equal [[11, 0], [12, 3], [13, "bar", 5]], buf
+    assert_equal({
+      fiber: 1,
+      io_write: 2,
+      io_read: 1,
+      blocking_operation_wait: 1,
+      process_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_fiber_interrupt
+    buf = []
+    r, w = IO.pipe
+    buf = nil
+    w << 'foo'
+
+    exception = nil
+    Fiber.schedule do
+      buf = r.read
+    rescue Exception => e
+      exception = e
+    end
+    assert_equal 1, machine.total_op_count
+    machine.snooze
+    Thread.new {
+      r.close
+      w.close
+    }
+    @scheduler.join
+    assert_kind_of IOError, exception
+    assert_equal({
+      fiber: 1,
+      io_read: 1,
+      fiber_interrupt: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    r.close rescue nil
+    w.close rescue nil
   end
 end
