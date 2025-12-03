@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'resolv'
+
 class UringMachine
   # UringMachine::FiberScheduler implements the Fiber::Scheduler interface for
   # creating fiber-based concurrent applications in Ruby, in tight integration
@@ -197,6 +199,10 @@ class UringMachine
       @machine.schedule(fiber, exception)
       @machine.wakeup
     end
+
+		def address_resolve(hostname)
+			Resolv.getaddresses(hostname)
+		end
 
     private
 
