@@ -11,7 +11,7 @@ end
 require 'benchmark'
 require 'uringmachine'
 
-ITERATIONS = 100000
+ITERATIONS = 10000
 BUF = ('*' * 8192).freeze
 FN = '/tmp/bm_write'
 
@@ -46,6 +46,9 @@ def run_um_write(num_fibers)
 ensure
   fio.close
 end
+
+run_io_write(1)
+run_um_write(1)
 
 Benchmark.bm do |x|
   [1, 2, 4, 8].each do |c|

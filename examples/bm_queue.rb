@@ -5,11 +5,12 @@ require 'bundler/inline'
 gemfile do
   source 'https://rubygems.org'
   gem 'uringmachine', path: '..'
+  gem 'benchmark'
   gem 'benchmark-ips'
 end
 
 require 'benchmark/ips'
-require 'uringmachine'
+require_relative '../lib/uringmachine'
 
 COUNT = 1000
 NUM_PRODUCERS = 8
