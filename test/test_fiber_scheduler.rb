@@ -356,6 +356,8 @@ class FiberSchedulerTest < UMBaseTest
       process_wait: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    Process.wait(0, Process::WNOHANG)
   end
 
   def test_fiber_scheduler_cmd
@@ -372,6 +374,8 @@ class FiberSchedulerTest < UMBaseTest
       process_wait: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    Process.wait(0, Process::WNOHANG)
   end
 
   def test_fiber_scheduler_popen
@@ -397,6 +401,8 @@ class FiberSchedulerTest < UMBaseTest
       process_wait: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    Process.wait(0, Process::WNOHANG)
   end
 
   def test_fiber_interrupt
