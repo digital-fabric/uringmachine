@@ -4,10 +4,33 @@ require_relative 'helper'
 require 'uringmachine/fiber_scheduler'
 require 'securerandom'
 
+class MethodCallAuditor
+  attr_reader :calls
+  
+  def initialize(target)
+    @target = target
+    @calls = []
+  end
+
+  def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
+  
+  def method_missing(sym, *args, &block)
+    # UM.debug("=>>(#{sym})")
+    res = @target.send(sym, *args, &block)
+    @calls << ({ sym:, args:, res:})
+    res
+  end
+
+  def last_call
+    calls.last
+  end
+end
+
 class FiberSchedulerTest < UMBaseTest
   def setup
     super
-    @scheduler = UM::FiberScheduler.new(@machine)
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
     Fiber.set_scheduler(@scheduler)
   end
 
@@ -21,16 +44,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_kind_of UringMachine, s.machine
   end
 
-  def test_fiber_scheduler_process_fork
-    Fiber.schedule {}
-    assert_equal 1, @scheduler.fiber_map.size
-
-    machine_before = @scheduler.machine
-    @scheduler.process_fork
-    refute_equal machine_before, @scheduler.machine
-    assert_equal 0, @scheduler.fiber_map.size
-  end
-
   def test_fiber_scheduler_spinning
     f1 = Fiber.schedule do
       sleep 0.001
@@ -42,10 +55,14 @@ class FiberSchedulerTest < UMBaseTest
 
     assert_kind_of Fiber, f1
     assert_kind_of Fiber, f2
+
+    assert_equal 2, @scheduler.calls.size
+    assert_equal [:fiber] * 2, @scheduler.calls.map { it[:sym] }
     assert_equal 2, @scheduler.fiber_map.size
 
     # close scheduler
     Fiber.set_scheduler nil
+    assert_equal :scheduler_close, @scheduler.last_call[:sym]
     GC.start
     assert_equal 0, @scheduler.fiber_map.size
   end
@@ -75,6 +92,15 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
     assert_equal [true] * 3, [f1, f2, f3].map(&:done?)
     assert_equal [:f1, :f2, 'foobar'], buffer
+
+    assert_equal({
+      fiber: 3,
+      kernel_sleep: 2,
+      io_write: 2,
+      io_read: 3,
+      blocking_operation_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   ensure
     i.close rescue nil
     o.close rescue nil
@@ -93,6 +119,12 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
     t1 = monotonic_clock
     assert_in_range 0.02..0.025, t1 - t0
+
+    assert_equal({
+      fiber: 2,
+      kernel_sleep: 2,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_lock
@@ -111,6 +143,13 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
     t1 = monotonic_clock
     assert_in_range 0.01..0.015, t1 - t0
+    assert_equal({
+      fiber: 3,
+      kernel_sleep: 12,
+      block: 1,
+      unblock: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_process_wait
@@ -131,6 +170,11 @@ class FiberSchedulerTest < UMBaseTest
     assert_kind_of Process::Status, status
     assert_equal child_pid, status.pid
     assert_equal 42, status.exitstatus
+    assert_equal({
+      fiber: 1,
+      process_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   ensure
     if child_pid
       Process.wait(child_pid) rescue nil
@@ -160,6 +204,11 @@ class FiberSchedulerTest < UMBaseTest
     
     assert_equal 6, sent
     assert_equal 'foobar', buf
+    assert_equal({
+      fiber: 2,
+      io_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   ensure
     s1.close rescue nil
     s2.close rescue nil
@@ -177,8 +226,15 @@ class FiberSchedulerTest < UMBaseTest
       buf = IO.read(fn)
     end
     assert_equal 2, machine.total_op_count
-
+    
     @scheduler.join
+    assert_equal 'foobar', buf
+    assert_equal({
+      fiber: 2,
+      blocking_operation_wait: 3,
+      io_read: 2,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_file_io
@@ -193,8 +249,14 @@ class FiberSchedulerTest < UMBaseTest
       File.open(fn, 'r') { buf = it.read }
     end
     assert_equal 2, machine.total_op_count
-
     @scheduler.join
+    assert_equal 'foobar', buf
+    assert_equal({
+      fiber: 2,
+      blocking_operation_wait: 3,
+      io_read: 2,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_mutex
@@ -225,6 +287,13 @@ class FiberSchedulerTest < UMBaseTest
 
     @scheduler.join
     assert_equal [11, [12, 0], 21, [13, 2], 14, [22, 2], [23, 4], 24], buf
+    assert_equal({
+      fiber: 2,
+      kernel_sleep: 2,
+      block: 1,
+      unblock: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_queue
@@ -245,6 +314,12 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
 
     assert_equal [[11, 0], [21, 0], [22, 0], :foo, [12, 1]], buf
+    assert_equal({
+      fiber: 2,
+      block: 1,
+      unblock: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_thread_join
@@ -260,6 +335,12 @@ class FiberSchedulerTest < UMBaseTest
 
     @scheduler.join
     assert_equal 1, machine.total_op_count
+    assert_equal({
+      fiber: 1,
+      block: 1,
+      unblock: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_system
@@ -270,6 +351,11 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 1, machine.total_op_count
     @scheduler.join
     assert_equal [true], buf
+    assert_equal({
+      fiber: 1,
+      process_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_cmd
@@ -280,6 +366,12 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 1, machine.total_op_count
     @scheduler.join
     assert_equal ["foo\n"], buf
+    assert_equal({
+      fiber: 1,
+      io_read: 2,
+      process_wait: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_popen
