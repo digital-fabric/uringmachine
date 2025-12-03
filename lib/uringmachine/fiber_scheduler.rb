@@ -17,7 +17,6 @@ class UringMachine
     # @return [void]
     def initialize(machine = nil)
       @machine = machine || UM.new
-      @ios = ObjectSpace::WeakMap.new
       @fiber_map = ObjectSpace::WeakMap.new
     end
 
@@ -31,7 +30,6 @@ class UringMachine
     # @return [self]
     def process_fork
       @machine = UM.new
-      @ios = ObjectSpace::WeakMap.new
       @fiber_map = ObjectSpace::WeakMap.new
       self
     end
@@ -165,7 +163,6 @@ class UringMachine
         raise NotImplementedError, "UringMachine currently does not support writing at an offset"
       end
 
-      ensure_nonblock(io)
       @machine.write(io.fileno, buffer)
     rescue Errno::EINTR
       retry
@@ -183,14 +180,13 @@ class UringMachine
         raise NotImplementedError, "UringMachine currently does not support reading at an offset"
       end
 
-      ensure_nonblock(io)
       length = buffer.size if length == 0
       @machine.read(io.fileno, buffer, length)
     rescue Errno::EINTR
       retry
     end
 
-    if UM.instance_methods.include?(:waitid_status)
+    if UM.method_defined?(:waitid_status)
       def process_wait(pid, flags)
         flags = UM::WEXITED if flags == 0
         @machine.waitid_status(UM::P_PID, pid, flags)
@@ -198,17 +194,6 @@ class UringMachine
     end
 
     private
-
-    # Ensures the given IO is in blocking mode.
-    #
-    # @param io [IO] IO object
-    # @return [void]
-    def ensure_nonblock(io)
-      return if @ios.key?(io)
-
-      @ios[io] = true
-      UM.io_set_nonblock(io, false)
-    end
 
     # Starts a background thread for running blocking operations.
     #
