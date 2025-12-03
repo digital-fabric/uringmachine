@@ -254,3 +254,24 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   I find it interesting how io_uring breaks a lot of assumptions about how I/O
   should be done.
 
+# 2025-12-03
+
+- Samuel and me continued discussing the behavior of the fiber scheduler after a
+  fork. After talking it through, we decided the best course of action would be
+  to remove the fiber scheduler after a fork, rather than to introduce a
+  `process_fork` hook. This is a safer choice, since a scheduler risks carrying
+  over some of its state across a fork, leading to unexpected behavior.
+
+  Another problem I uncovered is that if a fork is done from a non-blocking
+  fiber, the main fiber of the forked process (which "inherits" the forking
+  fiber) stays in non-blocking mode, which also may lead to unexpected behavior,
+  since the main fiber of all Ruby threads should be in blocking mode.
+
+  So I submitted a new [PR](https://github.com/ruby/ruby/pull/15385) that
+  corrects these two problems.
+
+- I mapped the remaining missing hooks in the UringMachine fiber scheduler
+  implementation, and made the tests more robust by checking that the different
+  scheduler hooks were actually being called.
+
+- The `#fiber_interrupt` hook is used to interrupt a fiber busy doing I/O on a 

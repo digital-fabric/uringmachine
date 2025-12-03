@@ -30,13 +30,8 @@ Analysis:
 - But first, I want to be able to reproduce it. We can start by setting
   `GC.stress = true` on tests and see if we segfault.
 
-## FiberScheduler implementation
 
-Some resources:
 
-- https://github.com/socketry/async/blob/main/context/getting-started.md
-- https://github.com/socketry/async/blob/main/context/scheduler.md
-- https://github.com/socketry/async/blob/main/lib/async/scheduler.rb#L28
 
 ## useful concurrency tools
 
