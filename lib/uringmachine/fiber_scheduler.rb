@@ -228,7 +228,15 @@ class UringMachine
     def io_write(io, buffer, length, offset)
       length = buffer.size if length == 0
 
-      @machine.write(io.fileno, buffer, length, offset)
+      if (timeout = io.timeout)
+				@machine.timeout(timeout, Timeout::Error) do
+          @machine.write(io.fileno, buffer, length, offset)
+        rescue Errno::EINTR
+          retry
+        end
+      else
+        @machine.write(io.fileno, buffer, length, offset)
+      end
     rescue Errno::EINTR
       retry
     end
@@ -242,7 +250,16 @@ class UringMachine
     # @return [Integer] bytes read
     def io_read(io, buffer, length, offset)
       length = buffer.size if length == 0
-      @machine.read(io.fileno, buffer, length, offset)
+
+      if (timeout = io.timeout)
+				@machine.timeout(timeout, Timeout::Error) do
+          @machine.read(io.fileno, buffer, length, offset)
+        rescue Errno::EINTR
+          retry
+        end
+      else
+        @machine.read(io.fileno, buffer, length, offset)
+      end
     rescue Errno::EINTR
       retry
     end

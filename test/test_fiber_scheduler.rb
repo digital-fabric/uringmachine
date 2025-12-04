@@ -71,7 +71,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 0, @scheduler.fiber_map.size
   end
 
-  def test_fiber_scheduler_basic_io
+  def test_fiber_scheduler_io_read_io_write
     i, o = IO.pipe
     buffer = []
 
@@ -108,6 +108,48 @@ class FiberSchedulerTest < UMBaseTest
   ensure
     i.close rescue nil
     o.close rescue nil
+  end
+
+  def test_io_read_with_timeout
+    i, o = IO.pipe
+    i.timeout = 0.01
+    buf = []
+
+    Fiber.schedule do
+      buf << i.read
+    rescue Timeout::Error
+      buf << :timeout
+    end
+    @scheduler.join
+    assert_equal [:timeout], buf
+    
+    assert_equal({
+      fiber: 1,
+      io_read: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_io_write_with_timeout
+    i, o = IO.pipe
+    o << ('*' * (1 << 16))
+    o.timeout = 0.01
+    
+    buf = []
+
+    Fiber.schedule do
+      buf << o.write('!')
+    rescue Timeout::Error
+      buf << :timeout
+    end
+    @scheduler.join
+    assert_equal [:timeout], buf
+    
+    assert_equal({
+      fiber: 1,
+      io_write: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
   def test_fiber_scheduler_sleep
