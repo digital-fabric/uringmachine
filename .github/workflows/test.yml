@@ -11,9 +11,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macos-latest uses arm64, macos-13 uses x86
         os: [ubuntu-latest]
-        ruby: ['3.4', 'head']
+        ruby: ['head']
 
     name: ${{matrix.os}}, ${{matrix.ruby}}
 
