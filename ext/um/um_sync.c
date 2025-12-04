@@ -29,10 +29,8 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
   struct um_op op;
   um_prep_op(machine, &op, OP_FUTEX_WAKE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-  // submit futex_wait
   io_uring_prep_futex_wake(
-    sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY,
-		FUTEX2_SIZE_U32, 0
+    sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
   VALUE ret = um_fiber_switch(machine);
@@ -45,8 +43,7 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
 void um_futex_wake_transient(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
   io_uring_prep_futex_wake(
-    sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY,
-		FUTEX2_SIZE_U32, 0
+    sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 }
 
@@ -62,7 +59,7 @@ void um_mutex_init(struct um_mutex *mutex) {
 inline void um_mutex_lock(struct um *machine, struct um_mutex *mutex) {
   mutex->num_waiters++;
   while (mutex->state == MUTEX_LOCKED) {
-    um_futex_wait(machine, &mutex->state, MUTEX_LOCKED);
+    um_futex_wait(machine, &mutex->state, MUTEX_UNLOCKED);
   }
   mutex->num_waiters--;
   mutex->state = MUTEX_LOCKED;
@@ -210,7 +207,6 @@ static inline VALUE um_queue_add(struct um *machine, struct um_queue *queue, VAL
   else          queue_add_tail(queue, value);
 
   queue->count++;
-
   queue->state = QUEUE_READY;
   if (queue->num_waiters)
     um_futex_wake_transient(machine, &queue->state, 1);
@@ -238,7 +234,7 @@ VALUE um_queue_remove_start(VALUE arg) {
 
   ctx->queue->num_waiters++;
   while (ctx->queue->state == QUEUE_EMPTY) {
-    um_futex_wait(ctx->machine, &ctx->queue->state, QUEUE_EMPTY);
+    um_futex_wait(ctx->machine, &ctx->queue->state, QUEUE_READY);
   }
 
   if (ctx->queue->state != QUEUE_READY)

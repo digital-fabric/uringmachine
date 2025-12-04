@@ -1601,6 +1601,42 @@ class QueueTest < UMBaseTest
 
     assert_equal [0, 1, 2], items
   end
+
+  def test_cross_thread_cross_queue_comms
+    worker_queue = UM::Queue.new
+
+    buf = []
+    t1 = Thread.new {
+      m = UM.new
+      (1..10).each {
+        q = UM::Queue.new
+        m.push(worker_queue, [q, it])
+        res = m.shift(q)
+        buf << res
+      }
+    }
+
+    t2 = Thread.new {
+      m = UM.new
+      loop do
+        q, v = m.shift(worker_queue)
+        break if q == :STOP
+        
+        res = v * 10
+        m.push(q, res)
+      end
+    }
+
+    t1.join
+    q = UM::Queue.new
+    machine.push(worker_queue, :STOP)
+    t2.join
+
+    assert_equal (1..10).map { it * 10 }, buf
+  ensure
+    t1.kill rescue nil
+    t2.kill rescue nil
+  end
 end
 
 class OpenTest < UMBaseTest
