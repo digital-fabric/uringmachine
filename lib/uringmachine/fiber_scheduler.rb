@@ -134,12 +134,17 @@ class UringMachine
     #
     # @param blocker [any] blocker object
     # @param timeout [Number, nil] optional
-    # timeout @return [bool] 
+    # timeout @return [bool] was the operation successful
     def block(blocker, timeout = nil)
-      raise NotImplementedError, "Implement me!" if timeout
+      if timeout
+        @machine.timeout(timeout, Timeout::Error) { @machine.yield }
+      else
+        @machine.yield
+      end
 
-      @machine.yield
       true
+    rescue Timeout::Error
+      false
     end
 
     # unblock hook: unblocks the given fiber by scheduling it. This hook is

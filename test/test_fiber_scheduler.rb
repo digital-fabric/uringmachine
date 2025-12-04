@@ -302,7 +302,7 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_fiber_scheduler_queue
+  def test_fiber_scheduler_queue_shift
     queue = Queue.new
 
     buf = []
@@ -324,6 +324,29 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 2,
       block: 1,
       unblock: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_fiber_scheduler_queue_shift_with_timeout
+    queue = Queue.new
+
+    buf = []
+    Fiber.schedule do
+      buf << [11, machine.total_op_count]
+      buf << queue.shift(timeout: 0.01)
+      buf << [12, machine.total_op_count]
+    end
+    Fiber.schedule do
+      buf << [21, machine.total_op_count]
+    end
+    assert_equal 1, machine.total_op_count
+    @scheduler.join
+
+    assert_equal [[11, 0], [21, 1], nil, [12, 2]], buf
+    assert_equal({
+      fiber: 2,
+      block: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
