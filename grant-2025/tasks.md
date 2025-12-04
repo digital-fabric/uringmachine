@@ -23,11 +23,11 @@
   - [v] Add `#address_resolve` hook with same impl as Async:
         https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L285-L296
   - [ ] Implement other hooks:
-    - [ ] `#timeout_after`
+    - [v] `#timeout_after`
           https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L631-L644
     - [ ] `#io_pread`
     - [ ] `#io_pwrite`
-    - [ ] `#io_select`
+    - [v] `#io_select`
     - [ ] Add timeout handling in different I/O hooks
   - [v] Experiment more with fork:
     - [v] what happens to schedulers on other threads (those that don't make it post-fork)
@@ -52,8 +52,9 @@
           ```
 
           So, apparently there's no problem!
-  - [ ] Discover any other fiber scheduler hooks
-  - [ ] Implement multi-thread worker pool for blocking_operation_wait 
+  - [v] Implement multi-thread worker pool for `blocking_operation_wait`
+        Single thread pool at class level, shared by all schedulers
+        With worker count according to CPU count ()
 
   - [v] tests:
     - [ ] Wrap the scheduler interface such that we can verify that specific
@@ -66,7 +67,7 @@
     - [v] fork
     - [v] system / exec / etc.
     - [v] popen
-  - [ ] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
+  - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
   - [ ] Implement timeouts (how do timeouts interact with blocking ops?)
     - [ ] Add tests
 

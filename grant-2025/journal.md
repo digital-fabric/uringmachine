@@ -274,4 +274,24 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   implementation, and made the tests more robust by checking that the different
   scheduler hooks were actually being called.
 
-- The `#fiber_interrupt` hook is used to interrupt a fiber busy doing I/O on a 
+- Continued implementing the missing fiber scheduler hooks: `#fiber_interrupt`,
+  `#address_resolve`, `#timeout_after`. For the most part, they were simple to
+  implement. I probably spent most of my time figuring out how to test these,
+  rather than implementing them. Most of the hooks involve just a few lines of
+  code, with many of them consisting of a single line of code, calling into the
+  relevant UringMachine low-level API.
+
+- Implemented the `#io_select` hook, which involved implementing a low-level
+  `UM#select` method. This method took some effort to implement, since it needs
+  to handle an arbitrary number of file descriptors to check for readiness. We
+  need to create a separate SQE for each fd we want to poll. When one or more
+  CQEs arrive for polled fd's, we also need to cancel all poll operations that
+  have not completed.
+  
+  Since in many cases, `IO.select` is called with just a single IO, I also added
+  a special-case implementation of `UM#select` that specifically handles a
+  single fd.
+
+
+
+
