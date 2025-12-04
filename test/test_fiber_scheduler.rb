@@ -417,12 +417,11 @@ class FiberSchedulerTest < UMBaseTest
 
   def test_fiber_interrupt
     r, w = IO.pipe
-    buf = nil
     w << 'foo'
 
     exception = nil
     Fiber.schedule do
-      buf = r.read
+      r.read
     rescue Exception => e
       exception = e
     end

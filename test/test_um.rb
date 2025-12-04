@@ -338,7 +338,7 @@ end
 
 class StatsTest < UMBaseTest
   def test_op_counts
-    r, w = IO.pipe
+    _r, w = IO.pipe
 
     assert_equal 0, machine.pending_count
     assert_equal 0, machine.total_op_count
