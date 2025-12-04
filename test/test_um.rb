@@ -327,7 +327,6 @@ class PeriodicallyTest < UMBaseTest
     rescue Cancel
       cancel = 1
     end
-    20.times { machine.snooze }
     assert_equal 0, machine.pending_count
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
@@ -1659,6 +1658,49 @@ class PollTest < UMBaseTest
 
   def test_poll_bad_fd
     assert_raises(Errno::EBADF) { machine.poll(9876, POLLIN) }
+  end
+end
+
+class SelectTest < UMBaseTest
+  def test_select
+    rfd1, wfd1 = UM.pipe
+    rfd2, wfd2 = UM.pipe
+    
+    events = []
+    machine.spin do
+      events << 1
+      events << machine.select([rfd1, rfd2], [], [])
+      events << 2
+      events << machine.select([rfd1, rfd2], [], [])
+      events << 3
+      machine.snooze
+      events << machine.select([], [wfd1, wfd2], [])
+      events << 4
+    end
+
+    machine.snooze
+    assert_equal [1], events
+
+    machine.write(wfd1, 'foo')
+    machine.snooze
+    assert_equal [1, [[rfd1], [], []], 2], events
+
+    machine.write(wfd2, 'foo')
+
+    machine.snooze
+    assert_equal [1, [[rfd1], [], []], 2, [[rfd1, rfd2], [], []], 3], events
+
+    machine.snooze
+
+    assert_equal [
+      1, [[rfd1], [], []],
+      2, [[rfd1, rfd2], [], []],
+      3, [[], [wfd1, wfd2], []],
+      4
+    ], events
+
+    machine.close(rfd1)
+    machine.close(rfd2)
   end
 end
 

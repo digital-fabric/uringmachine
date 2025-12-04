@@ -1,6 +1,8 @@
-#include <float.h>
 #include "um.h"
+#include <float.h>
 #include <ruby/thread.h>
+#include <assert.h>
+#include <poll.h>
 
 void um_setup(VALUE self, struct um *machine) {
   memset(machine, 0, sizeof(struct um));
@@ -84,9 +86,10 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     return;
   }
 
-  if (unlikely((cqe->res == -ECANCELED) && (op->flags & OP_F_IGNORE_CANCELED))) return;
-
   op->flags |= OP_F_COMPLETED;
+  if (unlikely((cqe->res == -ECANCELED) && (op->flags & OP_F_IGNORE_CANCELED))) return;
+  if (unlikely(op->flags & OP_F_CANCELED)) return;
+
   if (op->flags & OP_F_TRANSIENT)
     um_op_transient_remove(machine, op);
 
@@ -207,6 +210,8 @@ inline VALUE um_fiber_switch(struct um *machine) {
   while (true) {
     struct um_op *op = um_runqueue_shift(machine);
     if (op) {
+      if (unlikely(op->flags & OP_F_RUNQUEUE_SKIP)) continue;
+
       // in case of a snooze, we need to prevent a situation where completions
       // are not processed because the runqueue is never empty. Theoretically,
       // we can still have a situation where multiple fibers are all doing a
@@ -234,16 +239,15 @@ inline VALUE um_fiber_switch(struct um *machine) {
   }
 }
 
-void um_submit_cancel_op(struct um *machine, struct um_op *op) {
+void um_cancel_op(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
   io_uring_prep_cancel64(sqe, (long long)op, 0);
 }
 
 inline void um_cancel_and_wait(struct um *machine, struct um_op *op) {
-  um_submit_cancel_op(machine, op);
-  while (true) {
+  um_cancel_op(machine, op);
+  while (!um_op_completed_p(op)) {
     um_fiber_switch(machine);
-    if (um_op_completed_p(op)) break;
   }
 }
 
@@ -309,7 +313,7 @@ VALUE um_timeout_complete(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
 
   if (!um_op_completed_p(ctx->op)) {
-    um_submit_cancel_op(ctx->machine, ctx->op);
+    um_cancel_op(ctx->machine, ctx->op);
     ctx->op->flags |= OP_F_TRANSIENT | OP_F_IGNORE_CANCELED;
     um_op_transient_add(ctx->machine, ctx->op);
   }
@@ -694,6 +698,81 @@ VALUE um_poll(struct um *machine, int fd, unsigned mask) {
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
+}
+
+static inline void prepare_select_poll_ops(struct um *machine, uint *idx, struct um_op *ops, VALUE fds, uint len, uint flags, uint event) {
+  for (uint i = 0; i < len; i++) {
+    struct um_op *op = ops + ((*idx)++);
+    um_prep_op(machine, op, OP_POLL, flags | OP_F_IGNORE_CANCELED);
+    struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+    VALUE fd = rb_ary_entry(fds, i);
+    io_uring_prep_poll_add(sqe, NUM2INT(fd), event);
+    RB_OBJ_WRITE(machine->self, &op->value, fd);
+  }
+}
+
+VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
+  uint rfds_len = RARRAY_LEN(rfds);
+  uint wfds_len = RARRAY_LEN(wfds);
+  uint efds_len = RARRAY_LEN(efds);
+  uint total_len = rfds_len + wfds_len + efds_len;
+
+  if (unlikely(!total_len))
+    return rb_ary_new3(3, rb_ary_new(), rb_ary_new(), rb_ary_new());
+
+  struct um_op *ops = malloc(sizeof(struct um_op) * total_len);
+  uint idx = 0;
+  prepare_select_poll_ops(machine, &idx, ops, rfds, rfds_len, OP_F_SELECT_POLLIN, POLLIN);
+  prepare_select_poll_ops(machine, &idx, ops, wfds, wfds_len, OP_F_SELECT_POLLOUT, POLLOUT);
+  prepare_select_poll_ops(machine, &idx, ops, efds, efds_len, OP_F_SELECT_POLLPRI, POLLPRI);
+  assert(idx == total_len);
+
+  VALUE ret = um_fiber_switch(machine);
+  if (unlikely(um_value_is_exception_p(ret))) {
+    free(ops);
+    um_raise_exception(ret);
+  }
+
+  VALUE rfds_out = rb_ary_new();
+  VALUE wfds_out = rb_ary_new();
+  VALUE efds_out = rb_ary_new();
+
+  uint pending = total_len;
+  for (uint i = 0; i < total_len; i++) {
+    if (um_op_completed_p(&ops[i])) {
+      ops[i].flags |= OP_F_RUNQUEUE_SKIP;
+
+      pending--;
+      if (ops[i].flags & OP_F_SELECT_POLLIN)  rb_ary_push(rfds_out, ops[i].value);
+      if (ops[i].flags & OP_F_SELECT_POLLOUT) rb_ary_push(wfds_out, ops[i].value);
+      if (ops[i].flags & OP_F_SELECT_POLLPRI) rb_ary_push(efds_out, ops[i].value);
+    }
+    else {
+      ops[i].flags |= OP_F_CANCELED;
+      um_cancel_op(machine, &ops[i]);
+    }
+  }
+
+  while (pending) {
+    um_wait_for_and_process_ready_cqes(machine, 0);
+
+    for (uint i = 0; i < total_len; i++) {
+      struct um_op *op = ops + i;
+      if (op->flags & OP_F_CANCELED && um_op_completed_p(op)) {
+        pending--;
+      }
+    }
+  }
+  free(ops);
+
+  ret = rb_ary_new3(3, rfds_out, wfds_out, efds_out);
+  RB_GC_GUARD(ret);
+
+  return rb_ary_new3(3, rfds_out, wfds_out, efds_out);
+
+  RB_GC_GUARD(rfds_out);
+  RB_GC_GUARD(wfds_out);
+  RB_GC_GUARD(efds_out);
 }
 
 VALUE um_waitid(struct um *machine, int idtype, int id, int options) {

@@ -62,12 +62,17 @@ enum op_kind {
   OP_SLEEP_MULTISHOT
 };
 
-#define OP_F_COMPLETED        (1U << 0) // op is completed (set on each CQE for multishot ops)
-#define OP_F_TRANSIENT        (1U << 1) // op is heap allocated
-#define OP_F_ASYNC            (1U << 2) // op belongs to an AsyncOp
-#define OP_F_IGNORE_CANCELED  (1U << 3) // CQE with -ECANCEL should be ignored
-#define OP_F_MULTISHOT        (1U << 4) // op is multishot
-#define OP_F_FREE_ON_COMPLETE (1U << 5) // op should be freed on receiving CQE
+#define OP_F_COMPLETED        (1U <<  0) // op is completed (set on each CQE for multishot ops)
+#define OP_F_TRANSIENT        (1U <<  1) // op is heap allocated
+#define OP_F_ASYNC            (1U <<  2) // op belongs to an AsyncOp
+#define OP_F_CANCELED         (1U <<  3) // op is cancelled
+#define OP_F_IGNORE_CANCELED  (1U <<  4) // CQE with -ECANCEL should be ignored
+#define OP_F_MULTISHOT        (1U <<  5) // op is multishot
+#define OP_F_FREE_ON_COMPLETE (1U <<  6) // op should be freed on receiving CQE
+#define OP_F_RUNQUEUE_SKIP    (1U <<  7) // runqueue entry should be skipped
+#define OP_F_SELECT_POLLIN    (1U <<  8) // select POLLIN
+#define OP_F_SELECT_POLLOUT   (1U <<  9) // select POLLOUT
+#define OP_F_SELECT_POLLPRI   (1U << 10) // select POLLPRI
 
 struct um_op_result {
   __s32 res;
@@ -80,7 +85,7 @@ struct um_op {
   struct um_op *next;
 
   enum op_kind kind;
-  unsigned flags;
+  uint flags;
 
   VALUE fiber;
   VALUE value;
@@ -88,7 +93,7 @@ struct um_op {
 
   struct um_op_result result;
   struct um_op_result *multishot_result_tail;
-  unsigned multishot_result_count;
+  uint multishot_result_count;
 
   struct __kernel_timespec ts; // used for timeout operation
 };
@@ -211,7 +216,7 @@ double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
 
-#define RAISE_IF_EXCEPTION(v) if (um_value_is_exception_p(v)) { um_raise_exception(v); }
+#define RAISE_IF_EXCEPTION(v) if (unlikely(um_value_is_exception_p(v))) { um_raise_exception(v); }
 
 void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags);
 void um_raise_on_error_result(int result);
@@ -227,7 +232,7 @@ struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 VALUE um_wakeup(struct um *machine);
-void um_submit_cancel_op(struct um *machine, struct um_op *op);
+void um_cancel_op(struct um *machine, struct um_op *op);
 void um_cancel_and_wait(struct um *machine, struct um_op *op);
 int um_check_completion(struct um *machine, struct um_op *op);
 
@@ -247,6 +252,7 @@ VALUE um_close(struct um *machine, int fd);
 VALUE um_close_async(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_poll(struct um *machine, int fd, unsigned mask);
+VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds);
 VALUE um_waitid(struct um *machine, int idtype, int id, int options);
 VALUE um_waitid_status(struct um *machine, int idtype, int id, int options);
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);

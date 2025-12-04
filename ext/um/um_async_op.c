@@ -36,5 +36,5 @@ VALUE um_async_op_await(struct um_async_op *async_op) {
 }
 
 void um_async_op_cancel(struct um_async_op *async_op) {
-  um_submit_cancel_op(async_op->machine, async_op->op);
+  um_cancel_op(async_op->machine, async_op->op);
 }

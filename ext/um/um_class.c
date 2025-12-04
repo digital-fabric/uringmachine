@@ -340,6 +340,11 @@ VALUE UM_poll(VALUE self, VALUE fd, VALUE mask) {
   return um_poll(machine, NUM2INT(fd), NUM2UINT(mask));
 }
 
+VALUE UM_select(VALUE self, VALUE rfds, VALUE wfds, VALUE efds) {
+  struct um *machine = um_get_machine(self);
+  return um_select(machine, rfds, wfds, efds);
+}
+
 VALUE UM_waitid(VALUE self, VALUE idtype, VALUE id, VALUE options) {
   struct um *machine = um_get_machine(self);
   return um_waitid(machine, NUM2INT(idtype), NUM2INT(id), NUM2INT(options));
@@ -466,6 +471,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "statx", UM_statx, 4);
 
   rb_define_method(cUM, "poll", UM_poll, 2);
+  rb_define_method(cUM, "select", UM_select, 3);
   rb_define_method(cUM, "waitid", UM_waitid, 3);
   #ifdef HAVE_RB_PROCESS_STATUS_NEW
   rb_define_method(cUM, "waitid_status", UM_waitid_status, 3);
