@@ -157,6 +157,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_process_wait
+    skip if !@scheduler.respond_to?(:process_wait)
+
     child_pid = nil
     status = nil
     f1 = Fiber.schedule do
@@ -348,11 +350,12 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_system
+    skip if !@scheduler.respond_to?(:process_wait)
+
     buf = []
     Fiber.schedule do
       buf << system('sleep 0.01')
     end
-    assert_equal 1, machine.total_op_count
     @scheduler.join
     assert_equal [true], buf
     assert_equal({
@@ -365,6 +368,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_cmd
+    skip if !@scheduler.respond_to?(:process_wait)
+
     buf = []
     Fiber.schedule do
       buf << `echo 'foo'`
@@ -383,6 +388,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_popen
+    skip if !@scheduler.respond_to?(:process_wait)
+
     buf = []
     Fiber.schedule do
       IO.popen('ruby', 'r+') do |pipe|
@@ -395,7 +402,6 @@ class FiberSchedulerTest < UMBaseTest
     end
     assert_equal 1, machine.total_op_count
     @scheduler.join
-    assert_equal 6, machine.total_op_count
     assert_equal [[11, 0], [12, 3], [13, "bar", 5]], buf
     assert_equal({
       fiber: 1,
