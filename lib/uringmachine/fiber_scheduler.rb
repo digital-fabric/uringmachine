@@ -226,11 +226,9 @@ class UringMachine
     # @param offset [Integer] write offset
     # @return [Integer] bytes written
     def io_write(io, buffer, length, offset)
-      if offset > 0
-        raise NotImplementedError, "UringMachine currently does not support writing at an offset"
-      end
+      length = buffer.size if length == 0
 
-      @machine.write(io.fileno, buffer)
+      @machine.write(io.fileno, buffer, length, offset)
     rescue Errno::EINTR
       retry
     end
@@ -243,12 +241,8 @@ class UringMachine
     # @param offset [Integer] read offset
     # @return [Integer] bytes read
     def io_read(io, buffer, length, offset)
-      if offset > 0
-        raise NotImplementedError, "UringMachine currently does not support reading at an offset"
-      end
-
       length = buffer.size if length == 0
-      @machine.read(io.fileno, buffer, length)
+      @machine.read(io.fileno, buffer, length, offset)
     rescue Errno::EINTR
       retry
     end
