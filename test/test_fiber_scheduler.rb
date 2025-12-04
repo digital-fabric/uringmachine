@@ -479,4 +479,24 @@ class FiberSchedulerTest < UMBaseTest
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
+
+  def test_io_select
+    r, w = IO.pipe
+    buf = []
+
+    Fiber.schedule do
+      buf << IO.select([r], [], [])
+      buf << IO.select([], [w], [])
+    end
+    @machine.snooze
+    w << 'foo'
+    @machine.snooze
+    assert_equal [[[r], [], []]], buf
+    @machine.snooze
+    @scheduler.join
+    assert_equal [[[r], [], []], [[], [w], []]], buf
+  ensure
+    r.close rescue nil
+    w.close rescue nil
+  end
 end

@@ -140,6 +140,23 @@ class UringMachine
       end
     end
 
+    def io_select(rios, wios, eios, timeout = nil)
+      map_r = map_io_fds(rios)
+      map_w = map_io_fds(wios)
+      map_e = map_io_fds(eios)
+
+      r, w, e = nil
+      if timeout
+        @machine.timeout(timeout, Timeout::Error) {
+          r, w, e = @machine.select(map_r.keys, map_w.keys, map_e.keys)
+        }
+      else
+        r, w, e = @machine.select(map_r.keys, map_w.keys, map_e.keys)
+      end
+
+      [unmap_fds(r, map_r), unmap_fds(w, map_w), unmap_fds(e, map_e)]
+    end
+
     # fiber hook: creates a new fiber with the given block. The created fiber is
     # added to the fiber map, scheduled on the scheduler machine, and started
     # before this method returns (by calling snooze).
@@ -204,6 +221,10 @@ class UringMachine
 			Resolv.getaddresses(hostname)
 		end
 
+    def timeout_after(duration, exception, message, &block)
+      @machine.timeout(duration, exception, &block)
+    end
+
     private
 
     # Starts a background thread for running blocking operations.
@@ -224,5 +245,14 @@ class UringMachine
         end
       end
     end
+
+    def map_io_fds(ios)
+      ios.each_with_object({}) { |io, h| h[io.fileno] = io }
+    end
+
+    def unmap_fds(fds, map)
+      fds.map { map[it] }
+    end
+
   end
 end
