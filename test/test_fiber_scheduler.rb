@@ -448,7 +448,7 @@ class FiberSchedulerTest < UMBaseTest
   def test_address_resolve
     addrs = nil
     Fiber.schedule do
-      addrs = Addrinfo.getaddrinfo("localhost", 80, nil, :STREAM)
+      addrs = Addrinfo.getaddrinfo("localhost", 80, "AF_INET", :STREAM)
     end
     assert_equal 1, machine.total_op_count
     @scheduler.join
