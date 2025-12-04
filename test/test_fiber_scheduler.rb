@@ -430,7 +430,6 @@ class FiberSchedulerTest < UMBaseTest
     machine.snooze
     Thread.new {
       r.close
-      w.close
     }
     @scheduler.join
     assert_kind_of IOError, exception
