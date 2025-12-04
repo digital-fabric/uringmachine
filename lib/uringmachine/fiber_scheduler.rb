@@ -1,12 +1,63 @@
 # frozen_string_literal: true
 
 require 'resolv'
+require 'etc'
 
 class UringMachine
+  # Implements a thread pool for running blocking operations. 
+  class BlockingOperationThreadPool
+    def initialize
+      @blocking_op_queue = UM::Queue.new
+      @pending_count = 0
+      @worker_count = 0
+      @max_workers = Etc.nprocessors
+      @worker_mutex = UM::Mutex.new
+      @workers = []
+    end
+
+    def process(machine, job)
+      queue = UM::Queue.new
+
+      if @worker_count == 0 || (@pending_count > 0 && @worker_count < @max_workers)
+        start_worker(machine)
+      end 
+      machine.push(@blocking_op_queue, [queue, job])
+      machine.shift(queue)
+    end
+
+    private
+    
+    def start_worker(machine)
+      machine.synchronize(@worker_mutex) do
+        return if @worker_count == @max_workers
+
+        @workers << Thread.new { run_worker_thread }
+        @worker_count += 1
+      end
+    end
+
+    def run_worker_thread
+      machine = UM.new
+      loop do
+        q, op = machine.shift(@blocking_op_queue)
+        @pending_count += 1
+        res = begin
+          op.()
+        rescue Exception => e
+          e
+        end
+        @pending_count -= 1
+        machine.push(q, res)
+      end
+    end
+  end
+
   # UringMachine::FiberScheduler implements the Fiber::Scheduler interface for
   # creating fiber-based concurrent applications in Ruby, in tight integration
   # with the standard Ruby I/O and locking APIs.
   class FiberScheduler
+    @@blocking_operation_thread_pool = BlockingOperationThreadPool.new
+
     attr_reader :machine, :fiber_map
 
     # Instantiates a scheduler with the given UringMachine instance.
@@ -51,11 +102,6 @@ class UringMachine
       join()
     end
 
-    # fiber_interrupt hook: to be implemented.
-    def fiber_interrupt(fiber, exception)
-      raise NotImplementedError, "Implement me!"
-    end
-
     # For debugging purposes
     def p(o) = UM.debug(o.inspect)
 
@@ -79,11 +125,7 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
-      start_blocking_operation_thread if !@blocking_op_queue
-
-      queue = UM::Queue.new
-      @machine.push(@blocking_op_queue, [queue, blocking_operation])
-      @machine.shift(queue)
+      @@blocking_operation_thread_pool.process(@machine, blocking_operation)
     end
 
     # block hook: blocks the current fiber by yielding to the machine. This hook
@@ -92,11 +134,12 @@ class UringMachine
     #
     # @param blocker [any] blocker object
     # @param timeout [Number, nil] optional
-    # timeout @return [void]
+    # timeout @return [bool] 
     def block(blocker, timeout = nil)
       raise NotImplementedError, "Implement me!" if timeout
 
       @machine.yield
+      true
     end
 
     # unblock hook: unblocks the given fiber by scheduling it. This hook is
@@ -226,25 +269,6 @@ class UringMachine
     end
 
     private
-
-    # Starts a background thread for running blocking operations.
-    #
-    # @return [void]
-    def start_blocking_operation_thread
-      @blocking_op_queue = UM::Queue.new
-      @blocking_op_thread = Thread.new do
-        m = UM.new
-        loop do
-          q, op = m.shift(@blocking_op_queue)
-          res = begin
-            op.()
-          rescue Exception => e
-            e
-          end
-          m.push(q, res)
-        end
-      end
-    end
 
     def map_io_fds(ios)
       ios.each_with_object({}) { |io, h| h[io.fileno] = io }
