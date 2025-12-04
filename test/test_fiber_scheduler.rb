@@ -448,14 +448,14 @@ class FiberSchedulerTest < UMBaseTest
   def test_address_resolve
     addrs = nil
     Fiber.schedule do
-      addrs = Addrinfo.getaddrinfo("localhost", 80, "AF_INET", :STREAM)
+      addrs = Addrinfo.getaddrinfo("localhost", 80, Socket::AF_INET, :STREAM)
     end
     assert_equal 1, machine.total_op_count
     @scheduler.join
     assert_kind_of Array, addrs
     addr = addrs.first
     assert_kind_of Addrinfo, addr
-    assert_equal '127.0.0.1', addr.ip_address
+    assert_includes ['127.0.0.1', '::1'], addr.ip_address
     assert_equal({
       fiber: 1,
       io_read: 2,
