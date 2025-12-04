@@ -706,9 +706,34 @@ static inline void prepare_select_poll_ops(struct um *machine, uint *idx, struct
     um_prep_op(machine, op, OP_POLL, flags | OP_F_IGNORE_CANCELED);
     struct io_uring_sqe *sqe = um_get_sqe(machine, op);
     VALUE fd = rb_ary_entry(fds, i);
-    io_uring_prep_poll_add(sqe, NUM2INT(fd), event);
     RB_OBJ_WRITE(machine->self, &op->value, fd);
+    io_uring_prep_poll_add(sqe, NUM2INT(fd), event);
   }
+}
+
+VALUE um_select_single(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds, uint rfds_len, uint wfds_len, uint efds_len) {
+  struct um_op op;
+  uint idx = 0;
+  if (rfds_len)
+    prepare_select_poll_ops(machine, &idx, &op, rfds, rfds_len, OP_F_SELECT_POLLIN, POLLIN);
+  else if (wfds_len)
+    prepare_select_poll_ops(machine, &idx, &op, wfds, wfds_len, OP_F_SELECT_POLLOUT, POLLOUT);
+  else if (efds_len)
+    prepare_select_poll_ops(machine, &idx, &op, efds, efds_len, OP_F_SELECT_POLLPRI, POLLPRI);
+  assert(idx == 1);
+
+  VALUE ret = um_fiber_switch(machine);
+  um_check_completion(machine, &op);
+  RAISE_IF_EXCEPTION(ret);
+
+  if (op.flags & OP_F_SELECT_POLLIN)
+    return rb_ary_new3(3, rb_ary_new3(1, ret), rb_ary_new(), rb_ary_new());
+  else if (op.flags & OP_F_SELECT_POLLOUT)
+    return rb_ary_new3(3, rb_ary_new(), rb_ary_new3(1, ret), rb_ary_new());
+  else
+    return rb_ary_new3(3, rb_ary_new(), rb_ary_new(), rb_ary_new3(1, ret));
+
+  RB_GC_GUARD(ret);
 }
 
 VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
@@ -716,6 +741,8 @@ VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
   uint wfds_len = RARRAY_LEN(wfds);
   uint efds_len = RARRAY_LEN(efds);
   uint total_len = rfds_len + wfds_len + efds_len;
+  if (total_len == 1)
+    return um_select_single(machine, rfds, wfds, efds, rfds_len, wfds_len, efds_len);
 
   if (unlikely(!total_len))
     return rb_ary_new3(3, rb_ary_new(), rb_ary_new(), rb_ary_new());
@@ -737,15 +764,21 @@ VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
   VALUE wfds_out = rb_ary_new();
   VALUE efds_out = rb_ary_new();
 
+  int error_code = 0;
   uint pending = total_len;
   for (uint i = 0; i < total_len; i++) {
     if (um_op_completed_p(&ops[i])) {
       ops[i].flags |= OP_F_RUNQUEUE_SKIP;
-
       pending--;
-      if (ops[i].flags & OP_F_SELECT_POLLIN)  rb_ary_push(rfds_out, ops[i].value);
-      if (ops[i].flags & OP_F_SELECT_POLLOUT) rb_ary_push(wfds_out, ops[i].value);
-      if (ops[i].flags & OP_F_SELECT_POLLPRI) rb_ary_push(efds_out, ops[i].value);
+
+      if (unlikely((ops[i].result.res < 0) && !error_code)) {
+        error_code = ops[i].result.res;
+      }
+      else {
+        if (ops[i].flags & OP_F_SELECT_POLLIN)  rb_ary_push(rfds_out, ops[i].value);
+        if (ops[i].flags & OP_F_SELECT_POLLOUT) rb_ary_push(wfds_out, ops[i].value);
+        if (ops[i].flags & OP_F_SELECT_POLLPRI) rb_ary_push(efds_out, ops[i].value);
+      }
     }
     else {
       ops[i].flags |= OP_F_CANCELED;
@@ -765,8 +798,8 @@ VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
   }
   free(ops);
 
-  ret = rb_ary_new3(3, rfds_out, wfds_out, efds_out);
-  RB_GC_GUARD(ret);
+  if (error_code)
+    um_raise_on_error_result(error_code);
 
   return rb_ary_new3(3, rfds_out, wfds_out, efds_out);
 

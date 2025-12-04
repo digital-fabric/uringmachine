@@ -1702,6 +1702,42 @@ class SelectTest < UMBaseTest
     machine.close(rfd1)
     machine.close(rfd2)
   end
+
+  def test_select_single
+    rfd1, wfd1 = UM.pipe
+    
+    events = []
+    machine.spin do
+      events << 1
+      events << machine.select([rfd1], [], [])
+      events << 2
+      machine.snooze
+      events << machine.select([], [wfd1], [])
+      events << 3
+    end
+
+    machine.snooze
+    assert_equal [1], events
+
+    machine.write(wfd1, 'foo')
+    machine.snooze
+    assert_equal [1, [[rfd1], [], []], 2], events
+
+    3.times { machine.snooze }
+    assert_equal [1, [[rfd1], [], []], 2, [[], [wfd1], []], 3], events
+
+    machine.close(rfd1)
+    machine.close(wfd1)
+  end
+
+  def test_select_empty
+    ret = machine.select([], [], [])
+    assert_equal [[], [], []], ret
+  end
+
+  def test_select_bad_fd
+    assert_raises(Errno::EBADF) { machine.select([9876, 9877], [], []) }
+  end
 end
 
 class WaitidTest < UMBaseTest
