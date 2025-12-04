@@ -292,6 +292,18 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   a special-case implementation of `UM#select` that specifically handles a
   single fd.
 
+- Implemented a worker pool for performing blocking operations in the scheduler.
+  Up until now, each scheduler started their own worker thread for performing
+  blocking operations for use in the `#blocking_operation_wait` hook. The new
+  implementation uses a worker thread pool shared by all schedulers, with a
+  worker count limited to CPU count. Workers are started when needed.
+
+  I also added an optional `entries` argument to set the SQE and CQE buffer
+  sizes when starting a new `UringMachine` instance. This is specifically used
+  by worker threads to limit the memory footprint of each worker's UringMachine
+  instance. The default size is 4096 SQE entries (liburing by default makes the
+  CQE buffer size double that of the SQE buffer).
+
 
 
 

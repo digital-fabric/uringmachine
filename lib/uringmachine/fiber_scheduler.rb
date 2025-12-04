@@ -37,7 +37,7 @@ class UringMachine
     end
 
     def run_worker_thread
-      machine = UM.new
+      machine = UM.new(4)
       loop do
         q, op = machine.shift(@blocking_op_queue)
         @pending_count += 1

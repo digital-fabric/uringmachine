@@ -54,10 +54,10 @@
           So, apparently there's no problem!
   - [v] Implement multi-thread worker pool for `blocking_operation_wait`
         Single thread pool at class level, shared by all schedulers
-        With worker count according to CPU count ()
+        With worker count according to CPU count
 
   - [v] tests:
-    - [ ] Wrap the scheduler interface such that we can verify that specific
+    - [v] Wrap the scheduler interface such that we can verify that specific
       hooks were called. Add asserts for called hooks for all tests.
     - [v] Sockets (only io_wait)
     - [v] Files
