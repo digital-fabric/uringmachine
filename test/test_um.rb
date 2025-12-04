@@ -1298,8 +1298,6 @@ end
 
 class SynchronizeTest < UMBaseTest
   def test_synchronize_single
-    skip if !machine.respond_to?(:synchronize)
-
     m = UM::Mutex.new
 
     buf = []
@@ -1315,7 +1313,6 @@ class SynchronizeTest < UMBaseTest
   end
 
   def test_synchronize_pair
-    skip if !machine.respond_to?(:synchronize)
     m = UM::Mutex.new
 
     buf = []
@@ -1370,8 +1367,6 @@ end
 
 class QueueTest < UMBaseTest
   def test_push_pop_1
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
     assert_equal 0, q.count
     machine.push(q, :foo)
@@ -1385,8 +1380,6 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_2
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
     buf = []
 
@@ -1417,8 +1410,6 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_3
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
     buf = []
 
@@ -1445,8 +1436,6 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_pop_4
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
     buf = []
 
@@ -1474,8 +1463,6 @@ class QueueTest < UMBaseTest
   end
 
   def test_push_shift_1
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
 
     machine.push(q, :foo)
@@ -1488,8 +1475,6 @@ class QueueTest < UMBaseTest
   end
 
   def test_shift_shift_1
-    skip if !machine.respond_to?(:synchronize)
-
     q = UM::Queue.new
 
     machine.unshift(q, :foo)
@@ -1499,6 +1484,15 @@ class QueueTest < UMBaseTest
     assert_equal :baz, machine.shift(q)
     assert_equal :bar, machine.shift(q)
     assert_equal :foo, machine.shift(q)
+  end
+
+  def test_shift_exception_value
+    q = UM::Queue.new
+    machine.unshift(q, Exception.new("foo"))
+
+    e = machine.shift(q)
+    assert_kind_of Exception, e
+    assert_equal "foo", e.message
   end
 
   def test_cross_thread_push_shift

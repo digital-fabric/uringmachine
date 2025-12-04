@@ -20,6 +20,9 @@ class MethodCallAuditor
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
     res
+  rescue => e
+    @calls << ({ sym:, args:, res: e})
+    raise
   end
 
   def last_call
@@ -73,13 +76,13 @@ class FiberSchedulerTest < UMBaseTest
     buffer = []
 
     f1 = Fiber.schedule do
-      sleep 0.001
+      sleep 0.01
       o.write 'foo'
       buffer << :f1
     end
 
     f2 = Fiber.schedule do
-      sleep 0.002
+      sleep 0.02
       o.write 'bar'
       buffer << :f2
       o.close
@@ -427,7 +430,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_kind_of IOError, exception
     assert_equal({
       fiber: 1,
-      io_read: 1,
+      io_read: 2,
       fiber_interrupt: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
@@ -452,6 +455,27 @@ class FiberSchedulerTest < UMBaseTest
       io_read: 2,
       blocking_operation_wait: 1,
       address_resolve: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_timeout_after
+    res = nil
+    Fiber.schedule do
+      Timeout.timeout(0.05) do
+        sleep 1
+      end
+      res = true
+    rescue => e
+      res = e
+    end
+    @scheduler.join
+    assert_equal 3, machine.total_op_count
+    assert_kind_of Timeout::Error, res
+    assert_equal({
+      fiber: 1,
+      timeout_after: 1,
+      kernel_sleep: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
