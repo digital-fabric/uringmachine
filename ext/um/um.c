@@ -4,24 +4,19 @@
 #include <assert.h>
 #include <poll.h>
 
-void um_setup(VALUE self, struct um *machine) {
+#define DEFAULT_ENTRIES 4096
+
+void um_setup(VALUE self, struct um *machine, uint entries) {
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
 
-  unsigned prepared_limit = 4096;
   unsigned flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_COOP_TASKRUN;
 
-  while (1) {
-    int ret = io_uring_queue_init(prepared_limit, &machine->ring, flags);
-    if (likely(!ret)) break;
+  machine->entries = (entries > 0) ? entries : DEFAULT_ENTRIES;
 
-    // if ENOMEM is returned, try with half as much entries
-    if (unlikely(ret == -ENOMEM && prepared_limit > 64))
-      prepared_limit = prepared_limit / 2;
-    else
-      rb_syserr_fail(-ret, strerror(-ret));
-  }
+  int ret = io_uring_queue_init(machine->entries, &machine->ring, flags);
+  if (ret) rb_syserr_fail(-ret, strerror(-ret));
   machine->ring_initialized = 1;
 }
 

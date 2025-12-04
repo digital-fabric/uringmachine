@@ -5,7 +5,7 @@
   - [v] Add support for IO::Buffer in UM API.
   - [v] Add `UM::Error` class to be used instead of RuntimeError
   - [ ] Do batch allocation for `struct um_op`, for better cache locality?
-  - [ ] Add optional ring size argument to `UM.new` (for example, a the
+  - [v] Add optional ring size argument to `UM.new` (for example, a the
     worker thread for the scheduler `blocking_operation_wait` hook does not need
     a lot of depth, so you can basically do `UM.new(4)`)
   - [ ] Add support for using IO::Buffer in association with io_uring registered

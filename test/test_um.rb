@@ -11,6 +11,18 @@ class UringMachineTest < Minitest::Test
   end
 end
 
+class EntriesTest < Minitest::Test
+  def test_default_entries
+    m = UM.new
+    assert_equal 4096, m.entries
+  end
+
+  def test_custom_entries_value
+    m = UM.new(13)
+    assert_equal 13, m.entries
+  end
+end
+
 class SpinTest < UMBaseTest
   def test_spin
     x = nil

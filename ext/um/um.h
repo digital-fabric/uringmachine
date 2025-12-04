@@ -126,6 +126,7 @@ struct um {
   uint unsubmitted_count;
   uint pending_count;
   uint buffer_ring_count;
+  uint entries;
   ulong total_op_count; 
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
@@ -190,7 +191,7 @@ extern VALUE cAsyncOp;
 extern VALUE eStreamRESPError;
 
 struct um *um_get_machine(VALUE self);
-void um_setup(VALUE self, struct um *machine);
+void um_setup(VALUE self, struct um *machine, uint entries);
 void um_teardown(struct um *machine);
 
 struct um_op *um_op_alloc(struct um *machine);

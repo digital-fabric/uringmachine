@@ -54,9 +54,14 @@ inline struct um *um_get_machine(VALUE self) {
   return um;
 }
 
-VALUE UM_initialize(VALUE self) {
+VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   struct um *machine = RTYPEDDATA_DATA(self);
-  um_setup(self, machine);
+  VALUE entries;
+  rb_scan_args(argc, argv, "01", &entries);
+
+  uint entries_i = NIL_P(entries) ? 0 : NUM2UINT(entries);
+
+  um_setup(self, machine, entries_i);
   return self;
 }
 
@@ -64,6 +69,11 @@ VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
   struct um *machine = um_get_machine(self);
   int bgid = um_setup_buffer_ring(machine, NUM2UINT(size), NUM2UINT(count));
   return INT2NUM(bgid);
+}
+
+VALUE UM_entries(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return UINT2NUM(machine->entries);
 }
 
 VALUE UM_pending_count(VALUE self) {
@@ -438,7 +448,8 @@ void Init_UM(void) {
   cUM = rb_define_class("UringMachine", rb_cObject);
   rb_define_alloc_func(cUM, UM_allocate);
 
-  rb_define_method(cUM, "initialize", UM_initialize, 0);
+  rb_define_method(cUM, "initialize", UM_initialize, -1);
+  rb_define_method(cUM, "entries", UM_entries, 0);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
   rb_define_method(cUM, "total_op_count", UM_total_op_count, 0);
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
