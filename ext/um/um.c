@@ -399,14 +399,15 @@ size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen) {
 }
 
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset) {
-  struct um_op op;
-  um_prep_op(machine, &op, OP_WRITE, 0);
-  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-
   const void *base;
   size_t size;
   um_get_buffer_bytes_for_writing(buffer, &base, &size);
   if ((len == (size_t)-1) || (len > size)) len = size;
+  if (unlikely(!len)) return INT2NUM(0);
+
+  struct um_op op;
+  um_prep_op(machine, &op, OP_WRITE, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
   io_uring_prep_write(sqe, fd, base, len, file_offset);
 
@@ -420,16 +421,18 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
 }
 
 VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset) {
+  const void *base;
+  size_t size;
+  um_get_buffer_bytes_for_writing(buffer, &base, &size);
+  if ((len == (size_t)-1) || (len > size)) len = size;
+  if (unlikely(!len)) return INT2NUM(0);
+
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_TRANSIENT | OP_F_FREE_ON_COMPLETE);
   RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
   RB_OBJ_WRITE(machine->self, &op->value, buffer);
   RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
-  const void *base;
-  size_t size;
-  um_get_buffer_bytes_for_writing(buffer, &base, &size);
-  if ((len == (size_t)-1) || (len > size)) len = size;
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_write(sqe, fd, base, len, file_offset);

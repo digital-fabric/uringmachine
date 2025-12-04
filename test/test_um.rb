@@ -660,11 +660,13 @@ class WriteTest < UMBaseTest
     r, w = IO.pipe
 
     assert_equal 0, machine.pending_count
-    machine.write(w.fileno, 'foo')
+    res = machine.write(w.fileno, 'foo')
+    assert_equal 3, res
     assert_equal 0, machine.pending_count
     assert_equal 'foo', r.readpartial(3)
 
-    machine.write(w.fileno, 'bar', 2)
+    res = machine.write(w.fileno, 'bar', 2)
+    assert_equal 2, res
     assert_equal 'ba', r.readpartial(3)
   end
 
@@ -676,6 +678,24 @@ class WriteTest < UMBaseTest
       machine.write(r.fileno, 'foo')
     end
     assert_equal 0, machine.pending_count
+  end
+
+  def test_write_zero_length
+    r, w = IO.pipe
+
+    res = machine.write(w.fileno, '')
+    assert_equal 0, res
+
+    res = machine.write(w.fileno, 'bar', 0)
+    assert_equal 0, res
+
+    buf = IO::Buffer.new(3)
+    buf.set_string('baz')
+    res = machine.write(w.fileno, buf, 0, 0)
+    assert_equal 0, res
+
+    w.close
+    assert_equal '', r.read
   end
 
   def test_write_io_buffer
