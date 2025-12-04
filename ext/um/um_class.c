@@ -129,12 +129,14 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   VALUE buffer;
   VALUE maxlen;
   VALUE buffer_offset;
-  rb_scan_args(argc, argv, "22", &fd, &buffer, &maxlen, &buffer_offset);
+  VALUE file_offset;
+  rb_scan_args(argc, argv, "23", &fd, &buffer, &maxlen, &buffer_offset, &file_offset);
 
   ssize_t maxlen_i = NIL_P(maxlen) ? -1 : NUM2INT(maxlen);
   ssize_t buffer_offset_i = NIL_P(buffer_offset) ? 0 : NUM2INT(buffer_offset);
+  __u64 file_offset_i = NIL_P(file_offset) ? (__u64)-1 : NUM2UINT(file_offset);
 
-  return um_read(machine, NUM2INT(fd), buffer, maxlen_i, buffer_offset_i);
+  return um_read(machine, NUM2INT(fd), buffer, maxlen_i, buffer_offset_i, file_offset_i);
 }
 
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
@@ -147,15 +149,27 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   VALUE fd;
   VALUE buffer;
   VALUE len;
-  rb_scan_args(argc, argv, "21", &fd, &buffer, &len);
+  VALUE file_offset;
+  rb_scan_args(argc, argv, "22", &fd, &buffer, &len, &file_offset);
 
-  size_t bytes = NIL_P(len) ? (size_t)-1 : NUM2UINT(len);
-  return um_write(machine, NUM2INT(fd), buffer, bytes);
+  size_t len_i = NIL_P(len) ? (size_t)-1 : NUM2UINT(len);
+  __u64 file_offset_i = NIL_P(file_offset) ? (__u64)-1 : NUM2UINT(file_offset);
+  
+  return um_write(machine, NUM2INT(fd), buffer, len_i, file_offset_i);
 }
 
-VALUE UM_write_async(VALUE self, VALUE fd, VALUE buffer) {
+VALUE UM_write_async(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
-  return um_write_async(machine, NUM2INT(fd), buffer);
+  VALUE fd;
+  VALUE buffer;
+  VALUE len;
+  VALUE file_offset;
+  rb_scan_args(argc, argv, "22", &fd, &buffer, &len, &file_offset);
+
+  size_t len_i = NIL_P(len) ? (size_t)-1 : NUM2UINT(len);
+  __u64 file_offset_i = NIL_P(file_offset) ? (__u64)-1 : NUM2UINT(file_offset);
+
+  return um_write_async(machine, NUM2INT(fd), buffer, len_i, file_offset_i);
 }
 
 VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {
@@ -478,7 +492,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "periodically", UM_periodically, 1);
   rb_define_method(cUM, "write", UM_write, -1);
-  rb_define_method(cUM, "write_async", UM_write_async, 2);
+  rb_define_method(cUM, "write_async", UM_write_async, -1);
   rb_define_method(cUM, "statx", UM_statx, 4);
 
   rb_define_method(cUM, "poll", UM_poll, 2);

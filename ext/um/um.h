@@ -244,11 +244,11 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
 
 VALUE um_sleep(struct um *machine, double duration);
 VALUE um_periodically(struct um *machine, double interval);
-VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset);
+VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset, __u64 file_offset);
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
-VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len);
-VALUE um_write_async(struct um *machine, int fd, VALUE buffer);
+VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
+VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
 VALUE um_close(struct um *machine, int fd);
 VALUE um_close_async(struct um *machine, int fd);
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);

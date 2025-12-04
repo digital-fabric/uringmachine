@@ -362,12 +362,12 @@ VALUE um_sleep(struct um *machine, double duration) {
   return ret;
 }
 
-VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset) {
+VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset, __u64 file_offset) {
   struct um_op op;
   um_prep_op(machine, &op, OP_READ, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
-  io_uring_prep_read(sqe, fd, ptr, maxlen, -1);
+  io_uring_prep_read(sqe, fd, ptr, maxlen, file_offset);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op)) {
@@ -398,7 +398,7 @@ size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen) {
   return 0;
 }
 
-VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
+VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset) {
   struct um_op op;
   um_prep_op(machine, &op, OP_WRITE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -408,7 +408,7 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
   um_get_buffer_bytes_for_writing(buffer, &base, &size);
   if ((len == (size_t)-1) || (len > size)) len = size;
 
-  io_uring_prep_write(sqe, fd, base, len, -1);
+  io_uring_prep_write(sqe, fd, base, len, file_offset);
 
   VALUE ret = um_fiber_switch(machine);
   if (um_check_completion(machine, &op))
@@ -419,7 +419,7 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len) {
   return ret;
 }
 
-VALUE um_write_async(struct um *machine, int fd, VALUE buffer) {
+VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_TRANSIENT | OP_F_FREE_ON_COMPLETE);
   RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
@@ -429,9 +429,10 @@ VALUE um_write_async(struct um *machine, int fd, VALUE buffer) {
   const void *base;
   size_t size;
   um_get_buffer_bytes_for_writing(buffer, &base, &size);
+  if ((len == (size_t)-1) || (len > size)) len = size;
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  io_uring_prep_write(sqe, fd, base, size, -1);
+  io_uring_prep_write(sqe, fd, base, len, file_offset);
   um_op_transient_add(machine, op);
 
   return buffer;

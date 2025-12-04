@@ -304,6 +304,3 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   instance. The default size is 4096 SQE entries (liburing by default makes the
   CQE buffer size double that of the SQE buffer).
 
-
-
-

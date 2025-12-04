@@ -497,6 +497,19 @@ class ReadTest < UMBaseTest
       machine.read(r, [])
     }
   end
+
+  def test_read_with_file_offset
+    fn = "/tmp/#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    fd = machine.open(fn, UM::O_RDONLY)
+    buffer = +''
+    result = machine.read(fd, buffer, 100, 0, 2)
+    assert_equal 4, result
+    assert_equal 'obar', buffer
+  ensure
+    machine.close(fd)
+  end
 end
 
 class ReadEachTest < UMBaseTest
@@ -712,6 +725,19 @@ class WriteTest < UMBaseTest
       machine.write(w, [])
     }
   end
+
+  def test_write_with_file_offset
+    fn = "/tmp/#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    fd = machine.open(fn, UM::O_WRONLY)
+    result = machine.write(fd, 'baz', -1, 2)
+    assert_equal 3, result
+    assert_equal 'fobazr', IO.read(fn)
+  ensure
+    machine.close(fd)
+  end
+
 end
 
 class WriteAsyncTest < UMBaseTest
@@ -722,7 +748,7 @@ class WriteAsyncTest < UMBaseTest
     machine.write_async(w.fileno, 'foo')
     assert_equal 1, machine.pending_count
 
-    machine.snooze
+    machine.snooze while machine.pending_count > 0
     assert_equal 0, machine.pending_count
     assert_equal 'foo', r.readpartial(3)
   end
@@ -738,7 +764,7 @@ class WriteAsyncTest < UMBaseTest
     GC.start
     assert_equal 1, machine.pending_count
 
-    machine.snooze
+    machine.snooze while machine.pending_count > 0
     assert_equal 0, machine.pending_count
     assert_equal "foo#{123}#{'bar' * 48}", r.readpartial(len)
   end
@@ -761,7 +787,7 @@ class WriteAsyncTest < UMBaseTest
     write_buffer.set_string(msg)
 
     machine.write_async(w, write_buffer)
-    3.times { machine.snooze }
+    machine.snooze while machine.pending_count > 0
     machine.close(w)
 
     str = +''
@@ -773,6 +799,32 @@ class WriteAsyncTest < UMBaseTest
     _r, w = UM.pipe
 
     assert_raises(UM::Error) { machine.write_async(w, []) }
+  end
+
+  def test_write_async_with_len
+    r, w = IO.pipe
+
+    assert_equal 0, machine.pending_count
+    machine.write_async(w.fileno, 'foobar', 4)
+
+    assert_equal 1, machine.pending_count
+    machine.snooze while machine.pending_count > 0
+    assert_equal 0, machine.pending_count
+    assert_equal 'foob', r.readpartial(6)
+  end
+
+  def test_write_async_with_file_offset
+    fn = "/tmp/#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    fd = machine.open(fn, UM::O_WRONLY)
+    machine.write_async(fd, 'baz', -1, 2)
+
+    assert_equal 1, machine.pending_count
+    machine.snooze while machine.pending_count > 0
+    assert_equal 'fobazr', IO.read(fn)
+  ensure
+    machine.close(fd)
   end
 end
 
