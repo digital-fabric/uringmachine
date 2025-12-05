@@ -4,7 +4,7 @@ require 'resolv'
 require 'etc'
 
 class UringMachine
-  # Implements a thread pool for running blocking operations. 
+  # Implements a thread pool for running blocking operations.
   class BlockingOperationThreadPool
     def initialize
       @blocking_op_queue = UM::Queue.new
@@ -26,7 +26,7 @@ class UringMachine
     end
 
     private
-    
+
     def start_worker(machine)
       machine.synchronize(@worker_mutex) do
         return if @worker_count == @max_workers
@@ -127,8 +127,8 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
-      naive_blocking_peration_wait(blocking_operation)
-      # @@blocking_operation_thread_pool.process(@machine, blocking_operation)
+      # naive_blocking_peration_wait(blocking_operation)
+      @@blocking_operation_thread_pool.process(@machine, blocking_operation)
     end
 
     def naive_blocking_peration_wait(blocking_operation)

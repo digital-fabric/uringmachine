@@ -160,7 +160,7 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
 
   size_t len_i = NIL_P(len) ? (size_t)-1 : NUM2UINT(len);
   __u64 file_offset_i = NIL_P(file_offset) ? (__u64)-1 : NUM2UINT(file_offset);
-  
+
   return um_write(machine, NUM2INT(fd), buffer, len_i, file_offset_i);
 }
 

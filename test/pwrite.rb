@@ -7,14 +7,14 @@ require 'securerandom'
 
 class MethodCallAuditor
   attr_reader :calls
-  
+
   def initialize(target)
     @target = target
     @calls = []
   end
 
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
-  
+
   def method_missing(sym, *args, &block)
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})

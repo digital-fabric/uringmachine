@@ -1620,7 +1620,7 @@ class QueueTest < UMBaseTest
       loop do
         q, v = m.shift(worker_queue)
         break if q == :STOP
-        
+
         res = v * 10
         m.push(q, res)
       end
@@ -1784,7 +1784,7 @@ class SelectTest < UMBaseTest
   def test_select
     rfd1, wfd1 = UM.pipe
     rfd2, wfd2 = UM.pipe
-    
+
     events = []
     machine.spin do
       events << 1
@@ -1824,7 +1824,7 @@ class SelectTest < UMBaseTest
 
   def test_select_single
     rfd1, wfd1 = UM.pipe
-    
+
     events = []
     machine.spin do
       events << 1

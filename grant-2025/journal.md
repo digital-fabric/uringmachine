@@ -250,7 +250,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   - For sockets there are no specialized hooks, like `#socket_send` etc.
     Instead, Ruby makes the socket fd's non-blocking and invokes `#io_wait` to
     wait for the socket to be ready.
-  
+
   I find it interesting how io_uring breaks a lot of assumptions about how I/O
   should be done.
 
@@ -287,7 +287,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   need to create a separate SQE for each fd we want to poll. When one or more
   CQEs arrive for polled fd's, we also need to cancel all poll operations that
   have not completed.
-  
+
   Since in many cases, `IO.select` is called with just a single IO, I also added
   a special-case implementation of `UM#select` that specifically handles a
   single fd.
@@ -306,7 +306,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   SQE buffer). The blocking operations worker threads specify a value of 4 since
   they only use their UringMachine instance for popping jobs off the job queue
   and pushing the blocking operation result back to the scheduler.
-  
+
 - Added support for `file_offset` argument in `UM#read` and `UM#write` in
   preparation for implementing the `#io_pread` and `#io_pwrite` hooks. The
   `UM#write_async` API, which permits writing to a file descriptor without
@@ -327,4 +327,13 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   woken after the submitted operation was done.
 
 - I finished work on the `#io_pread` and `#io_pwrite` hooks. Unfortunately, the
-  test for `#io_pwrite` consistently hangs (not on `IO#pwrite`, rather on closing the file.) I'm 
+  test for `#io_pwrite` consistently hangs (not on `IO#pwrite` itself, rather on
+  closing the file.) With Samuel's help, hopefully we'll find a solution...
+
+- With those two last hooks, the fiber scheduler implementation is now feature
+  complete! While I have written test cases for the different fiber scheduler
+  hooks, I'd like to add more tests - and especially tests that exercise
+  multiple hooks, tests with high concurrency, and integration tests where I
+  check how the fiber scheduler plays with Ruby APIs like `Net::HTTP` and the
+  `socket` API in general.
+

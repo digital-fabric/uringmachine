@@ -4,10 +4,10 @@
 - [ ] UringMachine low-level API
   - [v] Add support for IO::Buffer in UM API.
   - [v] Add `UM::Error` class to be used instead of RuntimeError
-  - [ ] Do batch allocation for `struct um_op`, for better cache locality?
   - [v] Add optional ring size argument to `UM.new` (for example, a the
     worker thread for the scheduler `blocking_operation_wait` hook does not need
     a lot of depth, so you can basically do `UM.new(4)`)
+  - [ ] Do batch allocation for `struct um_op`, for better cache locality?
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
   - [ ] Add support for SQPOLL
@@ -22,13 +22,13 @@
   - [v] Implement `fiber_interrupt` hook
   - [v] Add `#address_resolve` hook with same impl as Async:
         https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L285-L296
-  - [ ] Implement other hooks:
+  - [v] Implement other hooks:
     - [v] `#timeout_after`
           https://github.com/socketry/async/blob/ea8b0725042b63667ea781d4d011786ca3658256/lib/async/scheduler.rb#L631-L644
-    - [ ] `#io_pread`
-    - [ ] `#io_pwrite`
+    - [v] `#io_pread`
+    - [v] `#io_pwrite`
     - [v] `#io_select`
-    - [ ] Add timeout handling in different I/O hooks
+    - [v] Add timeout handling in different I/O hooks
   - [v] Experiment more with fork:
     - [v] what happens to schedulers on other threads (those that don't make it post-fork)
           - do they get GC'd?
@@ -55,6 +55,10 @@
   - [v] Implement multi-thread worker pool for `blocking_operation_wait`
         Single thread pool at class level, shared by all schedulers
         With worker count according to CPU count
+  - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
+  - [v] Implement timeouts (how do timeouts interact with blocking ops?)
+
+  - [ ] Finish documentation for the `FiberScheduler` class.
 
   - [v] tests:
     - [v] Wrap the scheduler interface such that we can verify that specific
@@ -67,8 +71,11 @@
     - [v] fork
     - [v] system / exec / etc.
     - [v] popen
-  - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
-  - [v] Implement timeouts (how do timeouts interact with blocking ops?)
+  - [ ] "Integration tests"
+    - [ ] queue: multiple concurrent readers / writers
+    - [ ] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
+    - [ ] sockets: echo server + many clients
+    - [ ] IO - all methods!
 
   - [ ] Benchmarks
     - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
@@ -92,7 +99,7 @@
   - [ ] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.
   - [ ] Missing hook for close
   - [ ] Missing hooks for send/recv/sendmsg/recvmsg
-  - [ ] Writes to a file (including `IO.write`) do not invoke `#io_write` (because writes to files cannot be non-blocking.) Instead, `blocking_operation_wait` is invoked.
+  - [ ] Writes to a file (including `IO.write`) do not invoke `#io_write` (because writes to files cannot be non-blocking?) Instead, `blocking_operation_wait` is invoked.
 
 - [ ] SSL
   - [ ] openssl gem: custom BIO?

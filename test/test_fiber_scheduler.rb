@@ -7,14 +7,14 @@ require 'socket'
 
 class MethodCallAuditor
   attr_reader :calls
-  
+
   def initialize(target)
     @target = target
     @calls = []
   end
 
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
-  
+
   def method_missing(sym, *args, &block)
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
@@ -121,7 +121,7 @@ class FiberSchedulerTest < UMBaseTest
     end
     @scheduler.join
     assert_equal [:timeout], buf
-    
+
     assert_equal({
       fiber: 1,
       io_read: 1,
@@ -133,7 +133,7 @@ class FiberSchedulerTest < UMBaseTest
     i, o = IO.pipe
     o << ('*' * (1 << 16))
     o.timeout = 0.01
-    
+
     buf = []
 
     Fiber.schedule do
@@ -143,7 +143,7 @@ class FiberSchedulerTest < UMBaseTest
     end
     @scheduler.join
     assert_equal [:timeout], buf
-    
+
     assert_equal({
       fiber: 1,
       io_write: 1,
@@ -157,7 +157,7 @@ class FiberSchedulerTest < UMBaseTest
 
     buf = nil
     Fiber.schedule do
-      File.open(fn, 'r') do |f|     
+      File.open(fn, 'r') do |f|
         buf = f.pread(3, 2)
       end
     rescue => e
@@ -190,7 +190,7 @@ class FiberSchedulerTest < UMBaseTest
 
     @scheduler.join
     assert_equal 3, res
-    
+
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
       fiber: 1,
@@ -297,7 +297,7 @@ class FiberSchedulerTest < UMBaseTest
     # to be invoked, the send should get through without needing to poll.
     assert_equal 1, machine.total_op_count
     @scheduler.join
-    
+
     assert_equal 6, sent
     assert_equal 'foobar', buf
     assert_equal({
@@ -322,7 +322,7 @@ class FiberSchedulerTest < UMBaseTest
       buf = IO.read(fn)
     end
     assert_equal 2, machine.total_op_count
-    
+
     @scheduler.join
     assert_equal 'foobar', buf
     assert_equal({
@@ -506,9 +506,9 @@ class FiberSchedulerTest < UMBaseTest
     buf = []
     Fiber.schedule do
       IO.popen('ruby', 'r+') do |pipe|
-        buf << [11, machine.total_op_count]    
+        buf << [11, machine.total_op_count]
         pipe.puts 'puts "bar"'
-        buf << [12, machine.total_op_count]    
+        buf << [12, machine.total_op_count]
         pipe.close_write
         buf << [13, pipe.gets.chomp, machine.total_op_count]
       end
