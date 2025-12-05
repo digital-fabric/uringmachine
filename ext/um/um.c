@@ -61,6 +61,24 @@ done:
   return sqe;
 }
 
+struct um_submit_ctx {
+  struct um *machine;
+  int result;
+};
+
+void *um_submit_without_gvl(void *ptr) {
+  struct um_submit_ctx *ctx = ptr;
+  ctx->result = io_uring_submit(&ctx->machine->ring);
+  return NULL;
+}
+
+void um_submit(struct um *machine) {
+  struct um_submit_ctx ctx = { .machine = machine };
+  rb_thread_call_without_gvl(um_submit_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  if (ctx.result < 0)
+    rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+}
+
 static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (unlikely(!op)) return;

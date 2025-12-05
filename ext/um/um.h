@@ -233,6 +233,7 @@ void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
+void um_submit(struct um *machine);
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 VALUE um_wakeup(struct um *machine);
