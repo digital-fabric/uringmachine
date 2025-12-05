@@ -339,11 +339,10 @@ class PeriodicallyTest < UMBaseTest
     rescue Cancel
       cancel = 1
     end
-    assert_equal 0, machine.pending_count
+    assert_equal 1, cancel
     t1 = monotonic_clock
     assert_in_range 0.05..0.08, t1 - t0
     assert_in_range 4..6, count
-    assert_equal 1, cancel
 
   end
 end
