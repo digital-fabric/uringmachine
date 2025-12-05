@@ -4,13 +4,13 @@
 
 #define FUTEX2_SIZE_U32		0x02
 
-void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t expect) {
+// The value argument is the current (known) futex value.
+void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t value) {
   struct um_op op;
   um_prep_op(machine, &op, OP_FUTEX_WAIT, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_futex_wait(
-    sqe, (uint32_t *)futex, expect, FUTEX_BITSET_MATCH_ANY,
-		FUTEX2_SIZE_U32, 0
+    sqe, (uint32_t *)futex, value, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
   VALUE ret = um_fiber_switch(machine);
@@ -45,8 +45,8 @@ void um_futex_wake_transient(struct um *machine, uint32_t *futex, uint32_t num_w
   io_uring_prep_futex_wake(
     sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
+  um_submit(machine);
 }
-
 
 #define MUTEX_LOCKED    1
 #define MUTEX_UNLOCKED  0
@@ -59,7 +59,7 @@ void um_mutex_init(struct um_mutex *mutex) {
 inline void um_mutex_lock(struct um *machine, struct um_mutex *mutex) {
   mutex->num_waiters++;
   while (mutex->state == MUTEX_LOCKED) {
-    um_futex_wait(machine, &mutex->state, MUTEX_UNLOCKED);
+    um_futex_wait(machine, &mutex->state, MUTEX_LOCKED);
   }
   mutex->num_waiters--;
   mutex->state = MUTEX_LOCKED;
@@ -234,13 +234,11 @@ VALUE um_queue_remove_start(VALUE arg) {
 
   ctx->queue->num_waiters++;
   while (ctx->queue->state == QUEUE_EMPTY) {
-    um_futex_wait(ctx->machine, &ctx->queue->state, QUEUE_READY);
+    um_futex_wait(ctx->machine, &ctx->queue->state, QUEUE_EMPTY);
   }
 
-  if (ctx->queue->state != QUEUE_READY)
-    um_raise_internal_error("Internal error: queue should be in ready state!");
-  if (!ctx->queue->tail)
-    um_raise_internal_error("Internal error: queue should be in ready state!");
+  assert(ctx->queue->state == QUEUE_READY);
+  assert(ctx->queue->tail);
 
   ctx->queue->count--;
   return (ctx->op == QUEUE_POP ? queue_remove_tail : queue_remove_head)(ctx->queue);
