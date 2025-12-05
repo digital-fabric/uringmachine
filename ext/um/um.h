@@ -10,6 +10,8 @@
 #define CALLER() rb_funcall(rb_mKernel, rb_intern("caller"), 0)
 #define TRACE_CALLER() INSPECT("caller: ", CALLER())
 #define TRACE_FREE(ptr) //printf("Free %p %s:%d\n", ptr, __FILE__, __LINE__)
+#define DEBUG_MARK(machine, markv, msg) \
+  if (machine->mark == markv) printf("%s\n", msg);
 
 // branching
 #ifndef unlikely
@@ -122,12 +124,13 @@ struct um {
 
   struct io_uring ring;
 
-  uint ring_initialized;
-  uint unsubmitted_count;
-  uint pending_count;
-  uint buffer_ring_count;
-  uint entries;
-  ulong total_op_count; 
+  uint ring_initialized; // is the ring initialized successfully
+  uint mark; // used to mark instances for debugging
+  uint unsubmitted_count; // number of unsubmitted SQEs pending
+  uint pending_count; // number of pending operations (i.e. not yet completed)
+  uint buffer_ring_count; // number of registered buffer rings
+  uint entries; // number of entries in SQ
+  ulong total_op_count; // total number of operations submitted since ring was initialized
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
 
