@@ -292,6 +292,8 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   a special-case implementation of `UM#select` that specifically handles a
   single fd.
 
+# 2025-12-04
+
 - Implemented a worker pool for performing blocking operations in the scheduler.
   Up until now, each scheduler started their own worker thread for performing
   blocking operations for use in the `#blocking_operation_wait` hook. The new
@@ -317,4 +319,12 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 
 - Added support for timeout in `#block`, `#io_read` and `#io_write` hooks.
 
-- 
+# 2025-12-05
+
+- I found and fixed a problem with how `futex_wake` was done in the low-level
+  UringMachine code handling mutexes and queues. This fixed a deadlock in the
+  scheduler background worker pool where clients of the pool where not properly
+  woken after the submitted operation was done.
+
+- I finished work on the `#io_pread` and `#io_pwrite` hooks. Unfortunately, the
+  test for `#io_pwrite` consistently hangs (not on `IO#pwrite`, rather on closing the file.) I'm 

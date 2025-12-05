@@ -175,21 +175,19 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_io_pwrite
-    skip
-
     fn = "/tmp/#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     res = nil
     Fiber.schedule do
-      File.open(fn, 'w') do |f|
-        # f.write('baz')
+      File.open(fn, 'r+') do |f|
+        # res = f.write('baz')
         res = f.pwrite('baz', 2)
       end
     end
 
     @scheduler.join
-    assert_equal 3, buf
+    assert_equal 3, res
     
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
