@@ -20,7 +20,7 @@ class UringMachine
 
       if @worker_count == 0 || (@pending_count > 0 && @worker_count < @max_workers)
         start_worker(machine)
-      end 
+      end
       machine.push(@blocking_op_queue, [queue, job])
       machine.shift(queue)
     end
@@ -37,7 +37,7 @@ class UringMachine
     end
 
     def run_worker_thread
-      machine = UM.new(4)
+      machine = UM.new(4).mark(1)
       loop do
         q, op = machine.shift(@blocking_op_queue)
         @pending_count += 1
@@ -48,6 +48,8 @@ class UringMachine
         end
         @pending_count -= 1
         machine.push(q, res)
+      rescue => e
+        UM.debug("worker e: #{e.inspect}")
       end
     end
   end
@@ -125,7 +127,10 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
+      # p(blocking_operation: ">>")
       @@blocking_operation_thread_pool.process(@machine, blocking_operation)
+    # ensure
+    #   p(blocking_operation: "<<", v: res)
     end
 
     # block hook: blocks the current fiber by yielding to the machine. This hook
@@ -218,35 +223,12 @@ class UringMachine
       fiber
     end
 
-    # io_write hook: writes to the given IO.
-    #
-    # @param io [IO] IO object
-    # @param buffer [IO::Buffer] write buffer
-    # @param length [Integer] write length
-    # @param offset [Integer] write offset
-    # @return [Integer] bytes written
-    def io_write(io, buffer, length, offset)
-      length = buffer.size if length == 0
-
-      if (timeout = io.timeout)
-				@machine.timeout(timeout, Timeout::Error) do
-          @machine.write(io.fileno, buffer, length, offset)
-        rescue Errno::EINTR
-          retry
-        end
-      else
-        @machine.write(io.fileno, buffer, length, offset)
-      end
-    rescue Errno::EINTR
-      retry
-    end
-
     # io_read hook: reads from the given IO.
     #
     # @param io [IO] IO object
     # @param buffer [IO::Buffer] read buffer
     # @param length [Integer] read length
-    # @param offset [Integer] read offset
+    # @param offset [Integer] buffer offset
     # @return [Integer] bytes read
     def io_read(io, buffer, length, offset)
       length = buffer.size if length == 0
@@ -259,6 +241,83 @@ class UringMachine
         end
       else
         @machine.read(io.fileno, buffer, length, offset)
+      end
+    rescue Errno::EINTR
+      retry
+    end
+
+    # io_pread hook: reads from the given IO at the given offset
+    #
+    # @param io [IO] IO object
+    # @param buffer [IO::Buffer] read buffer
+    # @param from [Integer] read offset
+    # @param length [Integer] read length
+    # @param offset [Integer] buffer offset
+    # @return [Integer] bytes read
+    def io_pread(io, buffer, from, length, offset)
+      length = buffer.size if length == 0
+
+      if (timeout = io.timeout)
+				@machine.timeout(timeout, Timeout::Error) do
+          @machine.read(io.fileno, buffer, length, offset, from)
+        rescue Errno::EINTR
+          retry
+        end
+      else
+        @machine.read(io.fileno, buffer, length, offset, from)
+      end
+    rescue Errno::EINTR
+      retry
+    end
+
+    # io_write hook: writes to the given IO.
+    #
+    # @param io [IO] IO object
+    # @param buffer [IO::Buffer] write buffer
+    # @param length [Integer] write length
+    # @param offset [Integer] write offset
+    # @return [Integer] bytes written
+    def io_write(io, buffer, length, offset)
+      # p(io_write: io, length:, offset:, timeout: io.timeout)
+      length = buffer.size if length == 0
+      buffer = buffer.slice(offset) if offset > 0
+
+      if (timeout = io.timeout)
+				@machine.timeout(timeout, Timeout::Error) do
+          @machine.write(io.fileno, buffer, length)
+        rescue Errno::EINTR
+          retry
+        end
+      else
+        @machine.write(io.fileno, buffer, length)
+      end
+    rescue Errno::EINTR
+      retry
+    end
+
+    # io_pwrite hook: writes to the given IO at the given offset.
+    #
+    # @param io [IO] IO object
+    # @param buffer [IO::Buffer] write buffer
+    # @param length [Integer] file offset
+    # @param length [Integer] write length
+    # @param offset [Integer] buffer offset
+    # @return [Integer] bytes written
+    def io_pwrite(io, buffer, from, length, offset)
+      # p(io_pwrite: io, from:, length:, offset:, timeout: io.timeout)
+      length = buffer.size if length == 0
+      buffer = buffer.slice(offset) if offset > 0
+
+      if (timeout = io.timeout)
+				@machine.timeout(timeout, Timeout::Error) do
+          @machine.write(io.fileno, buffer, length, from)
+        rescue Errno::EINTR
+          retry
+        end
+      else
+        res = @machine.write(io.fileno, buffer, length, from)
+        p(res:)
+        res
       end
     rescue Errno::EINTR
       retry

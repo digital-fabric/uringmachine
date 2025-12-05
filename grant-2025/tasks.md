@@ -68,8 +68,7 @@
     - [v] system / exec / etc.
     - [v] popen
   - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
-  - [ ] Implement timeouts (how do timeouts interact with blocking ops?)
-    - [ ] Add tests
+  - [v] Implement timeouts (how do timeouts interact with blocking ops?)
 
   - [ ] Benchmarks
     - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler

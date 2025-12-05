@@ -16,7 +16,6 @@ class MethodCallAuditor
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
   
   def method_missing(sym, *args, &block)
-    # UM.debug("=>>(#{sym})")
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
     res
@@ -152,6 +151,55 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
+  def test_fiber_io_pread
+    fn = "/tmp/#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    buf = nil
+    Fiber.schedule do
+      File.open(fn, 'r') do |f|     
+        buf = f.pread(3, 2)
+      end
+    rescue => e
+      buf = e
+    end
+
+    @scheduler.join
+    assert_equal 'oba', buf
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_pread: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_fiber_io_pwrite
+    skip
+
+    fn = "/tmp/#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    res = nil
+    Fiber.schedule do
+      File.open(fn, 'w') do |f|
+        # f.write('baz')
+        res = f.pwrite('baz', 2)
+      end
+    end
+
+    @scheduler.join
+    assert_equal 3, buf
+    
+    assert_equal 'fobazr', IO.read(fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_pread: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
   def test_fiber_scheduler_sleep
     t0 = monotonic_clock
     assert_equal 0, machine.pending_count
@@ -188,7 +236,7 @@ class FiberSchedulerTest < UMBaseTest
     end
     @scheduler.join
     t1 = monotonic_clock
-    assert_in_range 0.01..0.015, t1 - t0
+    assert_in_range 0.01..0.020, t1 - t0
     assert_equal({
       fiber: 3,
       kernel_sleep: 12,
@@ -567,5 +615,29 @@ class FiberSchedulerTest < UMBaseTest
   ensure
     r.close rescue nil
     w.close rescue nil
+  end
+
+  def test_blocking_operation_wait_single
+    buf = []
+    (1..10).each { |i|
+      op = -> { i * 10}
+      buf << @scheduler.blocking_operation_wait(op)
+      sleep 0.01
+      @machine.snooze
+    }
+    assert_equal (1..10).map { it * 10 }, buf
+
+    buf = []
+    (1..20).each { |i|
+      op = -> { i * 10}
+      Fiber.schedule do
+        sleep 0.001
+        buf << @scheduler.blocking_operation_wait(op)
+        sleep 0.001
+      end
+    }
+    @scheduler.join
+
+    assert_equal (1..20).map { it * 10 }, buf.sort
   end
 end

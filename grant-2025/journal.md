@@ -299,8 +299,22 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   worker count limited to CPU count. Workers are started when needed.
 
   I also added an optional `entries` argument to set the SQE and CQE buffer
-  sizes when starting a new `UringMachine` instance. This is specifically used
-  by worker threads to limit the memory footprint of each worker's UringMachine
-  instance. The default size is 4096 SQE entries (liburing by default makes the
-  CQE buffer size double that of the SQE buffer).
+  sizes when starting a new `UringMachine` instance. The default size is 4096
+  SQE entries (liburing by default makes the CQE buffer size double that of the
+  SQE buffer). The blocking operations worker threads specify a value of 4 since
+  they only use their UringMachine instance for popping jobs off the job queue
+  and pushing the blocking operation result back to the scheduler.
+  
+- Added support for `file_offset` argument in `UM#read` and `UM#write` in
+  preparation for implementing the `#io_pread` and `#io_pwrite` hooks. The
+  `UM#write_async` API, which permits writing to a file descriptor without
+  waiting for the operation to complete, got support for specifying `length` and
+  `file_offset` arguments as well. In addition, `UM#write` and `UM#write_async`
+  got short-circuit logic for writes with a length of 0.
 
+- Added support for specifying buffer offset in `#io_read` and `#io_write`
+  hooks.
+
+- Added support for timeout in `#block`, `#io_read` and `#io_write` hooks.
+
+- 
