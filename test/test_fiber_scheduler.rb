@@ -174,7 +174,7 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_fiber_io_pwrite
+  def test_fiber_scheduler_io_pwrite
     fn = "/tmp/#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
@@ -219,7 +219,7 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_fiber_scheduler_lock
+  def test_fiber_scheduler_block
     mutex = Mutex.new
     buffer = []
     t0 = monotonic_clock
@@ -308,7 +308,7 @@ class FiberSchedulerTest < UMBaseTest
     s2.close rescue nil
   end
 
-  def test_fiber_scheduler_IO_write_IO_read
+  def test_fiber_scheduler_io_write_io_read
     fn = "/tmp/#{SecureRandom.hex}"
     Fiber.schedule do
       IO.write(fn, 'foobar')
@@ -526,7 +526,7 @@ class FiberSchedulerTest < UMBaseTest
     Process.wait(0, Process::WNOHANG) rescue nil
   end
 
-  def test_fiber_interrupt
+  def test_fiber_scheduler_fiber_interrupt
     r, w = IO.pipe
     w << 'foo'
 
@@ -554,7 +554,7 @@ class FiberSchedulerTest < UMBaseTest
     w.close rescue nil
   end
 
-  def test_address_resolve
+  def test_fiber_scheduler_address_resolve
     addrs = nil
     Fiber.schedule do
       addrs = Addrinfo.getaddrinfo("localhost", 80, Socket::AF_INET, :STREAM)
@@ -574,7 +574,7 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_timeout_after
+  def test_fiber_scheduler_timeout_after
     res = nil
     Fiber.schedule do
       Timeout.timeout(0.05) do
@@ -595,7 +595,7 @@ class FiberSchedulerTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_io_select
+  def test_fiber_scheduler_io_select
     r, w = IO.pipe
     buf = []
 
@@ -615,7 +615,7 @@ class FiberSchedulerTest < UMBaseTest
     w.close rescue nil
   end
 
-  def test_blocking_operation_wait_single
+  def test_fiber_scheduler_blocking_operation_wait_single_issuer
     buf = []
     (1..10).each { |i|
       op = -> { i * 10}

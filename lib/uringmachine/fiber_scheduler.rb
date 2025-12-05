@@ -315,9 +315,7 @@ class UringMachine
           retry
         end
       else
-        res = @machine.write(io.fileno, buffer, length, from)
-        p(res:)
-        res
+        @machine.write(io.fileno, buffer, length, from)
       end
     rescue Errno::EINTR
       retry
