@@ -127,8 +127,8 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
-      # naive_blocking_peration_wait(blocking_operation)
-      @@blocking_operation_thread_pool.process(@machine, blocking_operation)
+      naive_blocking_peration_wait(blocking_operation)
+      # @@blocking_operation_thread_pool.process(@machine, blocking_operation)
     end
 
     def naive_blocking_peration_wait(blocking_operation)

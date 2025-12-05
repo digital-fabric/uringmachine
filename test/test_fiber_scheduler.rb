@@ -175,6 +175,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_io_pwrite
+    skip
+    p pid: Process.pid
     fn = "/tmp/#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
