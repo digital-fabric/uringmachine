@@ -71,6 +71,16 @@ struct um_submit_ctx {
   int result;
 };
 
+// adapted from liburing/src/queue.c
+static inline bool sq_ring_needs_enter(struct um *machine) {
+  if (machine->ring.flags & IORING_SETUP_SQPOLL) {
+	  io_uring_smp_mb();
+  	if (unlikely(IO_URING_READ_ONCE(*machine->ring.sq.kflags) & IORING_SQ_NEED_WAKEUP))
+	  	return true;
+  }
+  return true;
+}
+
 void *um_submit_without_gvl(void *ptr) {
   struct um_submit_ctx *ctx = ptr;
   ctx->result = io_uring_submit(&ctx->machine->ring);
@@ -81,9 +91,13 @@ inline void um_submit(struct um *machine) {
   if (DEBUG) fprintf(stderr, "-> %p um_submit: unsubmitted=%d pending=%d total=%lu\n",
     &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
   );
-void um_submit(struct um *machine) {
+ 
   struct um_submit_ctx ctx = { .machine = machine };
-  rb_thread_call_without_gvl(um_submit_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  if (sq_ring_needs_enter(machine))
+    rb_thread_call_without_gvl(um_submit_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  else 
+    ctx.result = io_uring_submit(&machine->ring);
+
   if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n", &machine->ring, ctx.result
   );
 
