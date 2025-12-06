@@ -505,6 +505,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "poll", UM_poll, 2);
   rb_define_method(cUM, "select", UM_select, 3);
   rb_define_method(cUM, "waitid", UM_waitid, 3);
+  
   #ifdef HAVE_RB_PROCESS_STATUS_NEW
   rb_define_method(cUM, "waitid_status", UM_waitid_status, 3);
   #endif

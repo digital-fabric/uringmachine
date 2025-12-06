@@ -845,8 +845,8 @@ VALUE um_waitid(struct um *machine, int idtype, int id, int options) {
   );
 }
 
-VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
 #ifdef HAVE_RB_PROCESS_STATUS_NEW
+VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
   struct um_op op;
   um_prep_op(machine, &op, OP_WAITID, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -862,10 +862,8 @@ VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
   RB_GC_GUARD(ret);
 
   return rb_process_status_new(infop.si_pid, (infop.si_status & 0xff) << 8, 0);
-#else
-  rb_raise(rb_eNotImpError, "Missing rb_process_status_new");
-#endif
 }
+#endif
 
 #define hash_set(h, sym, v) rb_hash_aset(h, ID2SYM(rb_intern(sym)), v)
 

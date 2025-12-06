@@ -49,7 +49,7 @@ if !find_library('uring', nil, File.join(liburing_path, 'src'))
   raise "Couldn't find liburing.a"
 end
 
-have_func("rb_process_status_new")
+have_func("&rb_process_status_new")
 
 $defs << "-DUM_KERNEL_VERSION=#{config[:kernel_version]}"
 $defs << '-DHAVE_IO_URING_PREP_BIND'            if config[:prep_bind]

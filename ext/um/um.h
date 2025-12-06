@@ -259,7 +259,11 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode);
 VALUE um_poll(struct um *machine, int fd, unsigned mask);
 VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds);
 VALUE um_waitid(struct um *machine, int idtype, int id, int options);
+
+#ifdef HAVE_RB_PROCESS_STATUS_NEW
 VALUE um_waitid_status(struct um *machine, int idtype, int id, int options);
+#endif
+
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
 
 VALUE um_accept(struct um *machine, int fd);
