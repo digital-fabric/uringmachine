@@ -36,6 +36,11 @@ inline void um_teardown(struct um *machine) {
 }
 
 inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
+  if (DEBUG) fprintf(stderr, "-> %p um_get_sqe: op->kind=%s unsubmitted=%d pending=%d total=%lu\n",
+    &machine->ring, op ? um_op_kind_name(op->kind) : "NULL", machine->unsubmitted_count,
+    machine->pending_count, machine->total_op_count
+  );
+
   struct io_uring_sqe *sqe;
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
@@ -72,24 +77,35 @@ void *um_submit_without_gvl(void *ptr) {
   return NULL;
 }
 
+inline void um_submit(struct um *machine) {
+  if (DEBUG) fprintf(stderr, "-> %p um_submit: unsubmitted=%d pending=%d total=%lu\n",
+    &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
+  );
 void um_submit(struct um *machine) {
   struct um_submit_ctx ctx = { .machine = machine };
   rb_thread_call_without_gvl(um_submit_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n", &machine->ring, ctx.result
+  );
+
   if (ctx.result < 0)
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
 }
 
 static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
+  if (DEBUG) {
+    if (op) fprintf(stderr, "<- %p um_process_cqe: op %p kind %s flags %d cqe_res %d cqe_flags %d pending %d\n",
+      &machine->ring, op, um_op_kind_name(op->kind), op->flags, cqe->res, cqe->flags, machine->pending_count
+    );
+    else fprintf(stderr, "<- %p um_process_cqe: op NULL cqe_res %d cqe_flags %d pending %d\n",
+      &machine->ring, cqe->res, cqe->flags, machine->pending_count
+    );
+  }
   if (unlikely(!op)) return;
+
 
   if (!(cqe->flags & IORING_CQE_F_MORE))
     machine->pending_count--;
-
-  // printf(
-  //   ":process_cqe op %p kind %d flags %d cqe_res %d cqe_flags %d pending %d\n",
-  //   op, op->kind, op->flags, cqe->res, cqe->flags, machine->pending_count
-  // );
 
   if (op->flags & OP_F_FREE_ON_COMPLETE) {
     if (op->flags & OP_F_TRANSIENT)
@@ -127,6 +143,10 @@ static inline int cq_ring_needs_flush(struct io_uring *ring) {
 }
 
 static inline int um_process_ready_cqes(struct um *machine) {
+  if (DEBUG) fprintf(stderr, "-> %p um_process_ready_cqes: unsubmitted=%d pending=%d total=%lu\n",
+    &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
+  );
+
   unsigned total_count = 0;
 iterate:
   bool overflow_checked = false;
@@ -143,12 +163,21 @@ iterate:
   if (overflow_checked) goto done;
 
   if (cq_ring_needs_flush(&machine->ring)) {
-    io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
+    if (DEBUG) fprintf(stderr, "-> %p io_uring_enter\n", &machine->ring);
+    int ret = io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
+    if (DEBUG) fprintf(stderr, "<- %p io_uring_enter: result=%d\n", &machine->ring, ret);
+    if (ret < 0)
+      rb_syserr_fail(-ret, strerror(-ret));
+
     overflow_checked = true;
     goto iterate;
   }
 
 done:
+  if (DEBUG) fprintf(stderr, "<- %p um_process_ready_cqes: total_processed=%u\n",
+    &machine->ring, total_count
+  );
+
   return total_count;
 }
 
@@ -162,18 +191,33 @@ struct wait_for_cqe_ctx {
 void *um_wait_for_cqe_without_gvl(void *ptr) {
   struct wait_for_cqe_ctx *ctx = ptr;
   if (ctx->machine->unsubmitted_count) {
-    ctx->machine->unsubmitted_count = 0;
+    if (DEBUG) fprintf(stderr, "-> %p io_uring_submit_and_wait_timeout: unsubmitted=%d pending=%d total=%lu\n",
+      &ctx->machine->ring, ctx->machine->unsubmitted_count, ctx->machine->pending_count,
+      ctx->machine->total_op_count
+    );
 
     // Attn: The io_uring_submit_and_wait_timeout will not return -EINTR if
     // interrupted with a signal. We can detect this by testing ctx->cqe for
     // NULL.
     //
     // https://github.com/axboe/liburing/issues/1280
-    int res = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
-    ctx->result = (res > 0 && !ctx->cqe) ? -EINTR : res;
+    int ret = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
+    ctx->machine->unsubmitted_count = 0;
+    if (DEBUG) fprintf(stderr, "<- %p io_uring_submit_and_wait_timeout: result=%d\n",
+      &ctx->machine->ring, ret
+    );
+    ctx->result = (ret > 0 && !ctx->cqe) ? -EINTR : ret;
   }
-  else
+  else {
+    if (DEBUG) fprintf(stderr, "-> %p io_uring_wait_cqes: unsubmitted=%d pending=%d total=%lu\n",
+      &ctx->machine->ring, ctx->machine->unsubmitted_count, ctx->machine->pending_count,
+      ctx->machine->total_op_count
+    );
     ctx->result = io_uring_wait_cqes(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
+    if (DEBUG) fprintf(stderr, "<- %p io_uring_wait_cqes: result=%d\n",
+      &ctx->machine->ring, ctx->result
+    );
+  }
   return NULL;
 }
 
@@ -220,6 +264,9 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
 }
 
 inline VALUE um_fiber_switch(struct um *machine) {
+  if (DEBUG) fprintf(stderr, "-> %p um_fiber_switch: unsubmitted=%d pending=%d total=%lu\n",
+    &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
+  );
   while (true) {
     struct um_op *op = um_runqueue_shift(machine);
     if (op) {
@@ -288,7 +335,7 @@ VALUE um_wakeup(struct um *machine) {
   return Qnil;
 }
 
-inline void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags) {
+inline void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kind, unsigned flags) {
   memset(op, 0, sizeof(struct um_op));
   op->kind = kind;
   op->flags = flags;

@@ -1,5 +1,42 @@
 #include "um.h"
 
+const char * um_op_kind_name(enum um_op_kind kind) {
+  switch (kind) {
+    case OP_TIMEOUT:            return "OP_TIMEOUT";
+    case OP_SCHEDULE:           return "OP_SCHEDULE";
+    case OP_SLEEP:              return "OP_SLEEP";
+    case OP_OPEN:               return "OP_OPEN";
+    case OP_READ:               return "OP_READ";
+    case OP_WRITE:              return "OP_WRITE";
+    case OP_WRITE_ASYNC:        return "OP_WRITE_ASYNC";
+    case OP_CLOSE:              return "OP_CLOSE";
+    case OP_CLOSE_ASYNC:        return "OP_CLOSE_ASYNC";
+    case OP_STATX:              return "OP_STATX";
+    case OP_ACCEPT:             return "OP_ACCEPT";
+    case OP_RECV:               return "OP_RECV";
+    case OP_SEND:               return "OP_SEND";
+    case OP_SEND_BUNDLE:        return "OP_SEND_BUNDLE";
+    case OP_SOCKET:             return "OP_SOCKET";
+    case OP_CONNECT:            return "OP_CONNECT";
+    case OP_BIND:               return "OP_BIND";
+    case OP_LISTEN:             return "OP_LISTEN";
+    case OP_GETSOCKOPT:         return "OP_GETSOCKOPT";
+    case OP_SETSOCKOPT:         return "OP_SETSOCKOPT";
+    case OP_SHUTDOWN:           return "OP_SHUTDOWN";
+    case OP_SHUTDOWN_ASYNC:     return "OP_SHUTDOWN_ASYNC";
+    case OP_POLL:               return "OP_POLL";
+    case OP_WAITID:             return "OP_WAITID";
+    case OP_FUTEX_WAIT:         return "OP_FUTEX_WAIT";
+    case OP_FUTEX_WAKE:         return "OP_FUTEX_WAKE";
+    case OP_ACCEPT_MULTISHOT:   return "OP_ACCEPT_MULTISHOT";
+    case OP_READ_MULTISHOT:     return "OP_READ_MULTISHOT";
+    case OP_RECV_MULTISHOT:     return "OP_RECV_MULTISHOT";
+    case OP_TIMEOUT_MULTISHOT:  return "OP_TIMEOUT_MULTISHOT";
+    case OP_SLEEP_MULTISHOT:    return "OP_SLEEP_MULTISHOT";
+    default:                    return "UNKNOWN_OP_KIND";
+  }
+}
+
 inline void um_op_clear(struct um *machine, struct um_op *op) {
   memset(op, 0, sizeof(struct um_op));
   op->fiber = Qnil;

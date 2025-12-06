@@ -4,7 +4,13 @@
 #include <ruby.h>
 #include <liburing.h>
 
+
 // debugging
+enum {
+  // set to 1 to debug
+  DEBUG = 0
+};
+
 #define OBJ_ID(obj) (NUM2LONG(rb_funcall(obj, rb_intern("object_id"), 0)))
 #define INSPECT(str, obj) { printf(str); VALUE s = rb_funcall(obj, rb_intern("inspect"), 0); printf(": %s\n", StringValueCStr(s)); }
 #define CALLER() rb_funcall(rb_mKernel, rb_intern("caller"), 0)
@@ -25,7 +31,7 @@
 #define IO_BUFFER_P(buffer) \
   (TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer)
 
-enum op_kind {
+enum um_op_kind {
   OP_TIMEOUT,
   OP_SCHEDULE,
 
@@ -86,7 +92,7 @@ struct um_op {
   struct um_op *prev;
   struct um_op *next;
 
-  enum op_kind kind;
+  enum um_op_kind kind;
   uint flags;
 
   VALUE fiber;
@@ -197,6 +203,7 @@ struct um *um_get_machine(VALUE self);
 void um_setup(VALUE self, struct um *machine, uint entries);
 void um_teardown(struct um *machine);
 
+const char * um_op_kind_name(enum um_op_kind kind);
 struct um_op *um_op_alloc(struct um *machine);
 void um_op_free(struct um *machine, struct um_op *op);
 void um_op_clear(struct um *machine, struct um_op *op);
@@ -222,7 +229,7 @@ VALUE um_raise_exception(VALUE v);
 
 #define RAISE_IF_EXCEPTION(v) if (unlikely(um_value_is_exception_p(v))) { um_raise_exception(v); }
 
-void um_prep_op(struct um *machine, struct um_op *op, enum op_kind kind, unsigned flags);
+void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kind, unsigned flags);
 void um_raise_on_error_result(int result);
 void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size);
 void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs);
