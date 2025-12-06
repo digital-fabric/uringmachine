@@ -345,4 +345,9 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   extension code interfacing with liburing, in order to facilitate debugging
   when issues are encountered.
 
-- I implemented 
+- Added support for [SQPOLL
+  mode](https://unixism.net/loti/tutorial/sq_poll.html) when setting up a
+  UringMachine instance. It's not clear to me what are the performance
+  implications of that, but I'll try to make some time to check this against
+  [TP2](https://github.com/noteflakes/tp2), a UringMachine-based web server I'm
+  currently using in a bunch of projects.
