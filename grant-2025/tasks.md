@@ -7,6 +7,7 @@
   - [v] Add optional ring size argument to `UM.new` (for example, a the
     worker thread for the scheduler `blocking_operation_wait` hook does not need
     a lot of depth, so you can basically do `UM.new(4)`)
+  - [ ] Add debugging code suggested by Samuel
   - [ ] Do batch allocation for `struct um_op`, for better cache locality?
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings

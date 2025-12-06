@@ -1,35 +1,76 @@
 ## immediate
 
-- make a reproducer for segfault on timeout, spin lots of fibers where a timeout
-  wraps a #shift call (from an empty queue).
-- see also: https://mensfeld.pl/2025/11/ruby-ffi-gc-bug-hash-becomes-string/
+- Add debugging code suggested by Samuel:
 
-Analysis:
+  https://github.com/search?q=repo%3Asocketry%2Fio-event+%22if+%28DEBUG%22&type=code
 
-- The segfault is related to timeouts
-- Looking at process_runqueue_op (um.c):
+```ruby
+enum {
+  DEBUG = 1,
+};
 
-  ```c
-  inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
-    VALUE fiber = op->fiber;
-    VALUE value = op->value;
-
-    // on timeout, the op flags are changed to turn on OP_F_TRANSIENT
-    if (unlikely(op->flags & OP_F_TRANSIENT))
-      // here the op is freed, so the value is not visible to the GC anymoore
-      um_op_free(machine, op);
-
-    // if a GC occurs here, we risk a segfault
-
-    // value is used
-    return rb_fiber_transfer(fiber, 1, &value);
+const char * op_kind_name(enum op_kind kind) {
+  switch (kind) {
+    case OP_TIMEOUT: return "OP_TIMEOUT";
+    case OP_SCHEDULE: return "OP_SCHEDULE";
+    case OP_SLEEP: return "OP_SLEEP";
+    case OP_OPEN: return "OP_OPEN";
+    case OP_READ: return "OP_READ";
+    case OP_WRITE: return "OP_WRITE";
+    case OP_WRITE_ASYNC: return "OP_WRITE_ASYNC";
+    case OP_CLOSE: return "OP_CLOSE";
+    case OP_CLOSE_ASYNC: return "OP_CLOSE_ASYNC";
+    case OP_STATX: return "OP_STATX";
+    case OP_ACCEPT: return "OP_ACCEPT";
+    case OP_RECV: return "OP_RECV";
+    case OP_SEND: return "OP_SEND";
+    case OP_SEND_BUNDLE: return "OP_SEND_BUNDLE";
+    case OP_SOCKET: return "OP_SOCKET";
+    case OP_CONNECT: return "OP_CONNECT";
+    case OP_BIND: return "OP_BIND";
+    case OP_LISTEN: return "OP_LISTEN";
+    case OP_GETSOCKOPT: return "OP_GETSOCKOPT";
+    case OP_SETSOCKOPT: return "OP_SETSOCKOPT";
+    case OP_SHUTDOWN: return "OP_SHUTDOWN";
+    case OP_SHUTDOWN_ASYNC: return "OP_SHUTDOWN_ASYNC";
+    case OP_POLL: return "OP_POLL";
+    case OP_WAITID: return "OP_WAITID";
+    case OP_FUTEX_WAIT: return "OP_FUTEX_WAIT";
+    case OP_FUTEX_WAKE: return "OP_FUTEX_WAKE";
+    case OP_ACCEPT_MULTISHOT: return "OP_ACCEPT_MULTISHOT";
+    case OP_READ_MULTISHOT: return "OP_READ_MULTISHOT";
+    case OP_RECV_MULTISHOT: return "OP_RECV_MULTISHOT";
+    case OP_TIMEOUT_MULTISHOT: return "OP_TIMEOUT_MULTISHOT";
+    case OP_SLEEP_MULTISHOT: return "OP_SLEEP_MULTISHOT";
+    default: return "UNKNOWN_OP_KIND";
   }
-  ```
+}
 
-- So, a possible solution is to put a `RB_GC_GUARD` after the `return`.
-- But first, I want to be able to reproduce it. We can start by setting
-  `GC.stress = true` on tests and see if we segfault.
+inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
+  if (DEBUG) fprintf(stderr, "-> um_get_sqe: op->kind=%s unsubmitted=%d pending=%d total=%lu\n",
+    op ? op_kind_name(op->kind) : "NULL",
+    machine->unsubmitted_count,
+    machine->pending_count,
+    machine->total_op_count
+  );
+  ...
+}
 
+static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
+  struct um_op *op = (struct um_op *)cqe->user_data;
+
+  if (DEBUG) {
+    if (op) fprintf(stderr, "<- um_process_cqe: op %p kind %s flags %d cqe_res %d cqe_flags %d pending %d\n",
+      op, op_kind_name(op->kind), op->flags, cqe->res, cqe->flags, machine->pending_count
+    );
+    else fprintf(stderr, "<- um_process_cqe: op NULL cqe_res %d cqe_flags %d pending %d\n",
+      cqe->res, cqe->flags, machine->pending_count
+    );
+  }
+  ...
+}
+
+```
 
 
 

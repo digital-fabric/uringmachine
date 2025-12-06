@@ -175,15 +175,12 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_io_pwrite
-    skip
-    p pid: Process.pid
     fn = "/tmp/#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     res = nil
     Fiber.schedule do
       File.open(fn, 'r+') do |f|
-        # res = f.write('baz')
         res = f.pwrite('baz', 2)
       end
     end
@@ -194,8 +191,8 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
-      io_pread: 1,
+      blocking_operation_wait: 2,
+      io_pwrite: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
