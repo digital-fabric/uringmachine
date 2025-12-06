@@ -8,10 +8,11 @@
     worker thread for the scheduler `blocking_operation_wait` hook does not need
     a lot of depth, so you can basically do `UM.new(4)`)
   - [v] Add debugging code suggested by Samuel
-  - [ ] Do batch allocation for `struct um_op`, for better cache locality?
+  - [v] Add support for SQPOLL
+        https://unixism.net/loti/tutorial/sq_poll.html
+
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
-  - [ ] Add support for SQPOLL
   - [ ] Set `IOSQE_CQE_SKIP_SUCCESS` flag for `#close_async` and `#write_async`
   - [ ] In `UM#spin` always start fibers as non-blocking.
   - [ ] Add some way to measure fiber CPU time.
@@ -58,7 +59,7 @@
         With worker count according to CPU count
   - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
   - [v] Implement timeouts (how do timeouts interact with blocking ops?)
-
+  - [ ] Implement `#yield` hook (https://github.com/ruby/ruby/pull/14700)
   - [ ] Finish documentation for the `FiberScheduler` class.
 
   - [v] tests:

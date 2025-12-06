@@ -54,14 +54,33 @@ inline struct um *um_get_machine(VALUE self) {
   return um;
 }
 
+static inline uint get_sqpoll_timeout_msec(VALUE sqpoll_timeout) {
+  switch (TYPE(sqpoll_timeout)) {
+    case T_NIL:
+    case T_FALSE:
+      return 0;
+    case T_FLOAT:
+      return (uint)(NUM2DBL(sqpoll_timeout) * 1000);
+    case T_FIXNUM:
+      return NUM2UINT(sqpoll_timeout) * 1000;
+    case T_TRUE:
+      return 1000;
+    default:
+      rb_raise(eUMError, "Invalid sqpoll_timeout value");
+  }
+}
+
 VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   struct um *machine = RTYPEDDATA_DATA(self);
   VALUE entries;
-  rb_scan_args(argc, argv, "01", &entries);
+  VALUE sqpoll_timeout;
+  rb_scan_args(argc, argv, "02", &entries, &sqpoll_timeout);
 
   uint entries_i = NIL_P(entries) ? 0 : NUM2UINT(entries);
+  uint sqpoll_timeout_msec = get_sqpoll_timeout_msec(sqpoll_timeout);
 
-  um_setup(self, machine, entries_i);
+
+  um_setup(self, machine, entries_i, sqpoll_timeout_msec);
   return self;
 }
 
@@ -110,8 +129,8 @@ VALUE UM_wakeup(VALUE self) {
 
 VALUE UM_submit(VALUE self) {
   struct um *machine = um_get_machine(self);
-  um_submit(machine);
-  return self;
+  uint ret = um_submit(machine);
+  return UINT2NUM(ret);
 }
 
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {

@@ -6,16 +6,28 @@
 
 #define DEFAULT_ENTRIES 4096
 
-void um_setup(VALUE self, struct um *machine, uint entries) {
+inline void prepare_io_uring_params(struct io_uring_params *params, uint sqpoll_timeout_msec) {
+  memset(params, 0, sizeof(struct io_uring_params));
+  params->flags = IORING_SETUP_SUBMIT_ALL;
+  if (sqpoll_timeout_msec) {
+    params->flags |= IORING_SETUP_SQPOLL;
+    params->sq_thread_idle = sqpoll_timeout_msec;
+  }
+  else
+    params->flags |= IORING_SETUP_COOP_TASKRUN;
+}
+
+void um_setup(VALUE self, struct um *machine, uint entries, uint sqpoll_timeout_msec) {
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
 
-  unsigned flags = IORING_SETUP_SUBMIT_ALL | IORING_SETUP_COOP_TASKRUN;
-
   machine->entries = (entries > 0) ? entries : DEFAULT_ENTRIES;
+  machine->sqpoll_mode = !!sqpoll_timeout_msec;
 
-  int ret = io_uring_queue_init(machine->entries, &machine->ring, flags);
+  struct io_uring_params params;
+  prepare_io_uring_params(&params, sqpoll_timeout_msec);
+  int ret = io_uring_queue_init_params(machine->entries, &machine->ring, &params);
   if (ret) rb_syserr_fail(-ret, strerror(-ret));
   machine->ring_initialized = 1;
 }
@@ -73,7 +85,7 @@ struct um_submit_ctx {
 
 // adapted from liburing/src/queue.c
 static inline bool sq_ring_needs_enter(struct um *machine) {
-  if (machine->ring.flags & IORING_SETUP_SQPOLL) {
+  if (machine->sqpoll_mode) {
 	  io_uring_smp_mb();
   	if (unlikely(IO_URING_READ_ONCE(*machine->ring.sq.kflags) & IORING_SQ_NEED_WAKEUP))
 	  	return true;
@@ -87,10 +99,16 @@ void *um_submit_without_gvl(void *ptr) {
   return NULL;
 }
 
-inline void um_submit(struct um *machine) {
+inline uint um_submit(struct um *machine) {
   if (DEBUG) fprintf(stderr, "-> %p um_submit: unsubmitted=%d pending=%d total=%lu\n",
     &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
   );
+  if (!machine->unsubmitted_count) {
+    if (DEBUG) fprintf(stderr, "<- %p um_submit: no unsubmitted SQEs, early return\n",
+      &machine->ring
+    );
+    return 0;
+  }
  
   struct um_submit_ctx ctx = { .machine = machine };
   if (sq_ring_needs_enter(machine))
@@ -98,11 +116,15 @@ inline void um_submit(struct um *machine) {
   else 
     ctx.result = io_uring_submit(&machine->ring);
 
-  if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n", &machine->ring, ctx.result
+  if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n",
+    &machine->ring, ctx.result
   );
 
   if (ctx.result < 0)
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+
+  machine->unsubmitted_count = 0;
+  return ctx.result;
 }
 
 static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {

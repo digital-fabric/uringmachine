@@ -337,3 +337,12 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   check how the fiber scheduler plays with Ruby APIs like `Net::HTTP` and the
   `socket` API in general.
 
+# 2025-12-06
+
+- Samuel has found the issue with pwrite (it turns out the the `#io_pwrite` hook was being invoked with the GVL released), and [fixed it](https://github.com/ruby/ruby/pull/15428). So now `#pwrite` works correctly with a fiber scheduler!
+
+- I followed Samuel's suggestion and incorporated some debug logging into the
+  extension code interfacing with liburing, in order to facilitate debugging
+  when issues are encountered.
+
+- I implemented 

@@ -23,6 +23,68 @@ class EntriesTest < Minitest::Test
   end
 end
 
+class SQPOLLTest < Minitest::Test
+  def test_sqpoll_timeout
+    m = UM.new(10, 0.05)
+
+    r, w = UM.pipe
+
+    buf = nil
+    t = Thread.new { buf = IO.new(r).readpartial(3) }
+
+    # let SQPOLL worker thread timeout
+    sleep(0.06)
+
+    # SQE is prepared but not submitted
+    m.write_async(w, 'foo')
+
+    # thread should timeout
+    ret = t.join(0.03)
+    assert_nil buf
+  ensure
+    t.kill rescue nil
+  end
+
+  def test_sqpoll_timeout_with_submit
+    m = UM.new(10, 0.05)
+
+    r, w = UM.pipe
+
+    buf = nil
+    t = Thread.new { buf = IO.new(r).readpartial(3) }
+
+    # let SQPOLL worker thread timeout
+    sleep(0.06)
+
+    # SQE is prepared but not submitted
+    m.write_async(w, 'foo')
+    ret = m.submit
+    assert_equal 1, ret
+
+    # thread should timeout
+    ret = t.join(0.1)
+    assert_equal 'foo', buf
+  ensure
+    t.kill rescue nil
+  end
+end
+
+class SubmitTest < UMBaseTest
+  def test_submit
+    _r, w = UM.pipe
+
+    machine.write_async(w, 'foo')
+    machine.write_async(w, 'bar')
+    machine.write_async(w, 'baz')
+
+    assert_equal 3, machine.pending_count
+    assert_equal 3, machine.submit
+    assert_equal 0, machine.submit
+    machine.snooze
+    assert_equal 0, machine.pending_count
+  end
+end
+
 class SpinTest < UMBaseTest
   def test_spin
     x = nil

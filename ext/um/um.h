@@ -7,7 +7,7 @@
 
 // debugging
 enum {
-  // set to 1 to debug
+  // set to 1 to enable debug logging
   DEBUG = 0
 };
 
@@ -132,11 +132,14 @@ struct um {
 
   uint ring_initialized; // is the ring initialized successfully
   uint mark; // used to mark instances for debugging
+
   uint unsubmitted_count; // number of unsubmitted SQEs pending
   uint pending_count; // number of pending operations (i.e. not yet completed)
   uint buffer_ring_count; // number of registered buffer rings
-  uint entries; // number of entries in SQ
   ulong total_op_count; // total number of operations submitted since ring was initialized
+  
+  uint entries; // number of entries in SQ
+  uint sqpoll_mode; // SQPOLL mode enabled
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
 
@@ -200,7 +203,7 @@ extern VALUE cAsyncOp;
 extern VALUE eStreamRESPError;
 
 struct um *um_get_machine(VALUE self);
-void um_setup(VALUE self, struct um *machine, uint entries);
+void um_setup(VALUE self, struct um *machine, uint entries, uint sqpoll_timeout_msec);
 void um_teardown(struct um *machine);
 
 const char * um_op_kind_name(enum um_op_kind kind);
@@ -240,7 +243,7 @@ void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
-void um_submit(struct um *machine);
+uint um_submit(struct um *machine);
 VALUE um_fiber_switch(struct um *machine);
 VALUE um_await(struct um *machine);
 VALUE um_wakeup(struct um *machine);
