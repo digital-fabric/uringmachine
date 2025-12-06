@@ -1,3 +1,23 @@
+# 0.21.0 2025-12-06
+
+- Add `UM#submit`
+- Update liburing
+- Do not release GVL in um_submit if SQ does not need entering the kernel
+- Fix compilation when rb_process_status_new is not available
+- Fix um_futex_wake_transient to submit SQE, fix futex_wait usage
+- Add debug logging for key io_uring interactions
+- Add UM#mark and DEBUG_MARK for debugging specific UM instances
+- Short-circuit zero-length writes
+- Add optional file_offset argument to #read, #write. Add optional len and file_off
+set arguments to #write_async
+- Add support for specifying SQPOLL mode and SQ idle timeout in `UM#initialize`
+- Add support for specifying number of SQ entries in `UM#initialize`
+- Implement global worker pool for blocking operations in fiber scheduler
+- Finish implementing all fiber scheduler hooks
+- Add `UM#select`
+- Add `UM#wakeup`
+- Add `UM#total_op_count`
+
 # 0.20.0 2025-11-26
 
 - Add `UM.pidfd_open`, `UM.pidfd_send_signal` methods
