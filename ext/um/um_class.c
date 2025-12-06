@@ -108,6 +108,12 @@ VALUE UM_wakeup(VALUE self) {
   return um_wakeup(machine);
 }
 
+VALUE UM_submit(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  um_submit(machine);
+  return self;
+}
+
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, fiber, value);
@@ -484,12 +490,12 @@ void Init_UM(void) {
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
   rb_define_singleton_method(cUM, "debug", UM_debug, 1);
 
-
   rb_define_method(cUM, "schedule", UM_schedule, 2);
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
   rb_define_method(cUM, "yield", UM_yield, 0);
   rb_define_method(cUM, "wakeup", UM_wakeup, 0);
+  rb_define_method(cUM, "submit", UM_submit, 0);
 
   rb_define_method(cUM, "close", UM_close, 1);
   rb_define_method(cUM, "close_async", UM_close_async, 1);
