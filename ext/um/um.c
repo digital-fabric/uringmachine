@@ -109,11 +109,11 @@ inline uint um_submit(struct um *machine) {
     );
     return 0;
   }
- 
+
   struct um_submit_ctx ctx = { .machine = machine };
   if (sq_ring_needs_enter(machine))
     rb_thread_call_without_gvl(um_submit_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
-  else 
+  else
     ctx.result = io_uring_submit(&machine->ring);
 
   if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n",

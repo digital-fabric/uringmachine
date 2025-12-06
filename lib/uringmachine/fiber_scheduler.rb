@@ -127,18 +127,7 @@ class UringMachine
     # @param blocking_operation [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(blocking_operation)
-      # naive_blocking_peration_wait(blocking_operation)
       @@blocking_operation_thread_pool.process(@machine, blocking_operation)
-    end
-
-    def naive_blocking_peration_wait(blocking_operation)
-      res = nil
-      Thread.new do
-        res = blocking_operation.()
-      rescue => e
-        res = e
-      end.join
-      res
     end
 
     # block hook: blocks the current fiber by yielding to the machine. This hook

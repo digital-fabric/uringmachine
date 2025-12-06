@@ -76,14 +76,30 @@
   - [ ] "Integration tests"
     - [ ] queue: multiple concurrent readers / writers
     - [ ] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
+    - [ ] pipes: multiple pairs of fibers - reader / writer
     - [ ] sockets: echo server + many clients
     - [ ] IO - all methods!
 
   - [ ] Benchmarks
     - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
+
+          N groups where each group has M producers and O consumers accessing the same queue.
+
     - [ ] UM mutex / Ruby mutex (threads) / Ruby mutex with UM fiber scheduler
+
+      - [ ] N groups where each group has M fibers locking the same mutex and
+            performing CPU-bound work
+      - [ ] N groups where each group has M fibers locking the same mutex and
+            performing IO-bound work (like maybe write to `/dev/null`)
+
     - [ ] Pipe IO raw UM / Ruby threaded / Ruby with UM fiber scheduler
+
+          N groups where each group has a pair of reader / writer to a pipe
+
     - [ ] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
+
+          N groups where each group has a pair of reader / writer to a socketpair
+
     - [ ] Measure CPU (thread) time usage for above examples
 
         - run each version 1M times
@@ -98,9 +114,9 @@
           while cpu_time is more. But it's just a hunch.
 
 - [ ] Ruby Fiber::Scheduler interface
-  - [ ] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.
-  - [ ] Missing hook for close
-  - [ ] Missing hooks for send/recv/sendmsg/recvmsg
+  - [v] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.
+  - [ ]  hook for close
+  - [ ] hooks for send/recv/sendmsg/recvmsg
   - [ ] Writes to a file (including `IO.write`) do not invoke `#io_write` (because writes to files cannot be non-blocking?) Instead, `blocking_operation_wait` is invoked.
 
 - [ ] SSL

@@ -137,7 +137,7 @@ struct um {
   uint pending_count; // number of pending operations (i.e. not yet completed)
   uint buffer_ring_count; // number of registered buffer rings
   ulong total_op_count; // total number of operations submitted since ring was initialized
-  
+
   uint entries; // number of entries in SQ
   uint sqpoll_mode; // SQPOLL mode enabled
 
