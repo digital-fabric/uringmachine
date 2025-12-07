@@ -5,8 +5,8 @@
   - [v] Add support for IO::Buffer in UM API.
   - [v] Add `UM::Error` class to be used instead of RuntimeError
   - [v] Add optional ring size argument to `UM.new` (for example, a the
-    worker thread for the scheduler `blocking_operation_wait` hook does not need
-    a lot of depth, so you can basically do `UM.new(4)`)
+        worker thread for the scheduler `blocking_operation_wait` hook does not need
+        a lot of depth, so you can basically do `UM.new(4)`)
   - [v] Add debugging code suggested by Samuel
   - [v] Add support for SQPOLL
         https://unixism.net/loti/tutorial/sq_poll.html
