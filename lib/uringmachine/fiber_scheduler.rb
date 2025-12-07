@@ -324,6 +324,14 @@ class UringMachine
       retry
     end
 
+    # Closes the given fd.
+    #
+    # @param fd [Integer] file descriptor
+    # @return [Integer] file descriptor
+    def io_close(fd)
+      @machine.close_async(fd)
+    end
+
     if UM.method_defined?(:waitid_status)
 
       # Waits for a process to terminate.

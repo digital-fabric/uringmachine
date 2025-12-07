@@ -101,7 +101,7 @@ class FiberSchedulerTest < UMBaseTest
       kernel_sleep: 2,
       io_write: 2,
       io_read: 3,
-      blocking_operation_wait: 1,
+      io_close: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   ensure
@@ -170,6 +170,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       blocking_operation_wait: 1,
       io_pread: 1,
+      io_close: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -191,8 +192,9 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 2,
+      blocking_operation_wait: 1,
       io_pwrite: 1,
+      io_close: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -244,7 +246,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_process_wait
-    skip if !@scheduler.respond_to?(:process_wait)
+    skip("Missing #process_wait hook (no rb_process_status_new)") \
+      if !@scheduler.respond_to?(:process_wait)
 
     child_pid = nil
     status = nil
@@ -324,8 +327,9 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,
-      blocking_operation_wait: 3,
+      blocking_operation_wait: 2,
       io_read: 2,
+      io_close: 2,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -346,8 +350,9 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,
-      blocking_operation_wait: 3,
+      blocking_operation_wait: 2,
       io_read: 2,
+      io_close: 2,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -460,7 +465,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_system
-    skip if !@scheduler.respond_to?(:process_wait)
+    skip("Missing #process_wait hook (no rb_process_status_new)") \
+      if !@scheduler.respond_to?(:process_wait)
 
     buf = []
     Fiber.schedule do
@@ -478,7 +484,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_cmd
-    skip if !@scheduler.respond_to?(:process_wait)
+    skip("Missing #process_wait hook (no rb_process_status_new)") \
+      if !@scheduler.respond_to?(:process_wait)
 
     buf = []
     Fiber.schedule do
@@ -498,7 +505,8 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_popen
-    skip if !@scheduler.respond_to?(:process_wait)
+    skip("Missing #process_wait hook (no rb_process_status_new)") \
+      if !@scheduler.respond_to?(:process_wait)
 
     buf = []
     Fiber.schedule do
@@ -567,6 +575,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 2,
+      io_close: 1,
       blocking_operation_wait: 1,
       address_resolve: 1,
       join: 1
