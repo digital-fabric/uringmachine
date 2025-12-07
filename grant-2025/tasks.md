@@ -60,7 +60,8 @@
   - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
   - [v] Implement timeouts (how do timeouts interact with blocking ops?)
   - [v] Implement `#yield` hook (https://github.com/ruby/ruby/pull/14700)
-  - [v] Finish documentation for the `FiberScheduler` class.
+  - [v] Finish documentation for the `FiberScheduler` class
+  - [v] Implement `#io_close` hook
 
   - [v] tests:
     - [v] Wrap the scheduler interface such that we can verify that specific

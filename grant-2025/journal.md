@@ -354,3 +354,24 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   implications of that, but I'll try to make some time to check this against
   [TP2](https://github.com/noteflakes/tp2), a UringMachine-based web server I'm
   currently using in a bunch of projects.
+
+# 2025-12-07
+
+- I started looking at getting `#io_close` to work, and found out that Samuel
+  has already done the work, that is the code was already there, but was
+  commented out. Samuel explained that it was impossible to get it to work due
+  to the complexity of the implementation of `IO#close`, and indeed when I tried
+  it myself I saw that in fact it was just not possible the way the IO state is
+  managed when an IO is closed. I then had the idea that maybe we could pass the
+  underlying fd instead of the IO object itself to the `#io_close` hook. I tried
+  it and indeed it worked without any problems. The only issue is that this
+  breaks the convention where the different `io_xxx` hooks take an io as their
+  first argument. Nevertheless, I suggested this idea to Samuel and gladly he
+  accepted when he saw this is the only we can make this hook work. Samuel then
+  proceeded to prepare a [PR](https://github.com/ruby/ruby/pull/15434) and merge
+  it.
+  
+- Added the `#io_close` hook to the UringMachine fiber scheduler, as well as a
+  `#yield` hook for dealing with thread interrupts in response to another
+  [PR](https://github.com/ruby/ruby/pull/14700) by Samuel. I also added missing
+  docs for the different methods in the fiber scheduler.
