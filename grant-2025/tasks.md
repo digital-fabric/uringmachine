@@ -59,8 +59,8 @@
         With worker count according to CPU count
   - [v] Test working with non-blocking files, it should be fine, and we shouldn't need to reset `O_NONBLOCK`.
   - [v] Implement timeouts (how do timeouts interact with blocking ops?)
-  - [ ] Implement `#yield` hook (https://github.com/ruby/ruby/pull/14700)
-  - [ ] Finish documentation for the `FiberScheduler` class.
+  - [v] Implement `#yield` hook (https://github.com/ruby/ruby/pull/14700)
+  - [v] Finish documentation for the `FiberScheduler` class.
 
   - [v] tests:
     - [v] Wrap the scheduler interface such that we can verify that specific
@@ -74,11 +74,11 @@
     - [v] system / exec / etc.
     - [v] popen
   - [ ] "Integration tests"
+    - [ ] IO - all methods!
     - [ ] queue: multiple concurrent readers / writers
     - [ ] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
     - [ ] pipes: multiple pairs of fibers - reader / writer
     - [ ] sockets: echo server + many clients
-    - [ ] IO - all methods!
 
   - [ ] Benchmarks
     - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
