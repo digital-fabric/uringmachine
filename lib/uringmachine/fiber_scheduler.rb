@@ -7,7 +7,7 @@ class UringMachine
   # Implements a thread pool for running blocking operations.
   class BlockingOperationThreadPool
     def initialize
-      @blocking_op_queue = UM::Queue.new
+      @job_queue = UM::Queue.new
       @pending_count = 0
       @worker_count = 0
       @max_workers = Etc.nprocessors
@@ -16,12 +16,11 @@ class UringMachine
     end
 
     def process(machine, job)
-      queue = UM::Queue.new
-
+      queue = Fiber.current.mailbox
       if @worker_count == 0 || (@pending_count > 0 && @worker_count < @max_workers)
         start_worker(machine)
       end
-      machine.push(@blocking_op_queue, [queue, job])
+      machine.push(@job_queue, [queue, job])
       machine.shift(queue)
     end
 
@@ -39,7 +38,7 @@ class UringMachine
     def run_worker_thread
       machine = UM.new(4).mark(1)
       loop do
-        q, op = machine.shift(@blocking_op_queue)
+        q, op = machine.shift(@job_queue)
         @pending_count += 1
         res = begin
           op.()
