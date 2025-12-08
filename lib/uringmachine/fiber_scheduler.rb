@@ -195,6 +195,7 @@ class UringMachine
     # @param timeout [Number, nil] optional timeout
     # @param return
     def io_wait(io, events, timeout = nil)
+      # p(io_wait: io, events:)
       timeout ||= io.timeout
       if timeout
         @machine.timeout(timeout, Timeout::Error) {

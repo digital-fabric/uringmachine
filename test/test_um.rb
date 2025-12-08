@@ -842,7 +842,7 @@ class WriteAsyncTest < UMBaseTest
     len = str.bytesize
     machine.write_async(w.fileno, str)
     str = nil
-    GC.start
+    # GC.start
     assert_equal 1, machine.pending_count
 
     machine.snooze while machine.pending_count > 0

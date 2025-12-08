@@ -64,7 +64,7 @@ class UMBaseTest < Minitest::Test
   end
 
   def teardown
-    # @machine&.cleanup
+    GC.start
   end
 
   def assign_port

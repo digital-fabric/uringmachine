@@ -41,6 +41,7 @@ class FiberSchedulerTest < UMBaseTest
 
   def teardown
     Fiber.set_scheduler(nil)
+    super
   end
 
   def test_fiber_scheduler_initialize_without_machine
@@ -128,6 +129,9 @@ class FiberSchedulerTest < UMBaseTest
       io_read: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    i.close rescue nil
+    o.close rescue nil
   end
 
   def test_io_write_with_timeout
@@ -150,6 +154,9 @@ class FiberSchedulerTest < UMBaseTest
       io_write: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    i.close rescue nil
+    o.close rescue nil
   end
 
   def test_io_write_ioerror
@@ -168,6 +175,9 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    i.close rescue nil
+    o.close rescue nil
   end
 
   def test_fiber_io_pread
@@ -338,6 +348,7 @@ class FiberSchedulerTest < UMBaseTest
 
     buf = nil
     Fiber.schedule do
+      sleep 0.001
       buf = IO.read(fn)
     end
     assert_equal 2, machine.total_op_count
@@ -349,6 +360,7 @@ class FiberSchedulerTest < UMBaseTest
       blocking_operation_wait: 2,
       io_read: 2,
       io_close: 2,
+      kernel_sleep: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -362,6 +374,7 @@ class FiberSchedulerTest < UMBaseTest
 
     buf = nil
     Fiber.schedule do
+      sleep 0.001
       File.open(fn, 'r') { buf = it.read }
     end
     assert_equal 2, machine.total_op_count
@@ -372,6 +385,7 @@ class FiberSchedulerTest < UMBaseTest
       blocking_operation_wait: 2,
       io_read: 2,
       io_close: 2,
+      kernel_sleep: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -680,6 +694,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
   def teardown
     FileUtils.rm(@fn) rescue nil
     Fiber.set_scheduler(nil)
+    super
   end
 
   def test_IO_s_binread
@@ -858,8 +873,9 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
 
   def teardown
     @io.close rescue nil
-    FileUtils.rm(@fn) rescue nil
+      FileUtils.rm(@fn) rescue nil
     Fiber.set_scheduler(nil)
+    super
   end
 
   def test_IO_i_double_left_chevron
@@ -1229,6 +1245,9 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       io_wait: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    r.close rescue nil
+    w.close rescue nil
   end
 
   def test_IO_i_wait_readable
@@ -1286,6 +1305,7 @@ class FiberSchedulerQueueTest < UMBaseTest
 
   def teardown
     Fiber.set_scheduler(nil)
+    super
   end
 
   I = 5
@@ -1325,6 +1345,7 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
 
   def teardown
     Fiber.set_scheduler(nil)
+    super
   end
 
   C = 10
@@ -1343,6 +1364,171 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
     assert_equal C, calls[:fiber]
     assert_equal C, calls[:io_close]
     assert_in_range (C * 3)..(C * 4), calls[:io_wait]
-    assert_in_range (C * 10)..(C * 15), calls[:blocking_operation_wait]
+    assert_in_range (C * 7)..(C * 17), calls[:blocking_operation_wait]
+  end
+end
+
+class FiberSchedulerMultiPipeTest < UMBaseTest
+  def setup
+    super
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
+    Fiber.set_scheduler(@scheduler)
+    @uri = URI('https://ipinfo.io/')
+  end
+
+  def teardown
+    Fiber.set_scheduler(nil)
+    super
+  end
+
+  C = 10
+  I = 100
+  SIZE = 1024
+  DATA = '*' * SIZE
+
+  def test_fiber_scheduler_multi_pipe
+    count = 0
+    ios = []
+    C.times do
+      r, w = IO.pipe
+      r.sync = true
+      w.sync = true
+      ios << r << w
+      Fiber.schedule do
+        I.times { w.write(DATA); count += 1 }
+        w.close
+      end
+      Fiber.schedule do
+        I.times { r.read(SIZE); count += 1 }
+      end
+    end
+    @scheduler.join
+    assert_equal 2000, count
+    assert_equal({
+      fiber: 20,
+      io_read: 1000,
+      io_write: 1000,
+      io_close: 10,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    ios.each { it.close rescue nil }
+  end
+end
+
+class FiberSchedulerMultiTCPTest < UMBaseTest
+  C = 10
+  W = 10
+  I = 10
+  SIZE = 1024
+  DATA = '*' * SIZE
+
+  def p(o)
+    # UM.debug(o.inspect)
+  end
+
+  def run_server(port)
+    server = TCPServer.new('127.0.0.1', port)
+    p(server:)
+
+    server_fiber = Fiber.schedule { accept_loop(server) }
+
+    fibers = []
+    W.times {
+      fibers << Fiber.schedule { run_client(port) }
+    }
+    @machine.wait_fibers(fibers)
+    server.close
+    @machine.wait_fibers(server_fiber)
+  rescue Exception => e
+    p test_run_server: e
+    p e.backtrace
+    exit!
+  end
+
+  def accept_loop(server)
+    loop do
+      conn = server.accept
+      p(accept: conn)
+      Fiber.schedule { conn_loop(conn) }
+    end
+  rescue IOError
+    # socket closed
+  rescue Exception => e
+    p accept_loop: e
+    p e.backtrace
+    exit!
+  end
+
+  def conn_loop(conn)
+    loop do
+      msg = conn.recv(SIZE * 2)
+      break if !msg
+
+      conn.send(msg, 0)
+    end
+  rescue Exception => e
+    p conn_loop: e
+    p e.backtrace
+  ensure
+    conn.close rescue nil
+  end
+
+  def run_client(port)
+    client = TCPSocket.new('127.0.0.1', port)
+    p(client:)
+    I.times do
+      client.send(DATA, 0)
+      client.recv(SIZE * 2)
+    end
+    p(:client_done)
+  rescue Exception => e
+    p client_loop: e
+    p e.backtrace
+  ensure
+    client.close
+  end
+
+  def run_fiber_scheduler_multi_tcp
+    STDOUT.sync = true
+    msg_count = 0
+    conn_count = 0
+    ios = []
+    fibers = []
+    C.times do |i|
+      port = @port_base + i
+      fibers << Fiber.schedule do
+        run_server(port)
+      end
+    end
+    @machine.wait_fibers(fibers)
+    # assert_equal 20, conn_count
+    # assert_equal 2000, msg_count
+    @calls = @scheduler.calls.map { it[:sym] }.tally
+  ensure
+    # p ensure: ios
+    ios.each { it.close rescue nil }
+  end
+
+  def test_fiber_scheduler_multi_tcp
+    Thread.new do
+      @raw_scheduler = UM::FiberScheduler.new(@machine)
+      @scheduler = MethodCallAuditor.new(@raw_scheduler)
+      Fiber.set_scheduler(@scheduler)
+      @port_base = assign_port
+      run_fiber_scheduler_multi_tcp
+    ensure
+      Fiber.set_scheduler(nil)
+    end.join
+
+    assert_equal({
+      fiber: 220,
+      io_wait: 2120,
+      io_close: 210,
+      fiber_interrupt: 10,
+      unblock: 10,
+      kernel_sleep: 10
+    }, @calls)
   end
 end

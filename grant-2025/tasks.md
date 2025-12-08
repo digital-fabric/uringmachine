@@ -78,9 +78,9 @@
   - [ ] "Integration tests"
     - [v] IO - all methods!
     - [v] queue: multiple concurrent readers / writers
-    - [ ] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
-    - [ ] pipes: multiple pairs of fibers - reader / writer
-    - [ ] sockets: echo server + many clients
+    - [v] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
+    - [v] pipes: multiple pairs of fibers - reader / writer
+    - [v] sockets: echo server + many clients
 
   - [ ] Benchmarks
     - [v] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
