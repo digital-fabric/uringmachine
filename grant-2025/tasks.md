@@ -10,6 +10,7 @@
   - [v] Add debugging code suggested by Samuel
   - [v] Add support for SQPOLL
         https://unixism.net/loti/tutorial/sq_poll.html
+  - [v] Add `UM.socketpair`
 
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
@@ -82,18 +83,18 @@
     - [ ] sockets: echo server + many clients
 
   - [ ] Benchmarks
-    - [ ] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
+    - [v] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
 
           N groups where each group has M producers and O consumers accessing the same queue.
 
-    - [ ] UM mutex / Ruby mutex (threads) / Ruby mutex with UM fiber scheduler
+    - [v] UM mutex / Ruby mutex (threads) / Ruby mutex with UM fiber scheduler
 
-      - [ ] N groups where each group has M fibers locking the same mutex and
+      - [v] N groups where each group has M fibers locking the same mutex and
             performing CPU-bound work
-      - [ ] N groups where each group has M fibers locking the same mutex and
-            performing IO-bound work (like maybe write to `/dev/null`)
+      - [v] N groups where each group has M fibers locking the same mutex and
+            performing IO-bound work (write to a file)
 
-    - [ ] Pipe IO raw UM / Ruby threaded / Ruby with UM fiber scheduler
+    - [v] Pipe IO raw UM / Ruby threaded / Ruby with UM fiber scheduler
 
           N groups where each group has a pair of reader / writer to a pipe
 

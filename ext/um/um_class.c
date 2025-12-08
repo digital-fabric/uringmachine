@@ -3,6 +3,7 @@
 #include <ruby/io.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 VALUE cUM;
 VALUE eUMError;
@@ -428,6 +429,17 @@ VALUE UM_pipe(VALUE self) {
   return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
 }
 
+VALUE UM_socketpair(VALUE self, VALUE domain, VALUE type, VALUE protocol) {
+  int fds[2];
+  int ret = socketpair(NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), fds);
+  if (ret) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+
+  return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
+}
+
 VALUE UM_pidfd_open(VALUE self, VALUE pid) {
   int fd = syscall(SYS_pidfd_open, NUM2INT(pid), 0);
   if (fd == -1) {
@@ -501,6 +513,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
   rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
+  rb_define_singleton_method(cUM, "socketpair", UM_socketpair, 3);
   rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
   rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
 

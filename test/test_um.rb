@@ -1756,6 +1756,26 @@ class PipeTest < UMBaseTest
   end
 end
 
+class SocketpairTest < UMBaseTest
+  def test_socketpair
+    rfd, wfd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    ret = machine.write(wfd, 'foo')
+    assert_equal 3, ret
+
+    ret = machine.close(wfd)
+    assert_equal wfd, ret
+
+    buf = +''
+    ret = machine.read(rfd, buf, 8192)
+
+    assert_equal 3, ret
+    assert_equal 'foo', buf
+
+    ret = machine.close(rfd)
+    assert_equal rfd, ret
+  end
+end
+
 class PidfdTest < UMBaseTest
   def test_pidfd_open
     pid = fork { exit 13 }
