@@ -19,7 +19,7 @@ class MethodCallAuditor
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
     res
-  rescue => e
+  rescue Exception => e
     @calls << ({ sym:, args:, res: e})
     raise
   end
@@ -39,7 +39,6 @@ class FiberSchedulerTest < UMBaseTest
 
   def teardown
     Fiber.set_scheduler(nil)
-    GC.start
   end
 
   def test_fiber_scheduler_initialize_without_machine
@@ -147,6 +146,24 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_write: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_io_write_ioerror
+    i, o = IO.pipe
+    buf = []
+
+    Fiber.schedule do
+      buf << i.write('!')
+    rescue SystemCallError, IOError => e
+      buf << e
+    end
+    @scheduler.join
+    assert_kind_of IOError, buf.first
+
+    assert_equal({
+      fiber: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
@@ -645,5 +662,182 @@ class FiberSchedulerTest < UMBaseTest
     @scheduler.join
 
     assert_equal (1..20).map { it * 10 }, buf.sort
+  end
+end
+
+class FiberSchedulerIOClassMethodsTest < UMBaseTest
+  def setup
+    super
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
+    Fiber.set_scheduler(@scheduler)
+    @fn = "/tmp/um_#{SecureRandom.hex}"
+    IO.write(@fn, '===')
+  end
+
+  def teardown
+    FileUtils.rm(@fn) rescue nil
+    Fiber.set_scheduler(nil)
+  end
+
+  def test_IO_s_binread
+    ret = nil
+    Fiber.schedule do
+      ret = IO.binread(@fn)
+    end
+    @scheduler.join
+    assert_equal '===', ret
+    assert_equal({
+      fiber: 1,
+      io_read: 2,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_binwrite
+    ret = nil
+    Fiber.schedule do
+      ret = IO.binwrite(@fn, '***', 2)
+    end
+    @scheduler.join
+    assert_equal 3, ret
+    assert_equal '==***', IO.read(@fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_copy_stream
+    fn2 = "/tmp/um_#{SecureRandom.hex}"
+    ret = nil
+    Fiber.schedule do
+      ret = IO.copy_stream(@fn, fn2)
+    end
+    @scheduler.join
+    assert_equal 3, ret
+    assert_equal '===', IO.read(fn2)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 3,
+      io_close: 2,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_foreach
+    buf = []
+    Fiber.schedule do
+      IO.foreach(@fn) { buf << it }
+    end
+    @scheduler.join
+    assert_equal ['==='], buf
+    assert_equal({
+      fiber: 1,
+      io_read: 3,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_foreach
+    buf = []
+    Fiber.schedule do
+      IO.foreach(@fn) { buf << it }
+    end
+    @scheduler.join
+    assert_equal ['==='], buf
+    assert_equal({
+      fiber: 1,
+      io_read: 3,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_popen
+    ret = nil
+    Fiber.schedule do
+      IO.popen("cat #{@fn}") { ret = it.read }
+    end
+    @scheduler.join
+    assert_equal '===', ret
+    assert_equal({
+      fiber: 1,
+      io_read: 2,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_read
+    ret = nil
+    Fiber.schedule do
+      ret = IO.read(@fn)
+    end
+    @scheduler.join
+    assert_equal '===', ret
+    assert_equal({
+      fiber: 1,
+      io_read: 2,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_readlines
+    ret = nil
+    Fiber.schedule do
+      ret = IO.readlines(@fn)
+    end
+    @scheduler.join
+    assert_equal ['==='], ret
+    assert_equal({
+      fiber: 1,
+      io_read: 3,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+
+  def test_IO_s_select
+    ret = nil
+    io = File.open(@fn, 'r+')
+    Fiber.schedule do
+      ret = IO.select([io], [io], [])
+    end
+    @scheduler.join
+    assert_equal [[io], [io], []], ret
+    assert_equal({
+      fiber: 1,
+      io_select: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    io.close rescue nil
+  end
+
+  def test_IO_s_write
+    ret = nil
+    Fiber.schedule do
+      ret = IO.write(@fn, '***', 2)
+    end
+    @scheduler.join
+    assert_equal 3, ret
+    assert_equal '==***', IO.read(@fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
   end
 end

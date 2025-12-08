@@ -98,7 +98,7 @@
 
           N groups where each group has a pair of reader / writer to a pipe
 
-    - [ ] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
+    - [v] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
 
           N groups where each group has a pair of reader / writer to a socketpair
 

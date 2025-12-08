@@ -948,7 +948,7 @@ end
 
 class ShutdownTest < UMBaseTest
   def test_shutdown
-    c_fd, s_fd = make_socket_pair
+    c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     res = @machine.send(c_fd, 'abc', 3, 0)
     assert_equal 3, res
 
@@ -980,7 +980,7 @@ end
 
 class ShutdownAsyncTest < UMBaseTest
   def test_shutdown_async
-    c_fd, s_fd = make_socket_pair
+    c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     res = @machine.send(c_fd, 'abc', 3, 0)
     assert_equal 3, res
 
@@ -2187,7 +2187,7 @@ end
 class SendBundleTest < UMBaseTest
   def setup
     super
-    @client_fd, @server_fd = make_socket_pair
+    @client_fd, @server_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
   end
 
   def test_send_bundle_splat

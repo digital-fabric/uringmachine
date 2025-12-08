@@ -74,20 +74,4 @@ class UMBaseTest < Minitest::Test
       @@port += 1
     end
   end
-
-  def make_socket_pair
-    port = 10000 + rand(30000)
-    server_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    @machine.setsockopt(server_fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
-    @machine.bind(server_fd, '127.0.0.1', port)
-    @machine.listen(server_fd, UM::SOMAXCONN)
-
-    client_conn_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    @machine.connect(client_conn_fd, '127.0.0.1', port)
-
-    server_conn_fd = @machine.accept(server_fd)
-
-    @machine.close(server_fd)
-    [client_conn_fd, server_conn_fd]
-  end
 end
