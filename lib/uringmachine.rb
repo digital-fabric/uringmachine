@@ -53,7 +53,7 @@ class UringMachine
     fibers.size == 1 ? values.first : values
   end
 
-  def wait_fibers(fibers)
+  def await_fibers(fibers)
     if fibers.is_a?(Fiber)
       f = fibers
       if !f.done?

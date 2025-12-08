@@ -142,7 +142,7 @@ class FiberJoinTest < UMBaseTest
 end
 
 class WaitFibersTest < UMBaseTest
-  def test_wait_fibers
+  def test_await_fibers
     q = UM::Queue.new
     x = nil
 
@@ -163,19 +163,19 @@ class WaitFibersTest < UMBaseTest
       machine.push q, 2
     end
 
-    res = machine.wait_fibers([f])
+    res = machine.await_fibers([f])
     assert_equal 0, x
     assert_equal 3, machine.shift(q)
     assert_equal 1, res
 
     done = nil
     f = machine.spin { machine.snooze; done = true }
-    res = machine.wait_fibers(f)
+    res = machine.await_fibers(f)
     assert done
     assert_equal 1, res
   end
 
-  def test_wait_fibers_multiple
+  def test_await_fibers_multiple
     f1 = machine.spin do
       :foo
     end
@@ -189,11 +189,11 @@ class WaitFibersTest < UMBaseTest
       :baz
     end
 
-    res = machine.wait_fibers([f1, f2, f3])
+    res = machine.await_fibers([f1, f2, f3])
     assert_equal 3, res
   end
 
-  def test_wait_fibers_cross_thread
+  def test_await_fibers_cross_thread
     q = UM::Queue.new
 
     t2 = Thread.new do
@@ -203,23 +203,23 @@ class WaitFibersTest < UMBaseTest
         m2.snooze
         :foo
       end
-      m2.wait_fibers(f)
+      m2.await_fibers(f)
     end
 
     f = machine.shift(q)
     assert_kind_of Fiber, f
-    res = machine.wait_fibers(f)
+    res = machine.await_fibers(f)
     assert_equal 1, res
   ensure
     t2.join
   end
 
-  def test_wait_fibers_with_exception
+  def test_await_fibers_with_exception
     f = machine.spin do
       raise "Foobar"
     end
 
-    res = machine.wait_fibers(f)
+    res = machine.await_fibers(f)
     assert_equal 1, res
   end
 end

@@ -133,7 +133,7 @@ class UringMachine
         @fiber_map = ObjectSpace::WeakMap.new
       end
 
-      @machine.wait_fibers(fibers)
+      @machine.await_fibers(fibers)
     end
 
     # Runs the given operation in a separate thread, so as not to block other

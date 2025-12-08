@@ -1438,9 +1438,9 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
     W.times {
       fibers << Fiber.schedule { run_client(port) }
     }
-    @machine.wait_fibers(fibers)
+    @machine.await_fibers(fibers)
     server.close
-    @machine.wait_fibers(server_fiber)
+    @machine.await_fibers(server_fiber)
   rescue Exception => e
     p test_run_server: e
     p e.backtrace
@@ -1481,6 +1481,7 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
     I.times do
       client.send(DATA, 0)
       client.recv(SIZE * 2)
+      @msg_count += 1
     end
     p(:client_done)
   rescue Exception => e
@@ -1491,9 +1492,8 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
   end
 
   def run_fiber_scheduler_multi_tcp
+    @msg_count = 0
     STDOUT.sync = true
-    msg_count = 0
-    conn_count = 0
     ios = []
     fibers = []
     C.times do |i|
@@ -1502,9 +1502,7 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
         run_server(port)
       end
     end
-    @machine.wait_fibers(fibers)
-    # assert_equal 20, conn_count
-    # assert_equal 2000, msg_count
+    @machine.await_fibers(fibers)
     @calls = @scheduler.calls.map { it[:sym] }.tally
   ensure
     # p ensure: ios
@@ -1522,6 +1520,7 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
       Fiber.set_scheduler(nil)
     end.join
 
+    assert_equal 1000, @msg_count
     assert_equal({
       fiber: 220,
       io_wait: 2120,
