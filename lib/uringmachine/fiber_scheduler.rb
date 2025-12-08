@@ -184,7 +184,8 @@ class UringMachine
 
     # Yields to the next runnable fiber.
     def yield
-      @machine.yield
+      @machine.snooze
+      # @machine.yield
     end
 
     # Waits for the given io to become ready.

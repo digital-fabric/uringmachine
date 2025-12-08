@@ -4,6 +4,8 @@ require_relative 'helper'
 require 'uringmachine/fiber_scheduler'
 require 'securerandom'
 require 'socket'
+require 'net/http'
+require 'json'
 
 class MethodCallAuditor
   attr_reader :calls
@@ -1270,5 +1272,77 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       io_write: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+end
+
+class FiberSchedulerQueueTest < UMBaseTest
+  def setup
+    super
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
+    Fiber.set_scheduler(@scheduler)
+    @queue = Queue.new
+  end
+
+  def teardown
+    Fiber.set_scheduler(nil)
+  end
+
+  I = 5
+  C = 5
+
+  def test_fiber_scheduler_queue_multi_fiber
+    C.times {
+      Fiber.schedule do
+        I.times { sleep 0.0001; @queue << rand(1000) }
+      end
+    }
+    C.times {
+      Fiber.schedule do
+        I.times { @queue.shift; @scheduler.yield;   }
+      end
+    }
+    @scheduler.join
+    assert_equal({
+      fiber: 10,
+      kernel_sleep: 25,
+      yield: 25,
+      block: 25,
+      unblock: 25,
+      join: 1
+    }, @scheduler.calls.map { it[:sym] }.tally)
+  end
+end
+
+class FiberSchedulerNetHTTPTest < UMBaseTest
+  def setup
+    super
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
+    Fiber.set_scheduler(@scheduler)
+    @uri = URI('https://ipinfo.io/')
+  end
+
+  def teardown
+    Fiber.set_scheduler(nil)
+  end
+
+  C = 10
+
+  def test_fiber_scheduler_net_http
+    buf = []
+    C.times {
+      Fiber.schedule do
+        buf << JSON.parse(Net::HTTP.get(@uri))
+      end
+    }
+    @scheduler.join
+    assert_equal C, buf.size
+    assert_equal 1, buf.map { it['ip'] }.uniq.compact.size
+    calls = @scheduler.calls.map { it[:sym] }.tally
+    assert_equal C, calls[:fiber]
+    assert_equal C, calls[:io_close]
+    assert_in_range (C * 3)..(C * 4), calls[:io_wait]
+    assert_in_range (C * 10)..(C * 15), calls[:blocking_operation_wait]
   end
 end
