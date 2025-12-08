@@ -76,7 +76,7 @@
     - [v] system / exec / etc.
     - [v] popen
   - [ ] "Integration tests"
-    - [ ] IO - all methods!
+    - [v] IO - all methods!
     - [ ] queue: multiple concurrent readers / writers
     - [ ] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client
     - [ ] pipes: multiple pairs of fibers - reader / writer
