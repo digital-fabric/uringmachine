@@ -2,6 +2,7 @@
 
 require 'resolv'
 require 'etc'
+require 'uringmachine'
 
 class UringMachine
   # Implements a worker thread pool for running blocking operations. Worker
@@ -132,7 +133,7 @@ class UringMachine
         @fiber_map = ObjectSpace::WeakMap.new
       end
 
-      @machine.join(*fibers)
+      @machine.wait_fibers(fibers)
     end
 
     # Runs the given operation in a separate thread, so as not to block other

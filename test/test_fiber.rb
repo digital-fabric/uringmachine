@@ -141,9 +141,92 @@ class FiberJoinTest < UMBaseTest
   end
 end
 
+class WaitFibersTest < UMBaseTest
+  def test_wait_fibers
+    q = UM::Queue.new
+    x = nil
+
+    f = machine.spin do
+      x = 1
+      machine.push q, machine.shift(q) + 1
+      42
+    ensure
+      x = 0
+    end
+
+    assert_nil x
+    machine.snooze
+    assert_equal 1, x
+
+    machine.spin do
+      x = 2
+      machine.push q, 2
+    end
+
+    res = machine.wait_fibers([f])
+    assert_equal 0, x
+    assert_equal 3, machine.shift(q)
+    assert_equal 1, res
+
+    done = nil
+    f = machine.spin { machine.snooze; done = true }
+    res = machine.wait_fibers(f)
+    assert done
+    assert_equal 1, res
+  end
+
+  def test_wait_fibers_multiple
+    f1 = machine.spin do
+      :foo
+    end
+
+    f2 = machine.spin do
+      machine.sleep(0.001)
+      :bar
+    end
+
+    f3 = machine.spin do
+      :baz
+    end
+
+    res = machine.wait_fibers([f1, f2, f3])
+    assert_equal 3, res
+  end
+
+  def test_wait_fibers_cross_thread
+    q = UM::Queue.new
+
+    t2 = Thread.new do
+      m2 = UM.new
+      f = m2.spin do
+        m2.push(q, f)
+        m2.snooze
+        :foo
+      end
+      m2.wait_fibers(f)
+    end
+
+    f = machine.shift(q)
+    assert_kind_of Fiber, f
+    res = machine.wait_fibers(f)
+    assert_equal 1, res
+  ensure
+    t2.join
+  end
+
+  def test_wait_fibers_with_exception
+    f = machine.spin do
+      raise "Foobar"
+    end
+
+    res = machine.wait_fibers(f)
+    assert_equal 1, res
+  end
+end
+
 class ScopeTest < UMBaseTest
   def test_scope
-    skip
+    skip("UM#scope not yet implemented")
 
     x1 = nil
     x2 = nil

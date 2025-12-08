@@ -38,7 +38,7 @@ class UringMachine
         results[f] = f.result
       else
         (pending ||= []) << f
-        queue ||= UM::Queue.new
+        queue ||= Fiber.current.mailbox
         f.add_done_listener(queue)
       end
     end
@@ -51,6 +51,35 @@ class UringMachine
     end
     values = results.values
     fibers.size == 1 ? values.first : values
+  end
+
+  def wait_fibers(fibers)
+    if fibers.is_a?(Fiber)
+      f = fibers
+      if !f.done?
+        queue = Fiber.current.mailbox
+        f.add_done_listener(queue)
+        self.shift(queue)
+      end
+      return 1
+    end
+
+    queue = nil
+    pending = nil
+    fibers.each do |f|
+      if !f.done?
+        (pending ||= []) << f
+        queue ||= Fiber.current.mailbox
+        f.add_done_listener(queue)
+      end
+    end
+    if pending
+      while !pending.empty?
+        f = self.shift(queue)
+        pending.delete(f)
+      end
+    end
+    fibers.count
   end
 
   def resolve(hostname, type = :A)
