@@ -11,6 +11,8 @@ implementations:
   stock Ruby I/O and synchronization classes.
 - Fiber-based concurrency using the UringMachine low-level (pure) API.
 
+<img src="./chart.png">
+
 ## 1. I/O - Pipe
 
 50 concurrent groups, where in each group we create a pipe with a pair of
