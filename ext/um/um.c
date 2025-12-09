@@ -535,10 +535,7 @@ VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64
 
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_WRITE_ASYNC, OP_F_TRANSIENT | OP_F_FREE_ON_COMPLETE);
-  RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
   RB_OBJ_WRITE(machine->self, &op->value, buffer);
-  RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
-
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_write(sqe, fd, base, len, file_offset);
@@ -566,9 +563,6 @@ VALUE um_close(struct um *machine, int fd) {
 VALUE um_close_async(struct um *machine, int fd) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_CLOSE_ASYNC, OP_F_FREE_ON_COMPLETE);
-  RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->value, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_close(sqe, fd);
@@ -777,9 +771,6 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
 VALUE um_shutdown_async(struct um *machine, int fd, int how) {
   struct um_op *op = um_op_alloc(machine);
   um_prep_op(machine, op, OP_SHUTDOWN_ASYNC, OP_F_FREE_ON_COMPLETE);
-  RB_OBJ_WRITE(machine->self, &op->fiber, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->value, Qnil);
-  RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_shutdown(sqe, fd, how);
