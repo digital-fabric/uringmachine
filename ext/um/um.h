@@ -4,7 +4,6 @@
 #include <ruby.h>
 #include <liburing.h>
 
-
 // debugging
 enum {
   // set to 1 to enable debug logging
@@ -18,6 +17,8 @@ enum {
 #define TRACE_FREE(ptr) //printf("Free %p %s:%d\n", ptr, __FILE__, __LINE__)
 #define DEBUG_MARK(machine, markv, msg) \
   if (machine->mark == markv) printf("%s\n", msg);
+#define DEBUG_PRINTF(...) \
+  if (DEBUG) fprintf(stderr, __VA_ARGS__)
 
 // branching
 #ifndef unlikely
@@ -32,6 +33,7 @@ enum {
   (TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer)
 
 enum um_op_kind {
+  OP_UNDEFINED,
   OP_TIMEOUT,
   OP_SCHEDULE,
 
@@ -143,7 +145,9 @@ struct um {
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
 
-  struct um_op *transient_head;
+  struct um_op *transient_head; // list of pending transient ops
+  VALUE pending_fibers; // hash containing pending fibers
+
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;
 
@@ -244,8 +248,8 @@ void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
 uint um_submit(struct um *machine);
-VALUE um_fiber_switch(struct um *machine);
-VALUE um_await(struct um *machine);
+VALUE um_yield(struct um *machine);
+VALUE um_switch(struct um *machine);
 VALUE um_wakeup(struct um *machine);
 void um_cancel_op(struct um *machine, struct um_op *op);
 void um_cancel_and_wait(struct um *machine, struct um_op *op);

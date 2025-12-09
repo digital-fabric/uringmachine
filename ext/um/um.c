@@ -21,6 +21,7 @@ void um_setup(VALUE self, struct um *machine, uint entries, uint sqpoll_timeout_
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
+  RB_OBJ_WRITE(self, &machine->pending_fibers, rb_hash_new());
 
   machine->entries = (entries > 0) ? entries : DEFAULT_ENTRIES;
   machine->sqpoll_mode = !!sqpoll_timeout_msec;
@@ -48,8 +49,8 @@ inline void um_teardown(struct um *machine) {
 }
 
 inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
-  if (DEBUG) fprintf(stderr, "-> %p um_get_sqe: op->kind=%s unsubmitted=%d pending=%d total=%lu\n",
-    &machine->ring, op ? um_op_kind_name(op->kind) : "NULL", machine->unsubmitted_count,
+  DEBUG_PRINTF("-> %p um_get_sqe: op %p kind=%s unsubmitted=%d pending=%d total=%lu\n",
+    &machine->ring, op, um_op_kind_name(op ? op->kind : OP_UNDEFINED), machine->unsubmitted_count,
     machine->pending_count, machine->total_op_count
   );
 
@@ -57,6 +58,7 @@ inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
 
+  fprintf(stderr, "!!!Failed to get SQE\n");
   um_raise_internal_error("Failed to get SQE");
 
   // TODO: retry getting SQE?
@@ -100,13 +102,11 @@ void *um_submit_without_gvl(void *ptr) {
 }
 
 inline uint um_submit(struct um *machine) {
-  if (DEBUG) fprintf(stderr, "-> %p um_submit: unsubmitted=%d pending=%d total=%lu\n",
+  DEBUG_PRINTF("-> %p um_submit: unsubmitted=%d pending=%d total=%lu\n",
     &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
   );
   if (!machine->unsubmitted_count) {
-    if (DEBUG) fprintf(stderr, "<- %p um_submit: no unsubmitted SQEs, early return\n",
-      &machine->ring
-    );
+    DEBUG_PRINTF("<- %p um_submit: no unsubmitted SQEs, early return\n", &machine->ring);
     return 0;
   }
 
@@ -116,9 +116,7 @@ inline uint um_submit(struct um *machine) {
   else
     ctx.result = io_uring_submit(&machine->ring);
 
-  if (DEBUG) fprintf(stderr, "<- %p um_submit: result=%d\n",
-    &machine->ring, ctx.result
-  );
+  DEBUG_PRINTF("<- %p um_submit: result=%d\n", &machine->ring, ctx.result);
 
   if (ctx.result < 0)
     rb_syserr_fail(-ctx.result, strerror(-ctx.result));
@@ -130,15 +128,18 @@ inline uint um_submit(struct um *machine) {
 static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) {
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (DEBUG) {
-    if (op) fprintf(stderr, "<- %p um_process_cqe: op %p kind %s flags %d cqe_res %d cqe_flags %d pending %d\n",
-      &machine->ring, op, um_op_kind_name(op->kind), op->flags, cqe->res, cqe->flags, machine->pending_count
-    );
-    else fprintf(stderr, "<- %p um_process_cqe: op NULL cqe_res %d cqe_flags %d pending %d\n",
-      &machine->ring, cqe->res, cqe->flags, machine->pending_count
-    );
+    if (op) {
+      DEBUG_PRINTF("<- %p um_process_cqe: op %p kind %s flags %d cqe_res %d cqe_flags %d pending %d\n",
+        &machine->ring, op, um_op_kind_name(op->kind), op->flags, cqe->res, cqe->flags, machine->pending_count
+      );
+    }
+    else {
+      DEBUG_PRINTF("<- %p um_process_cqe: op NULL cqe_res %d cqe_flags %d pending %d\n",
+        &machine->ring, cqe->res, cqe->flags, machine->pending_count
+      );
+    }
   }
   if (unlikely(!op)) return;
-
 
   if (!(cqe->flags & IORING_CQE_F_MORE))
     machine->pending_count--;
@@ -179,7 +180,7 @@ static inline int cq_ring_needs_flush(struct io_uring *ring) {
 }
 
 static inline int um_process_ready_cqes(struct um *machine) {
-  if (DEBUG) fprintf(stderr, "-> %p um_process_ready_cqes: unsubmitted=%d pending=%d total=%lu\n",
+  DEBUG_PRINTF("-> %p um_process_ready_cqes: unsubmitted=%d pending=%d total=%lu\n",
     &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
   );
 
@@ -199,9 +200,9 @@ iterate:
   if (overflow_checked) goto done;
 
   if (cq_ring_needs_flush(&machine->ring)) {
-    if (DEBUG) fprintf(stderr, "-> %p io_uring_enter\n", &machine->ring);
+    DEBUG_PRINTF("-> %p io_uring_enter\n", &machine->ring);
     int ret = io_uring_enter(machine->ring.ring_fd, 0, 0, IORING_ENTER_GETEVENTS, NULL);
-    if (DEBUG) fprintf(stderr, "<- %p io_uring_enter: result=%d\n", &machine->ring, ret);
+    DEBUG_PRINTF("<- %p io_uring_enter: result=%d\n", &machine->ring, ret);
     if (ret < 0)
       rb_syserr_fail(-ret, strerror(-ret));
 
@@ -210,9 +211,7 @@ iterate:
   }
 
 done:
-  if (DEBUG) fprintf(stderr, "<- %p um_process_ready_cqes: total_processed=%u\n",
-    &machine->ring, total_count
-  );
+  DEBUG_PRINTF("<- %p um_process_ready_cqes: total_processed=%u\n", &machine->ring, total_count);
 
   return total_count;
 }
@@ -227,7 +226,7 @@ struct wait_for_cqe_ctx {
 void *um_wait_for_cqe_without_gvl(void *ptr) {
   struct wait_for_cqe_ctx *ctx = ptr;
   if (ctx->machine->unsubmitted_count) {
-    if (DEBUG) fprintf(stderr, "-> %p io_uring_submit_and_wait_timeout: unsubmitted=%d pending=%d total=%lu\n",
+    DEBUG_PRINTF("-> %p io_uring_submit_and_wait_timeout: unsubmitted=%d pending=%d total=%lu\n",
       &ctx->machine->ring, ctx->machine->unsubmitted_count, ctx->machine->pending_count,
       ctx->machine->total_op_count
     );
@@ -239,20 +238,16 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
     // https://github.com/axboe/liburing/issues/1280
     int ret = io_uring_submit_and_wait_timeout(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
     ctx->machine->unsubmitted_count = 0;
-    if (DEBUG) fprintf(stderr, "<- %p io_uring_submit_and_wait_timeout: result=%d\n",
-      &ctx->machine->ring, ret
-    );
+    DEBUG_PRINTF("<- %p io_uring_submit_and_wait_timeout: result=%d\n", &ctx->machine->ring, ret);
     ctx->result = (ret > 0 && !ctx->cqe) ? -EINTR : ret;
   }
   else {
-    if (DEBUG) fprintf(stderr, "-> %p io_uring_wait_cqes: unsubmitted=%d pending=%d total=%lu\n",
+    DEBUG_PRINTF("-> %p io_uring_wait_cqes: unsubmitted=%d pending=%d total=%lu\n",
       &ctx->machine->ring, ctx->machine->unsubmitted_count, ctx->machine->pending_count,
       ctx->machine->total_op_count
     );
     ctx->result = io_uring_wait_cqes(&ctx->machine->ring, &ctx->cqe, ctx->wait_nr, NULL, NULL);
-    if (DEBUG) fprintf(stderr, "<- %p io_uring_wait_cqes: result=%d\n",
-      &ctx->machine->ring, ctx->result
-    );
+    DEBUG_PRINTF("<- %p io_uring_wait_cqes: result=%d\n", &ctx->machine->ring, ctx->result);
   }
   return NULL;
 }
@@ -287,6 +282,8 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
 }
 
 inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
+  DEBUG_PRINTF("-> %p process_runqueue_op: op %p\n", &machine->ring, op);
+
   VALUE fiber = op->fiber;
   VALUE value = op->value;
 
@@ -299,8 +296,8 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   return ret;
 }
 
-inline VALUE um_fiber_switch(struct um *machine) {
-  if (DEBUG) fprintf(stderr, "-> %p um_fiber_switch: unsubmitted=%d pending=%d total=%lu\n",
+inline VALUE um_switch(struct um *machine) {
+  DEBUG_PRINTF("-> %p um_switch: unsubmitted=%d pending=%d total=%lu\n",
     &machine->ring, machine->unsubmitted_count, machine->pending_count, machine->total_op_count
   );
   while (true) {
@@ -335,6 +332,14 @@ inline VALUE um_fiber_switch(struct um *machine) {
   }
 }
 
+inline VALUE um_yield(struct um *machine) {
+  VALUE fiber = rb_fiber_current();
+  rb_hash_aset(machine->pending_fibers, fiber, Qtrue);
+  VALUE ret = um_switch(machine);
+  rb_hash_delete(machine->pending_fibers, fiber);
+  return ret;
+}
+
 void um_cancel_op(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
   io_uring_prep_cancel64(sqe, (long long)op, 0);
@@ -342,9 +347,13 @@ void um_cancel_op(struct um *machine, struct um_op *op) {
 
 inline void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   um_cancel_op(machine, op);
+
+  VALUE fiber = rb_fiber_current();
+  rb_hash_aset(machine->pending_fibers, fiber, Qtrue);
   while (!um_op_completed_p(op)) {
-    um_fiber_switch(machine);
+    um_switch(machine);
   }
+  rb_hash_delete(machine->pending_fibers, fiber);
 }
 
 inline int um_check_completion(struct um *machine, struct um_op *op) {
@@ -355,13 +364,6 @@ inline int um_check_completion(struct um *machine, struct um_op *op) {
 
   um_raise_on_error_result(op->result.res);
   return 1;
-}
-
-inline VALUE um_await(struct um *machine) {
-  VALUE ret = um_fiber_switch(machine);
-  RAISE_IF_EXCEPTION(ret);
-  RB_GC_GUARD(ret);
-  return ret;
 }
 
 VALUE um_wakeup(struct um *machine) {
@@ -449,7 +451,8 @@ VALUE um_sleep(struct um *machine, double duration) {
   op.ts = um_double_to_timespec(duration);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_timeout(sqe, &op.ts, 0, 0);
-  VALUE ret = um_fiber_switch(machine);
+
+  VALUE ret = um_yield(machine);
 
   if (!um_op_completed_p(&op))
     um_cancel_and_wait(machine, &op);
@@ -470,7 +473,8 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t b
   void *ptr = um_prepare_read_buffer(buffer, maxlen, buffer_offset);
   io_uring_prep_read(sqe, fd, ptr, maxlen, file_offset);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op)) {
     um_update_read_buffer(machine, buffer, buffer_offset, op.result.res, op.result.flags);
     ret = INT2NUM(op.result.res);
@@ -488,10 +492,10 @@ size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_read(sqe, fd, buffer, maxlen, -1);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op)) {
     return op.result.res;
-
   }
 
   RAISE_IF_EXCEPTION(ret);
@@ -512,7 +516,8 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
 
   io_uring_prep_write(sqe, fd, base, len, file_offset);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -548,7 +553,8 @@ VALUE um_close(struct um *machine, int fd) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_close(sqe, fd);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(fd);
 
@@ -576,7 +582,8 @@ VALUE um_accept(struct um *machine, int fd) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_accept(sqe, fd, NULL, NULL, 0);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -591,7 +598,8 @@ VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint fla
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_socket(sqe, domain, type, protocol, flags);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -606,7 +614,8 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_connect(sqe, fd, addr, addrlen);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -627,7 +636,8 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
 
   io_uring_prep_send(sqe, fd, base, len, flags);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -647,7 +657,8 @@ VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
 	sqe->flags |= IOSQE_BUFFER_SELECT;
 	sqe->buf_group = bgid;
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -664,7 +675,8 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags
 
   io_uring_prep_recv(sqe, fd, ptr, maxlen, flags);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op)) {
     um_update_read_buffer(machine, buffer, 0, op.result.res, op.result.flags);
     ret = INT2NUM(op.result.res);
@@ -681,7 +693,8 @@ VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrl
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_bind(sqe, fd, addr, addrlen);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -696,7 +709,8 @@ VALUE um_listen(struct um *machine, int fd, int backlog) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_listen(sqe, fd, backlog);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -714,7 +728,8 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_GETSOCKOPT, fd, level, opt, &value, sizeof(value));
 
-  ret = um_fiber_switch(machine);
+  ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(value);
 
@@ -731,7 +746,8 @@ VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_cmd_sock(sqe, SOCKET_URING_OP_SETSOCKOPT, fd, level, opt, &value, sizeof(value));
 
-  ret = um_fiber_switch(machine);
+  ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -748,7 +764,8 @@ VALUE um_shutdown(struct um *machine, int fd, int how) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_shutdown(sqe, fd, how);
 
-  ret = um_fiber_switch(machine);
+  ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -776,7 +793,8 @@ VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_open(sqe, StringValueCStr(pathname), flags, mode);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -791,12 +809,15 @@ VALUE um_poll(struct um *machine, int fd, unsigned mask) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
   io_uring_prep_poll_add(sqe, fd, mask);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
+  RB_GC_GUARD(op.fiber);
+  RB_GC_GUARD(op.value);
   return ret;
 }
 
@@ -822,7 +843,8 @@ VALUE um_select_single(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds, u
     prepare_select_poll_ops(machine, &idx, &op, efds, efds_len, OP_F_SELECT_POLLPRI, POLLPRI);
   assert(idx == 1);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   um_check_completion(machine, &op);
   RAISE_IF_EXCEPTION(ret);
 
@@ -854,7 +876,7 @@ VALUE um_select(struct um *machine, VALUE rfds, VALUE wfds, VALUE efds) {
   prepare_select_poll_ops(machine, &idx, ops, efds, efds_len, OP_F_SELECT_POLLPRI, POLLPRI);
   assert(idx == total_len);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
   if (unlikely(um_value_is_exception_p(ret))) {
     free(ops);
     um_raise_exception(ret);
@@ -916,7 +938,8 @@ VALUE um_waitid(struct um *machine, int idtype, int id, int options) {
   siginfo_t infop;
   io_uring_prep_waitid(sqe, idtype, id, &infop, options, 0);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -937,7 +960,7 @@ VALUE um_waitid_status(struct um *machine, int idtype, int id, int options) {
   siginfo_t infop;
   io_uring_prep_waitid(sqe, idtype, id, &infop, options | WNOWAIT, 0);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -983,7 +1006,8 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
   memset(&stat, 0, sizeof(stat));
   io_uring_prep_statx(sqe, dirfd, path_ptr, flags, mask, &stat);
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_switch(machine);
+
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
 
@@ -1003,7 +1027,7 @@ VALUE accept_each_start(VALUE arg) {
   io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
 
   while (true) {
-    VALUE ret = um_fiber_switch(ctx->machine);
+    VALUE ret = um_switch(ctx->machine);
     if (!um_op_completed_p(ctx->op)) {
       RAISE_IF_EXCEPTION(ret);
       return ret;
@@ -1045,6 +1069,8 @@ VALUE multishot_complete(VALUE arg) {
   if (ctx->read_buf)
     free(ctx->read_buf);
 
+  rb_hash_delete(ctx->machine->pending_fibers, ctx->op->fiber);
+
   return Qnil;
 }
 
@@ -1067,7 +1093,7 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
     struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
 
-    VALUE ret = um_fiber_switch(ctx->machine);
+    VALUE ret = um_switch(ctx->machine);
     if (um_op_completed_p(ctx->op)) {
       um_raise_on_error_result(ctx->op->result.res);
       if (!ctx->op->result.res) return total;
@@ -1128,7 +1154,7 @@ VALUE read_recv_each_start(VALUE arg) {
   int total = 0;
 
   while (true) {
-    VALUE ret = um_fiber_switch(ctx->machine);
+    VALUE ret = um_switch(ctx->machine);
     if (!um_op_completed_p(ctx->op)) {
       RAISE_IF_EXCEPTION(ret);
       return ret;
@@ -1179,7 +1205,7 @@ VALUE periodically_start(VALUE arg) {
   io_uring_prep_timeout(sqe, &ctx->ts, 0, IORING_TIMEOUT_MULTISHOT);
 
   while (true) {
-    VALUE ret = um_fiber_switch(ctx->machine);
+    VALUE ret = um_switch(ctx->machine);
     if (!um_op_completed_p(ctx->op)) {
       RAISE_IF_EXCEPTION(ret);
       return ret;

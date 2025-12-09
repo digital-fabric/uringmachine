@@ -13,7 +13,7 @@ void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t value) {
     sqe, (uint32_t *)futex, value, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
   if (!um_op_completed_p(&op))
     um_cancel_and_wait(machine, &op);
   else {
@@ -33,7 +33,7 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
     sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
-  VALUE ret = um_fiber_switch(machine);
+  VALUE ret = um_yield(machine);
   um_check_completion(machine, &op);
 
   RAISE_IF_EXCEPTION(ret);

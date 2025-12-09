@@ -13,6 +13,7 @@ static ID id_fileno;
 static void UM_mark(void *ptr) {
   struct um *machine = ptr;
   rb_gc_mark_movable(machine->self);
+  rb_gc_mark_movable(machine->pending_fibers);
 
   um_op_list_mark(machine, machine->transient_head);
   um_op_list_mark(machine, machine->runqueue_head);
@@ -21,6 +22,7 @@ static void UM_mark(void *ptr) {
 static void UM_compact(void *ptr) {
   struct um *machine = ptr;
   machine->self = rb_gc_location(machine->self);
+  machine->pending_fibers = rb_gc_location(machine->pending_fibers);
 
   um_op_list_compact(machine, machine->transient_head);
   um_op_list_compact(machine, machine->runqueue_head);
@@ -115,12 +117,26 @@ VALUE UM_total_op_count(VALUE self) {
 VALUE UM_snooze(VALUE self) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, rb_fiber_current(), Qnil);
-  return um_await(machine);
+
+  VALUE ret = um_yield(machine);
+  RAISE_IF_EXCEPTION(ret);
+  return ret;
 }
 
 VALUE UM_yield(VALUE self) {
   struct um *machine = um_get_machine(self);
-  return um_await(machine);
+
+  VALUE ret = um_yield(machine);
+  RAISE_IF_EXCEPTION(ret);
+  return ret;
+}
+
+VALUE UM_switch(VALUE self) {
+  struct um *machine = um_get_machine(self);
+
+  VALUE ret = um_switch(machine);
+  RAISE_IF_EXCEPTION(ret);
+  return ret;
 }
 
 VALUE UM_wakeup(VALUE self) {
@@ -495,7 +511,7 @@ VALUE UM_kernel_version(VALUE self) {
 }
 
 VALUE UM_debug(VALUE self, VALUE str) {
-  printf("%s\n", StringValueCStr(str));
+  fprintf(stderr, "%s\n", StringValueCStr(str));
   return Qnil;
 }
 
@@ -526,6 +542,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
   rb_define_method(cUM, "yield", UM_yield, 0);
+  rb_define_method(cUM, "switch", UM_switch, 0);
   rb_define_method(cUM, "wakeup", UM_wakeup, 0);
   rb_define_method(cUM, "submit", UM_submit, 0);
 

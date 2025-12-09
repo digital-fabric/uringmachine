@@ -26,7 +26,7 @@ VALUE um_async_op_await(struct um_async_op *async_op) {
   RB_OBJ_WRITE(async_op->machine->self, &async_op->op->fiber, rb_fiber_current());
   async_op->op->flags &= ~OP_F_ASYNC;
 
-  VALUE ret = um_fiber_switch(async_op->machine);
+  VALUE ret = um_switch(async_op->machine);
   if (!um_op_completed_p(async_op->op))
     um_cancel_and_wait(async_op->machine, async_op->op);
 
