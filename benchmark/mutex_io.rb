@@ -120,8 +120,8 @@ def run_um_fiber_scheduler
   # pp scheduler.calls.map { it[:sym] }.tally
 end
 
-def run_um
-  machine = UM.new
+def run_um(sqpoll = nil)
+  machine = UM.new(4096, sqpoll)
   fibers = []
   fds = []
   count = 0
@@ -153,5 +153,7 @@ Benchmark.bm do |x|
   x.report("UM FS")     { run_um_fiber_scheduler }
   `rm -f /tmp/mutex*`; GC.start
   x.report("UM pure")   { run_um }
+  `rm -f /tmp/mutex*`; GC.start
+  x.report("UM sqpoll")   { run_um(true) }
   `rm -f /tmp/mutex*`; GC.start
 end

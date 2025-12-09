@@ -13,7 +13,7 @@ require 'uringmachine/fiber_scheduler'
 GROUPS = 20
 PRODUCERS = 5
 CONSUMERS = 10
-ITEMS = 100000
+ITEMS = 200000
 
 def run_threads
   threads = []
@@ -91,8 +91,8 @@ def run_um_fiber_scheduler
   scheduler.join
 end
 
-def run_um
-  machine = UM.new
+def run_um(sqpoll = nil)
+  machine = UM.new(4096, sqpoll)
   fibers = []
   GROUPS.times do
     queue = UM::Queue.new
@@ -121,4 +121,5 @@ Benchmark.bm do |x|
   x.report("Async FS")  { run_async_fiber_scheduler }
   x.report("UM FS")     { run_um_fiber_scheduler }
   x.report("UM pure")   { run_um }
+  x.report("UM sqpoll") { run_um(true) }
 end
