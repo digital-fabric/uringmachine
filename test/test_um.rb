@@ -564,7 +564,7 @@ class ReadTest < UMBaseTest
   end
 
   def test_read_with_file_offset
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     fd = machine.open(fn, UM::O_RDONLY)
@@ -574,6 +574,7 @@ class ReadTest < UMBaseTest
     assert_equal 'obar', buffer
   ensure
     machine.close(fd)
+    FileUtils.rm(fn) rescue nil
   end
 end
 
@@ -812,7 +813,7 @@ class WriteTest < UMBaseTest
   end
 
   def test_write_with_file_offset
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     fd = machine.open(fn, UM::O_WRONLY)
@@ -821,8 +822,8 @@ class WriteTest < UMBaseTest
     assert_equal 'fobazr', IO.read(fn)
   ensure
     machine.close(fd)
+    FileUtils.rm(fn) rescue nil
   end
-
 end
 
 class WriteAsyncTest < UMBaseTest
@@ -899,7 +900,7 @@ class WriteAsyncTest < UMBaseTest
   end
 
   def test_write_async_with_file_offset
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     fd = machine.open(fn, UM::O_WRONLY)
@@ -910,6 +911,7 @@ class WriteAsyncTest < UMBaseTest
     assert_equal 'fobazr', IO.read(fn)
   ensure
     machine.close(fd)
+    FileUtils.rm(fn) rescue nil
   end
 end
 
@@ -1704,38 +1706,40 @@ class QueueTest < UMBaseTest
 end
 
 class OpenTest < UMBaseTest
-  PATH = '/tmp/um_open_test'
-
   def setup
     super
-    FileUtils.rm(PATH, force: true)
+    @fn = "/tmp/um_#{SecureRandom.hex}"
+  end
+Cleanup temp files+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  def teardown
+    FileUtils.rm(@fn) rescue nil
   end
 
   def test_open
-    fd = machine.open(PATH, UM::O_CREAT | UM::O_WRONLY)
+    fd = machine.open(@fn, UM::O_CREAT | UM::O_WRONLY)
     assert_kind_of Integer, fd
-    assert File.file?(PATH)
+    assert File.file?(@fn)
 
     machine.write(fd, 'foo')
     machine.close(fd)
 
-    assert_equal 'foo', IO.read(PATH)
+    assert_equal 'foo', IO.read(@fn)
   end
 
   def test_open_with_block
-    res = machine.open(PATH, UM::O_CREAT | UM::O_WRONLY) do |fd|
+    res = machine.open(@fn, UM::O_CREAT | UM::O_WRONLY) do |fd|
       machine.write(fd, 'bar')
       fd
     end
 
     assert_kind_of Integer, res
     assert_raises(Errno::EBADF) { machine.close(res) }
-    assert_equal 'bar', IO.read(PATH)
+    assert_equal 'bar', IO.read(@fn)
   end
 
   def test_open_bad_arg
-    assert_raises(Errno::ENOENT) { machine.open(PATH, UM::O_RDONLY) }
-    assert_raises(Errno::ENOENT) { machine.open(PATH, UM::O_RDONLY) {} }
+    assert_raises(Errno::ENOENT) { machine.open(@fn, UM::O_RDONLY) }
+    assert_raises(Errno::ENOENT) { machine.open(@fn, UM::O_RDONLY) {} }
   end
 end
 

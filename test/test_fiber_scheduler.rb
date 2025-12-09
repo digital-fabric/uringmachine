@@ -181,7 +181,7 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_io_pread
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     buf = nil
@@ -202,10 +202,12 @@ class FiberSchedulerTest < UMBaseTest
       io_close: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    FileUtils.rm(fn) rescue nil
   end
 
   def test_fiber_scheduler_io_pwrite
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
     res = nil
@@ -226,6 +228,8 @@ class FiberSchedulerTest < UMBaseTest
       io_close: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    FileUtils.rm(fn) rescue nil
   end
 
   def test_fiber_scheduler_sleep
@@ -340,7 +344,7 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_io_write_io_read
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     Fiber.schedule do
       IO.write(fn, 'foobar')
     end
@@ -363,10 +367,12 @@ class FiberSchedulerTest < UMBaseTest
       kernel_sleep: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    FileUtils.rm(fn) rescue nil
   end
 
   def test_fiber_scheduler_file_io
-    fn = "/tmp/#{SecureRandom.hex}"
+    fn = "/tmp/um_#{SecureRandom.hex}"
     Fiber.schedule do
       File.open(fn, 'w') { it.write 'foobar' }
     end
@@ -388,6 +394,8 @@ class FiberSchedulerTest < UMBaseTest
       kernel_sleep: 1,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    FileUtils.rm(fn) rescue nil
   end
 
   def test_fiber_scheduler_mutex
@@ -744,6 +752,8 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       io_close: 2,
       join: 1
     }, @scheduler.calls.map { it[:sym] }.tally)
+  ensure
+    FileUtils.rm(fn2) rescue nil
   end
 
   def test_IO_s_foreach
