@@ -149,7 +149,7 @@ UM sqpoll  2.044662   2.460344   4.505006 (  2.261502)
 
 ## 6. Postgres client
 
-N concurrent threads/fiber, each thread issuing SELECT query to a PG database.
+C concurrent threads/fiber, each thread issuing SELECT query to a PG database.
 
 ```
 C=10          user     system      total        real
