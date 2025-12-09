@@ -11,8 +11,8 @@ end
 require 'uringmachine/fiber_scheduler'
 
 GROUPS = 20
-PRODUCERS = 4
-CONSUMERS = 8
+PRODUCERS = 5
+CONSUMERS = 10
 ITEMS = 100000
 
 def run_threads

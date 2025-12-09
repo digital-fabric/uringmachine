@@ -107,9 +107,9 @@ threads/fibers that push items to the queue, and 8 consumer threads/fibers that
 pull items from the queue.
 
 ```
-              user     system      total        real
-Threads   1.186719   0.051169   1.237888 (  1.233542)
-Async FS  1.136423   0.034915   1.171338 (  1.171468)
-UM FS     1.147243   0.018894   1.166137 (  1.166354)
-UM pure   1.141208   0.105116   1.246324 (  1.246514)
+N=20          user     system      total        real
+Threads   1.221488   0.063794   1.285282 (  1.277677)
+Async FS  1.100493   0.044960   1.145453 (  1.145690)
+UM FS     1.058176   0.033955   1.092131 (  1.092379)
+UM pure   1.024583   0.100029   1.124612 (  1.124821)
 ```
