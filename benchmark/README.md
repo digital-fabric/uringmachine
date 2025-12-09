@@ -38,7 +38,11 @@ implementations:
 
 - SQ polling provides a performance advantage in high-concurrency scenarios,
   depending on the context. It remains to be seen how it affects performance in
-  real-world situations. 
+  real-world situations.
+  
+- The [pg](https://github.com/ged/ruby-pg) gem supports the use of fiber
+  schedulers, and there too we see a marked performance advantage to using
+  fibers instead of threads.
 
 ## 1. I/O - Pipe
 
