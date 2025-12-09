@@ -16,8 +16,34 @@ GROUPS = ENV['N']&.to_i || 10
 WORKERS = 10
 ITERATIONS = 10000
 
+puts "N=#{GROUPS}"
+
 SIZE = 1024
 DATA = "*" * SIZE
+
+class MethodCallAuditor
+  attr_reader :calls
+
+  def initialize(target)
+    @target = target
+    @calls = []
+  end
+
+  def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
+
+  def method_missing(sym, *args, &block)
+    res = @target.send(sym, *args, &block)
+    @calls << ({ sym:, args:, res:})
+    res
+  rescue Exception => e
+    @calls << ({ sym:, args:, res: e})
+    raise
+  end
+
+  def last_call
+    calls.last
+  end
+end
 
 def run_threads
   threads = []
@@ -42,6 +68,7 @@ end
 
 def run_async_fiber_scheduler
   scheduler = Async::Scheduler.new
+  # scheduler = MethodCallAuditor.new(scheduler)
   Fiber.set_scheduler(scheduler)
   ios = []
   count = 0
@@ -62,30 +89,7 @@ def run_async_fiber_scheduler
     end
   end
   ios.each(&:close)
-end
-
-class MethodCallAuditor
-  attr_reader :calls
-
-  def initialize(target)
-    @target = target
-    @calls = []
-  end
-
-  def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
-
-  def method_missing(sym, *args, &block)
-    res = @target.send(sym, *args, &block)
-    @calls << ({ sym:, args:, res:})
-    res
-  rescue Exception => e
-    @calls << ({ sym:, args:, res: e})
-    raise
-  end
-
-  def last_call
-    calls.last
-  end
+  # pp scheduler.calls.map { it[:sym] }.tally
 end
 
 def run_um_fiber_scheduler
@@ -140,17 +144,14 @@ def run_um
   fds.each { machine.close(it) }
 end
 
-# run_um_fiber_scheduler
-# exit
-
 Benchmark.bm do |x|
-  `rm -f /tmp/mutex*`
+  `rm -f /tmp/mutex*`; GC.start
   x.report("Threads")   { run_threads }
-  `rm -f /tmp/mutex*`
+  `rm -f /tmp/mutex*`; GC.start
   x.report("Async FS")  { run_async_fiber_scheduler }
-  `rm -f /tmp/mutex*`
+  `rm -f /tmp/mutex*`; GC.start
   x.report("UM FS")     { run_um_fiber_scheduler }
-  `rm -f /tmp/mutex*`
+  `rm -f /tmp/mutex*`; GC.start
   x.report("UM pure")   { run_um }
-  `rm -f /tmp/mutex*`
+  `rm -f /tmp/mutex*`; GC.start
 end
