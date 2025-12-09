@@ -14,7 +14,7 @@ require 'fileutils'
 
 GROUPS = ENV['N']&.to_i || 10
 WORKERS = 10
-ITERATIONS = 10000
+ITERATIONS = 1000
 
 puts "N=#{GROUPS}"
 

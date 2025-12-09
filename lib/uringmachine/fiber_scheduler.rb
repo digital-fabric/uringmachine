@@ -94,6 +94,7 @@ class UringMachine
     def initialize(machine = nil)
       @machine = machine || UM.new
       @fiber_map = ObjectSpace::WeakMap.new
+      @thread = Thread.current
     end
 
     # :nodoc:
@@ -172,7 +173,7 @@ class UringMachine
     # @return [void]
     def unblock(blocker, fiber)
       @machine.schedule(fiber, nil)
-      @machine.wakeup
+      @machine.wakeup if Thread.current != @thread
     end
 
     # Sleeps for the given duration.
