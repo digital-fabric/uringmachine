@@ -4,20 +4,20 @@ The following benchmarks measure the performance of UringMachine against stock
 Ruby in a variety of scenarios. For each scenario, we compare three different
 implementations:
 
-- *Threads*: thread-based concurrency using the stock Ruby I/O and
+- **Threads**: thread-based concurrency using the stock Ruby I/O and
   synchronization classes.
   
-- *Async FS*: fiber-based concurrency with the
+- **Async FS**: fiber-based concurrency with the
   [Async](https://github.com/socketry/async) fiber scheduler, using the stock
   Ruby I/O and synchronization classes.
   
-- *UM FS*: fiber-based concurrency with the UringMachine fiber scheduler, using
-  the stock Ruby I/O and synchronization classes.
+- **UM FS**: fiber-based concurrency with the UringMachine fiber scheduler,
+  using the stock Ruby I/O and synchronization classes.
   
-- *UM pure*: fiber-based concurrency using the UringMachine low-level (pure)
+- **UM pure**: fiber-based concurrency using the UringMachine low-level (pure)
   API.
   
-- *UM sqpoll*: the same as *UM pure* with [submission queue
+- **UM sqpoll**: the same as **UM pure** with [submission queue
   polling](https://unixism.net/loti/tutorial/sq_poll.html).
 
 <img src="./chart.png">
