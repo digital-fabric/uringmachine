@@ -100,8 +100,8 @@ class UringMachine
     @@fiber_map.delete(fiber)
     self.notify_done_listeners(fiber)
 
-    # transfer control to UM scheduler
-    self.yield
+    # switch away to a different fiber
+    self.switch
   end
 
   def notify_done_listeners(fiber)

@@ -108,6 +108,7 @@ class UringMachine
     # @param block [Proc] fiber block @return [Fiber]
     def fiber(&block)
       fiber = Fiber.new(blocking: false) { @machine.run(fiber, &block) }
+
       @fiber_map[fiber] = true
       @machine.schedule(fiber, nil)
       @machine.snooze
@@ -332,6 +333,7 @@ class UringMachine
     # @param fd [Integer] file descriptor
     # @return [Integer] file descriptor
     def io_close(fd)
+      # p(io_close: fd)
       @machine.close_async(fd)
     end
 

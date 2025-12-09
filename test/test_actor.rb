@@ -25,7 +25,7 @@ class ActorTest < UMBaseTest
 
   def test_basic_actor_functionality
     mailbox = UM::Queue.new
-    actor = @machine.spin_actor(Counter)
+    actor = machine.spin_actor(Counter)
 
     assert_kind_of Fiber, actor
 
@@ -35,6 +35,11 @@ class ActorTest < UMBaseTest
     assert_equal 2, actor.call(mailbox, :get)
     assert_equal actor, actor.cast(:reset)
     assert_equal 0, actor.call(mailbox, :get)
+  ensure
+    if actor
+      actor.stop
+      machine.join(actor)
+    end
   end
 
   module Counter2
@@ -61,5 +66,10 @@ class ActorTest < UMBaseTest
     mailbox = UM::Queue.new
 
     assert_equal 43, actor.call(mailbox, :get)
+  ensure
+    if actor
+      actor.stop
+      machine.join(actor)
+    end
   end
 end

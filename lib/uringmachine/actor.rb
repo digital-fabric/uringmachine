@@ -24,6 +24,8 @@ class UringMachine
   end
 
   class Actor < Fiber
+    class Stop < UM::Error; end
+
     def run(machine, target, mailbox)
       @machine = machine
       @target = target
@@ -31,6 +33,8 @@ class UringMachine
       while (msg = machine.shift(mailbox))
         process_message(msg)
       end
+    rescue Stop
+      # stopped
     ensure
       @target.teardown if @target.respond_to?(:teardown)
     end
@@ -43,6 +47,10 @@ class UringMachine
     def call(response_mailbox, sym, *a, **k)
       @machine.push @mailbox, [:call, response_mailbox, sym, a, k]
       @machine.shift response_mailbox
+    end
+
+    def stop
+      @machine.schedule(self, Stop.new)
     end
 
     private

@@ -73,9 +73,11 @@ class SubmitTest < UMBaseTest
   def test_submit
     _r, w = UM.pipe
 
+    assert_equal 0, machine.pending_fibers.size
     machine.write_async(w, 'foo')
     machine.write_async(w, 'bar')
     machine.write_async(w, 'baz')
+    assert_equal 0, machine.pending_fibers.size
 
     assert_equal 3, machine.pending_count
     assert_equal 3, machine.submit
@@ -109,7 +111,7 @@ end
 
 class SnoozeTest < UMBaseTest
   def test_snooze_while_sleeping_fiber
-    machine.spin do
+    f = machine.spin do
       machine.sleep(0.1)
     end
 
@@ -122,6 +124,9 @@ class SnoozeTest < UMBaseTest
     machine.snooze
     t1 = monotonic_clock
     assert_in_range 0..0.001, t1 - t0
+  ensure
+    machine.schedule(f, nil)
+    machine.join(f)
   end
 end
 
@@ -133,7 +138,7 @@ class ScheduleTest < UMBaseTest
       buf << [21, x]
       machine.schedule(main, 21)
       buf << 22
-      x = machine.yield
+      x = machine.switch
       buf << [23, x]
     end
 
@@ -152,11 +157,10 @@ class ScheduleTest < UMBaseTest
   def test_schedule_exception
     buf = []
     f = Fiber.new do
-      # this should raise
-      machine.yield
+      machine.yield # this should raise
     rescue Exception => e
       buf << e
-      machine.yield
+      machine.switch
     end
 
     machine.schedule(f, nil)
@@ -176,7 +180,7 @@ class ScheduleTest < UMBaseTest
     e = CustomError.new
     f = Fiber.new do
       machine.schedule(main, e)
-      machine.yield
+      machine.switch
     end
 
     machine.schedule(f, nil)
@@ -590,7 +594,7 @@ class ReadEachTest < UMBaseTest
       w << 'baz'
       machine.sleep 0.02
       w.close
-      machine.yield
+      machine.switch
     end
 
     machine.schedule(f, nil)
@@ -1458,7 +1462,6 @@ class SynchronizeTest < UMBaseTest
 
   def test_synchronize_pair
     m = UM::Mutex.new
-
     buf = []
 
     f1 = Fiber.new do
@@ -1468,7 +1471,7 @@ class SynchronizeTest < UMBaseTest
         buf << 12
       end
       buf << 13
-      machine.yield
+      machine.switch
     end
 
     f2 = Fiber.new do
@@ -1478,7 +1481,7 @@ class SynchronizeTest < UMBaseTest
         buf << 22
       end
       buf << 23
-      machine.yield
+      machine.switch
     end
 
     machine.schedule(f1, nil)
@@ -1563,13 +1566,13 @@ class QueueTest < UMBaseTest
 
     f1 = Fiber.new do
       buf << [1, machine.pop(q)]
-      machine.yield
+      machine.switch
     end
     machine.schedule(f1, nil)
 
     f2 = Fiber.new do
       buf << [2, machine.pop(q)]
-      machine.yield
+      machine.switch
     end
     machine.schedule(f2, nil)
 
@@ -1588,13 +1591,13 @@ class QueueTest < UMBaseTest
 
     f1 = Fiber.new do
       buf << [1, machine.pop(q)]
-      machine.yield
+      machine.switch
     end
     machine.schedule(f1, nil)
 
     f2 = Fiber.new do
       buf << [2, machine.pop(q)]
-      machine.yield
+      machine.switch
     end
     machine.schedule(f2, nil)
 

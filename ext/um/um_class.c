@@ -150,6 +150,11 @@ VALUE UM_submit(VALUE self) {
   return UINT2NUM(ret);
 }
 
+VALUE UM_pending_fibers(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return machine->pending_fibers;
+}
+
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, fiber, value);
@@ -545,6 +550,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "switch", UM_switch, 0);
   rb_define_method(cUM, "wakeup", UM_wakeup, 0);
   rb_define_method(cUM, "submit", UM_submit, 0);
+  rb_define_method(cUM, "pending_fibers", UM_pending_fibers, 0);
 
   rb_define_method(cUM, "close", UM_close, 1);
   rb_define_method(cUM, "close_async", UM_close_async, 1);
