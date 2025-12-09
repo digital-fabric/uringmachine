@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative 'helper'
-require 'socket'
 require 'uringmachine/actor'
 
 class ActorTest < UMBaseTest
@@ -61,7 +60,7 @@ class ActorTest < UMBaseTest
   end
 
 
-  def test_actor_with_args
+  def test_spin_actor_with_args
     actor = @machine.spin_actor(Counter2, 43)
     mailbox = UM::Queue.new
 

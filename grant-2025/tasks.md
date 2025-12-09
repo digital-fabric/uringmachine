@@ -19,8 +19,6 @@
 
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
-  - [ ] Set `IOSQE_CQE_SKIP_SUCCESS` flag for `#close_async` and `#write_async`
-  - [ ] In `UM#spin` always start fibers as non-blocking.
   - [ ] Add some way to measure fiber CPU time.
         https://github.com/socketry/async/issues/428
 
@@ -106,6 +104,8 @@
     - [v] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
 
           N groups where each group has a pair of reader / writer to a socketpair
+          
+    - [v] Postgres test
 
     - [ ] Measure CPU (thread) time usage for above examples
 
