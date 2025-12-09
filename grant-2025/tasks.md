@@ -16,7 +16,7 @@
     - [ ] runqueue depth
     - [ ] number of pending fibers
     - [ ] ops: transient count, free count
-    - [ ] 
+
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
   - [ ] Set `IOSQE_CQE_SKIP_SUCCESS` flag for `#close_async` and `#write_async`
@@ -80,7 +80,7 @@
     - [v] fork
     - [v] system / exec / etc.
     - [v] popen
-  - [ ] "Integration tests"
+  - [v] "Integration tests"
     - [v] IO - all methods!
     - [v] queue: multiple concurrent readers / writers
     - [v] net/http test: ad-hoc HTTP/1.1 server + `Net::HTTP` client

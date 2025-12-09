@@ -944,7 +944,7 @@ class CloseAsyncTest < UMBaseTest
     assert_equal 'foo', r.readpartial(3)
 
     assert_equal 0, machine.pending_count
-    machine.close_async(w.fileno)
+    machine.close_async(w.fileno) # fire and forget
     assert_equal 1, machine.pending_count
     machine.snooze
     assert_equal 0, machine.pending_count
@@ -1710,7 +1710,7 @@ class OpenTest < UMBaseTest
     super
     @fn = "/tmp/um_#{SecureRandom.hex}"
   end
-Cleanup temp files+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
   def teardown
     FileUtils.rm(@fn) rescue nil
   end
