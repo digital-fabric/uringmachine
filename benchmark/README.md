@@ -4,22 +4,36 @@ The following benchmarks measure the performance of UringMachine against stock
 Ruby in a variety of scenarios. For each scenario, we compare three different
 implementations:
 
-- Thread-based concurrency using the stock Ruby I/O and synchronization classes.
-- Fiber-based concurrency with the [Async]() fiber scheduler, using the
-  stock Ruby I/O and synchronization classes.
-- Fiber-based concurrency with the UringMachine fiber scheduler, using the
-  stock Ruby I/O and synchronization classes.
-- Fiber-based concurrency using the UringMachine low-level (pure) API.
+- *Threads*: thread-based concurrency using the stock Ruby I/O and
+  synchronization classes.
+- *Async FS*: fiber-based concurrency with the
+  [Async](https://github.com/socketry/async) fiber scheduler, using the stock
+  Ruby I/O and synchronization classes.
+- *UM FS*: fiber-based concurrency with the UringMachine fiber scheduler, using
+  the stock Ruby I/O and synchronization classes.
+- *UM pure*: fiber-based concurrency using the UringMachine low-level (pure)
+  API.
 
 <img src="./chart.png">
 
+## Observations:
+
+- We see the stark difference between thread-based and fiber-based concurrency.
+  For I/O-bound workloads, there's really no contest - and that's exactly why
+  the fiber scheduler interface changes everything. - The UringMachine fiber
+  scheduler is in some cases faster than the Async fiber scheduler, but not in
+  all. This might be because the Async FS does scheduling of fibers in plain
+  Ruby, while the UMFS implements a runqueue in its C-extension. - The
+  UringMachine low-level API is faster to use in most cases, and its performance
+  advantage grows with the level of concurrency.
+
 ## 1. I/O - Pipe
 
-50 concurrent groups, where in each group we create a pipe with a pair of
-threads/fibers writing/reading 1KB of data to the pipe.
+50 groups, where in each group we create a pipe with a pair of threads/fibers
+writing/reading 1KB of data to the pipe.
 
 ```
-N=50          user     system      total        real
+C=50x2        user     system      total        real
 Threads   2.218838   2.729582   4.948420 (  4.450232)
 Async FS  1.136269   0.458769   1.595038 (  1.595244)
 UM FS     0.651478   0.327257   0.978735 (  0.979133)
