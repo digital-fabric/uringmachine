@@ -370,8 +370,33 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   accepted when he saw this is the only we can make this hook work. Samuel then
   proceeded to prepare a [PR](https://github.com/ruby/ruby/pull/15434) and merge
   it.
-  
+
 - Added the `#io_close` hook to the UringMachine fiber scheduler, as well as a
   `#yield` hook for dealing with thread interrupts in response to another
   [PR](https://github.com/ruby/ruby/pull/14700) by Samuel. I also added missing
   docs for the different methods in the fiber scheduler.
+
+# 2025-12-08
+
+- Wrote a bunch of benchmarks for different scenarios comparing threads vs fiber
+  scheduler vs low-level UM implementation. The
+  [results](https://github.com/digital-fabric/uringmachine/blob/main/benchmark/README.md)
+  show the promise of UringMachine and of its fiber scheduler. What is great
+  about the fiber scheduler interface is that it provides a significant boost to
+  I/O-bound scenarios, with almost no change to the source code (basically, you
+  just need to replace `Thread.new` with `Fiber.schedule`).
+  
+  These results, though preliminary, seem to validate the approach I took with
+  UringMachine - implementing a low-level API and tying it to the entire Ruby
+  ecosystem by way of the fiber scheduler interface.
+  
+- Spent the rest of the day writing lots of tests for the fiber scheduler. I
+  tried to cover the entire `IO` API - both class- and instance methods. I also
+  wrote some "integration" tests - different scenarios not unlike those in the
+  benchmarks, which exercise the different hooks in the fiber scheduler.
+  
+- I also added some new APIs to help with testing: `UM#await_fibers` is a
+  method for waiting for one or more fibers to terminate. Unlike `UM#join`, it
+  doesn't return the return values of the given fibers, it just waits for them
+  to terminate. Another new API is `UM.socketpair`, which is like
+  `Socket.socketpair` except it returns raw fd's.

@@ -4,12 +4,13 @@ gemfile do
   source 'https://rubygems.org'
   gem 'uringmachine', path: '..'
   gem 'benchmark'
+  gem 'io-event'
+  gem 'async'
 end
 
 require 'uringmachine/fiber_scheduler'
 require 'securerandom'
-
-system('rm /tmp/mutex_io_*') rescue nil
+require 'fileutils'
 
 GROUPS = ENV['N']&.to_i || 10
 WORKERS = 10
@@ -19,7 +20,6 @@ SIZE = 1024
 DATA = "*" * SIZE
 
 def run_threads
-  # system('rm /tmp/mutex_io_*') rescue nil
   threads = []
   ios = []
   GROUPS.times do
@@ -40,10 +40,58 @@ def run_threads
   ios.each(&:close)
 end
 
-def run_fiber_scheduler
-  # system('rm /tmp/mutex_io_*') rescue nil
+def run_async_fiber_scheduler
+  scheduler = Async::Scheduler.new
+  Fiber.set_scheduler(scheduler)
+  ios = []
+  count = 0
+  scheduler.run do
+    GROUPS.times do
+      mutex = Mutex.new
+      ios << (f = File.open("/tmp/mutex_io_fiber_scheduler_#{SecureRandom.hex}", 'w'))
+      f.sync = true
+      WORKERS.times do
+        Fiber.schedule do
+          ITERATIONS.times do
+            mutex.synchronize do
+              count += f.write(DATA)
+            end
+          end
+        end
+      end
+    end
+  end
+  ios.each(&:close)
+end
+
+class MethodCallAuditor
+  attr_reader :calls
+
+  def initialize(target)
+    @target = target
+    @calls = []
+  end
+
+  def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
+
+  def method_missing(sym, *args, &block)
+    res = @target.send(sym, *args, &block)
+    @calls << ({ sym:, args:, res:})
+    res
+  rescue Exception => e
+    @calls << ({ sym:, args:, res: e})
+    raise
+  end
+
+  def last_call
+    calls.last
+  end
+end
+
+def run_um_fiber_scheduler
   machine = UM.new
   scheduler = UM::FiberScheduler.new(machine)
+  # scheduler = MethodCallAuditor.new(scheduler)
   Fiber.set_scheduler(scheduler)
   ios = []
   count = 0
@@ -65,10 +113,10 @@ def run_fiber_scheduler
 
   scheduler.join
   ios.each(&:close)
+  # pp scheduler.calls.map { it[:sym] }.tally
 end
 
 def run_um
-  # system('rm /tmp/mutex_io_*') rescue nil
   machine = UM.new
   fibers = []
   fds = []
@@ -88,15 +136,21 @@ def run_um
     end
   end
 
-  machine.wait_fibers(fibers)
+  machine.await_fibers(fibers)
   fds.each { machine.close(it) }
 end
 
+# run_um_fiber_scheduler
+# exit
+
 Benchmark.bm do |x|
-  GC.start
-  x.report("Threads")           { run_threads }
-  GC.start
-  x.report("UM FiberScheduler") { run_fiber_scheduler }
-  GC.start
-  x.report("UM pure")           { run_um }
+  `rm -f /tmp/mutex*`
+  x.report("Threads")   { run_threads }
+  `rm -f /tmp/mutex*`
+  x.report("Async FS")  { run_async_fiber_scheduler }
+  `rm -f /tmp/mutex*`
+  x.report("UM FS")     { run_um_fiber_scheduler }
+  `rm -f /tmp/mutex*`
+  x.report("UM pure")   { run_um }
+  `rm -f /tmp/mutex*`
 end

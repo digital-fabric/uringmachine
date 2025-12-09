@@ -4,6 +4,8 @@ gemfile do
   source 'https://rubygems.org'
   gem 'uringmachine', path: '..'
   gem 'benchmark'
+  gem 'io-event'
+  gem 'async'
 end
 
 require 'uringmachine/fiber_scheduler'
@@ -33,7 +35,29 @@ def run_threads
   threads.each(&:join)
 end
 
-def run_fiber_scheduler
+def run_async_fiber_scheduler
+  # Thread.new do
+    scheduler = Async::Scheduler.new
+    Fiber.set_scheduler(scheduler)
+    scheduler.run do
+      GROUPS.times do
+        r, w = Socket.socketpair(:AF_UNIX, :SOCK_STREAM, 0)
+        r.sync = true
+        w.sync = true
+        Fiber.schedule do
+          ITERATIONS.times { w.send(DATA, 0) }
+          w.close
+        end
+        Fiber.schedule do
+          ITERATIONS.times { r.recv(SIZE) }
+          r.close
+        end
+      end
+    end
+  # end.join
+end
+
+def run_um_fiber_scheduler
   machine = UM.new
   scheduler = UM::FiberScheduler.new(machine)
   Fiber.set_scheduler(scheduler)
@@ -67,11 +91,12 @@ def run_um
       machine.close_async(r)
     end
   end
-  machine.wait_fibers(fibers)
+  machine.await_fibers(fibers)
 end
 
 Benchmark.bm do |x|
-  x.report("Threads")           { run_threads }
-  x.report("UM FiberScheduler") { run_fiber_scheduler }
-  x.report("UM pure")           { run_um }
+  x.report("Threads")   { run_threads }
+  x.report("Async FS")  { run_async_fiber_scheduler }
+  x.report("UM FS")     { run_um_fiber_scheduler }
+  x.report("UM pure")   { run_um }
 end

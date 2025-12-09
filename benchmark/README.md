@@ -17,10 +17,11 @@ implementations:
 threads/fibers writing/reading 1KB of data to the pipe.
 
 ```
-                       user     system      total        real     ratio
-Threads            3.180942   4.535893   7.716835 (  6.661512)    x1.00
-UM FiberScheduler  0.734797   0.401159   1.135956 (  1.136021)    x0.17
-UM pure            0.146786   0.321765   0.468551 (  0.468793)    x0.07
+              user     system      total        real
+Threads   2.506197   3.088454   5.594651 (  4.956997)
+Async FS  1.193954   0.419434   1.613388 (  1.613560)
+UM FS     0.688240   0.307525   0.995765 (  0.996139)
+UM pure   0.253324   0.330341   0.583665 (  0.583843)
 ```
 
 ## 2. I/O - Socketpair
@@ -29,10 +30,11 @@ UM pure            0.146786   0.321765   0.468551 (  0.468793)    x0.07
 pair of threads/fibers writing/reading 1KB of data to the sockets.
 
 ```
-                       user     system      total        real     ratio
-Threads            3.087872   5.371877   8.459749 (  6.658642)    x1.00
-UM FiberScheduler  0.579182   1.017451   1.596633 (  1.597015)    x0.24
-UM pure            0.118848   0.612396   0.731244 (  0.731465)    x0.11
+user     system      total        real
+Threads   2.320470   3.887775   6.208245 (  4.943793)
+Async FS  0.508515   0.798268   1.306783 (  1.307060)
+UM FS     0.497538   0.832940   1.330478 (  1.330843)
+UM pure   0.207668   0.632624   0.840292 (  0.840562)
 ```
 
 ## 3. Mutex - CPU-bound
@@ -41,10 +43,11 @@ UM pure            0.118848   0.612396   0.731244 (  0.731465)    x0.11
 threads/fibers locking the mutex and performing a Regexp match.
 
 ```
-                       user     system      total        real     ratio
-Threads            5.517281   0.037554   5.554835 (  5.543819)    x1.00
-UM FiberScheduler  5.198372   0.003999   5.202371 (  5.203005)    x0.94
-UM pure            5.362594   0.005000   5.367594 (  5.368282)    x0.97
+user     system      total        real
+Threads   5.300555   0.035522   5.336077 (  5.325899)
+Async FS  5.311512   0.004965   5.316477 (  5.317157)
+UM FS     5.301865   0.000000   5.301865 (  5.302522)
+UM pure   5.291983   0.008991   5.300974 (  5.301578)
 ```
 
 ## 4. Mutex - I/O-bound
@@ -54,35 +57,41 @@ start 10 worker threads/fibers locking the mutex and writing 1KB chunks to the
 file.
 
 ```
-N=1                    user     system      total        real     ratio
-Threads            0.464248   0.892285   1.356533 (  1.108107)    x1.00
-UM FiberScheduler  0.419482   1.145587   1.565069 (  1.429551)    x1.29
-UM pure            0.228935   1.307773   1.536708 (  1.414426)    x1.28
+N=1           user     system      total        real
+Threads   0.353471   0.576720   0.930191 (  0.773777)
+Async FS  0.273938   0.748782   1.022720 (  0.928015)
+UM FS     0.321644   0.796376   1.118020 (  1.017612)
+UM pure   0.209001   0.897841   1.106842 (  1.020961)
 
-N=5                    user     system      total        real     ratio
-Threads            2.753522   5.243440   7.996962 (  6.247786)    x1.00
-UM FiberScheduler  0.723096   2.405801   3.128897 (  1.405862)    x0.22
-UM pure            0.277712   1.967339   2.245051 (  0.994354)    x0.16
+N=5           user     system      total        real
+Threads   1.867092   3.483718   5.350810 (  4.196995)
+Async FS  0.684154   1.491352   2.175506 (  1.200852)
+UM FS     0.766727   1.954056   2.720783 (  1.293250)
+UM pure   0.463424   1.996961   2.460385 (  1.138078)
 
-N=10                   user     system      total        real     ratio
-Threads            5.493555  10.854305  16.347860 ( 12.862785)    x1.00
-UM FiberScheduler  1.286965   4.099696   5.386661 (  2.417395)    x0.19
-UM pure            0.382762   3.154509   3.537271 (  1.514130)    x0.12
+N=10          user     system      total        real
+Threads   3.836791   7.237707  11.074498 (  8.586606)
+Async FS  1.170350   2.687634   3.857984 (  2.077960)
+UM FS     1.328229   2.923621   4.251850 (  2.270382)
+UM pure   0.660448   2.796605   3.457053 (  1.831333)
 
-N=20                   user     system      total        real     ratio
-Threads           10.970734  22.493584  33.464318 ( 26.346881)    x1.00
-UM FiberScheduler  2.498935   5.898825   8.397760 (  4.450860)    x0.17
-UM pure            0.579116   4.977388   5.556504 (  2.839390)    x0.11
+N=20          user     system      total        real
+Threads   7.684380  15.012919  22.697299 ( 17.751588)
+Async FS  2.517380   5.040245   7.557625 (  4.090871)
+UM FS     3.007983   7.188207  10.196190 (  4.950258)
+UM pure   1.184024   5.933565   7.117589 (  3.214988)
 
-N=50                   user     system      total        real     ratio
-Threads           27.517430  58.524771  86.042201 ( 67.544292)    x1.00
-UM FiberScheduler  8.898559  15.072599  23.971158 ( 13.258086)    x0.20
-UM pure            1.220973  13.224007  14.444980 (  6.151113)    x0.09
+N=50          user     system      total        real
+Threads  19.495570  37.259494  56.755064 ( 44.776187)
+Async FS  8.373260  11.724548  20.097808 ( 11.588783)
+UM FS    10.023142  20.535555  30.558697 ( 15.123302)
+UM pure   2.427401  13.494526  15.921927 (  7.254758)
 
-N=100                  user     system      total        real     ratio
-Threads           58.513644 124.297334 182.860781 (144.413083)    x1.00
-UM FiberScheduler 26.336488  43.101414  70.939939 ( 36.352986)    x0.25
-UM pure            2.223913  30.475928  34.008375 ( 14.956937)    x0.10
+N=100         user     system      total        real
+Threads  42.044358  80.442909 122.487267 ( 96.574176)
+Async FS 26.199758  22.802559  49.002317 ( 31.232776)
+UM FS    31.518132  44.427632  75.945764 ( 40.106880)
+UM pure   5.007674  27.199925  32.207599 ( 15.012285)
 ```
 
 ## 5. Queue
@@ -92,8 +101,9 @@ threads/fibers that push items to the queue, and 8 consumer threads/fibers that
 pull items from the queue.
 
 ```
-                       user     system      total        real     ratio
-Threads            1.606373   0.055943   1.662316 (  1.649027)    x1.00
-UM FiberScheduler  1.033577   0.029969   1.063546 (  1.063966)    x0.64
-UM pure            0.893669   0.083983   0.977652 (  0.977839)    x0.59
+              user     system      total        real
+Threads   1.130497   0.060878   1.191375 (  1.182039)
+Async FS  0.988763   0.026930   1.015693 (  1.015933)
+UM FS     1.022337   0.020941   1.043278 (  1.043397)
+UM pure   0.906505   0.079977   0.986482 (  0.986675)
 ```

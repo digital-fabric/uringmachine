@@ -12,6 +12,11 @@
         https://unixism.net/loti/tutorial/sq_poll.html
   - [v] Add `UM.socketpair`
 
+  - [ ] Add more metrics
+    - [ ] runqueue depth
+    - [ ] number of pending fibers
+    - [ ] ops: transient count, free count
+    - [ ] 
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
   - [ ] Set `IOSQE_CQE_SKIP_SUCCESS` flag for `#close_async` and `#write_async`
