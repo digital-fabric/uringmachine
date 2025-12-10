@@ -1,3 +1,17 @@
+# 0.22.0 2025-12-10
+
+- Fix use of `um_yield` in statx, multishot ops
+- Improve performance of `UM#snooze`
+- Add some profiling info (WIP)
+- Add `UM#metrics` for getting metrics
+- Add `UM#pending_fibers` for detecting leaking fibers in tests
+- More tests and benchmarks
+- Add `UM#await_fibers` for awaiting fibers
+- Add `UM.socketpair` for creating a socket pair
+- Fiber scheduler:
+  - Use fiber's mailbox for processing blocking operations
+  - Add `#io_close`, `#yield` hooks, remove `#process_fork` hook
+
 # 0.21.0 2025-12-06
 
 - Add `UM#submit`
