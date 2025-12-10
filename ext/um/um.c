@@ -1032,7 +1032,7 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
   memset(&stat, 0, sizeof(stat));
   io_uring_prep_statx(sqe, dirfd, path_ptr, flags, mask, &stat);
 
-  VALUE ret = um_switch(machine);
+  VALUE ret = um_yield(machine);
 
   if (um_check_completion(machine, &op))
     ret = INT2NUM(op.result.res);
@@ -1053,7 +1053,7 @@ VALUE accept_each_start(VALUE arg) {
   io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
 
   while (true) {
-    VALUE ret = um_switch(ctx->machine);
+    VALUE ret = um_yield(ctx->machine);
     if (!um_op_completed_p(ctx->op)) {
       RAISE_IF_EXCEPTION(ret);
       return ret;
@@ -1119,7 +1119,7 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
     struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
 
-    VALUE ret = um_switch(ctx->machine);
+    VALUE ret = um_yield(ctx->machine);
     if (um_op_completed_p(ctx->op)) {
       um_raise_on_error_result(ctx->op->result.res);
       if (!ctx->op->result.res) return total;
@@ -1180,7 +1180,7 @@ VALUE read_recv_each_start(VALUE arg) {
   int total = 0;
 
   while (true) {
-    VALUE ret = um_switch(ctx->machine);
+    VALUE ret = um_yield(ctx->machine);
     if (!um_op_completed_p(ctx->op)) {
       RAISE_IF_EXCEPTION(ret);
       return ret;
