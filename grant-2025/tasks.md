@@ -17,12 +17,12 @@
     - [v] number of pending fibers
     - [v] ops: transient count, free count
     - [v] total fiber switches, total waiting for CQEs
-    - [ ] switches since last CQE processing
     - [ ] watermark: ops_pending, ops_unsubmitted, ops_runqueue, ops_free, ops_transient
           (only in profile mode)
   - [ ] Performance tuning parameters
-    - [ ] max fiber switches before checking for completions
+    - [ ] max fiber switches before processing CQEs
     - [ ] max fiber switches before submitting unsubmitted SQEs
+    - [ ] measure switches since last submitting / last CQE processing
 
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings

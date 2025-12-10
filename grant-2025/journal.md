@@ -448,3 +448,23 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   managing this for each fiber means getting and setting a couple of instance
   variables, which can *really* slow things down. On top of that, I'm not that
   sure this is really needed.
+
+- I went through some old benchmarks, reorganized them, get rid of some that
+  were irrelevant. There were some really interesting ones: a benchmark
+  measuring the cost of different ways of accessing an SQLite DB (using
+  [Extralite](https://github.com/digital-fabric/extralite/)): normally, using an
+  actor interface, or protected by a mutex. I'll try to follow up with a
+  benchmark measuring concurrent access to SQLite DBs, similar to the PG one.
+  
+  Another interesting benchmark I found was one for resolving DNS addresses
+  using Ruby's builtin `Addrinfo` API, the bundled `resolv` gem, and a basic DNS
+  resolver included in UringMachine (I totally forgot I made one). Here too, I'd
+  like to add a benchmark to measure how these different solutions do in a
+  highly concurrent scenario.
+  
+- Thanks to one of these old benchmarks I made a change that more than doubled
+  the performance of `UM#snooze`. What this method does is it adds the current
+  fiber to the end of the runqueue, and yields control to the next fiber in the
+  runqueue, or to process available CQE's. This method is useful for testing,
+  but also for yielding control periodically when performing CPU-bound work, in
+  order to keep the application responsive and improve latency.
