@@ -79,11 +79,11 @@ class SubmitTest < UMBaseTest
     machine.write_async(w, 'baz')
     assert_equal 0, machine.pending_fibers.size
 
-    assert_equal 3, machine.pending_count
+    assert_equal 3, machine.metrics[:ops_pending]
     assert_equal 3, machine.submit
     assert_equal 0, machine.submit
     machine.snooze
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 end
 
@@ -187,12 +187,12 @@ class ScheduleTest < UMBaseTest
     t0 = monotonic_clock
 
     # the call to schedule means an op is checked out
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     begin
       machine.sleep(1)
     rescue Exception => e2
     end
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     t1 = monotonic_clock
 
     assert_equal e2, e
@@ -215,7 +215,7 @@ class ScheduleTest < UMBaseTest
       buf << 5
     end
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal [1, 2, 5], buf
     assert_kind_of TOError, e
   end
@@ -254,9 +254,9 @@ class ScheduleTest < UMBaseTest
     rescue => e
     end
 
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     machine.sleep(0.01) # wait for cancelled CQEs
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
 
     assert_kind_of RuntimeError, e
     assert_equal 'hi', e.message
@@ -267,9 +267,9 @@ class ScheduleTest < UMBaseTest
 
     assert_equal 42, v
 
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     machine.sleep 0.01 # wait for cancelled CQE
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_timeout_with_no_timeout
@@ -278,9 +278,9 @@ class ScheduleTest < UMBaseTest
 
     assert_equal 3, v
 
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     machine.sleep 0.01 # wait for cancelled CQE
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   class TO2Error < RuntimeError; end
@@ -293,7 +293,7 @@ class ScheduleTest < UMBaseTest
       machine.timeout(0.04, TOError) do
         machine.timeout(0.02, TO2Error) do
           machine.timeout(0.03, TO3Error) do
-            buf << machine.pending_count
+            buf << machine.metrics[:ops_pending]
             machine.sleep(1)
           end
         end
@@ -301,9 +301,9 @@ class ScheduleTest < UMBaseTest
     rescue => e
     end
 
-    assert_equal 2, machine.pending_count
+    assert_equal 2, machine.metrics[:ops_pending]
     machine.sleep(0.01) # wait for cancelled CQEs
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
 
     assert_kind_of TO2Error, e
     assert_equal [3], buf
@@ -313,9 +313,9 @@ end
 class SleepTest < UMBaseTest
   def test_sleep
     t0 = monotonic_clock
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     res = machine.sleep(0.1)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     t1 = monotonic_clock
     assert_in_range 0.09..0.13, t1 - t0
     assert_equal 0.1, res
@@ -372,7 +372,7 @@ class PeriodicallyTest < UMBaseTest
     cancel = 0
 
     t0 = monotonic_clock
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     begin
       machine.periodically(0.01) do
         count += 1
@@ -382,7 +382,7 @@ class PeriodicallyTest < UMBaseTest
       cancel = 1
     end
     machine.snooze
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     t1 = monotonic_clock
     assert_in_range 0.05..0.09, t1 - t0
     assert_equal 5, count
@@ -394,7 +394,7 @@ class PeriodicallyTest < UMBaseTest
     cancel = 0
 
     t0 = monotonic_clock
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     begin
       machine.timeout(0.05, Cancel) do
         machine.periodically(0.01) do
@@ -417,21 +417,21 @@ class StatsTest < UMBaseTest
   def test_op_counts
     _r, w = IO.pipe
 
-    assert_equal 0, machine.pending_count
-    assert_equal 0, machine.total_op_count
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 0, machine.metrics[:total_ops]
     machine.write_async(w.fileno, 'foo')
-    assert_equal 1, machine.pending_count
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:ops_pending]
+    assert_equal 1, machine.metrics[:total_ops]
     machine.snooze
-    assert_equal 0, machine.pending_count
-    assert_equal 1, machine.total_op_count
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 1, machine.metrics[:total_ops]
 
     machine.write_async(w.fileno, 'foo')
-    assert_equal 1, machine.pending_count
-    assert_equal 2, machine.total_op_count
+    assert_equal 1, machine.metrics[:ops_pending]
+    assert_equal 2, machine.metrics[:total_ops]
     machine.snooze
-    assert_equal 0, machine.pending_count
-    assert_equal 2, machine.total_op_count
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 2, machine.metrics[:total_ops]
   end
 end
 
@@ -441,9 +441,9 @@ class ReadTest < UMBaseTest
     w << 'foobar'
 
     buf = +''
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     res = machine.read(r.fileno, buf, 3)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 3, res
     assert_equal 'foo', buf
 
@@ -465,7 +465,7 @@ class ReadTest < UMBaseTest
     assert_raises(Errno::EBADF) do
       machine.read(w.fileno, +'', 8192)
     end
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_read_with_buffer_offset
@@ -605,7 +605,7 @@ class ReadEachTest < UMBaseTest
     end
 
     assert_equal ['foo', 'bar', 'baz'], bufs
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   # send once and close write fd
@@ -629,7 +629,7 @@ class ReadEachTest < UMBaseTest
 
     assert_kind_of RuntimeError, e
     assert_equal 'hi', e.message
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   # send once and leave write fd open
@@ -654,7 +654,7 @@ class ReadEachTest < UMBaseTest
     assert_equal 'hi', e.message
 
     machine.snooze # in case the final CQE has not yet arrived
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   # send twice
@@ -680,7 +680,7 @@ class ReadEachTest < UMBaseTest
     assert_equal 'hi', e.message
 
     machine.snooze # in case the final CQE has not yet arrived
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_read_each_break
@@ -704,7 +704,7 @@ class ReadEachTest < UMBaseTest
 
     assert_equal ['foo'], bufs
     machine.snooze # in case the final CQE has not yet arrived
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   ensure
     t&.kill
   end
@@ -725,10 +725,10 @@ class WriteTest < UMBaseTest
   def test_write
     r, w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     res = machine.write(w.fileno, 'foo')
     assert_equal 3, res
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 'foo', r.readpartial(3)
 
     res = machine.write(w.fileno, 'bar', 2)
@@ -739,11 +739,11 @@ class WriteTest < UMBaseTest
   def test_write_bad_fd
     r, _w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_raises(Errno::EBADF) do
       machine.write(r.fileno, 'foo')
     end
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_write_zero_length
@@ -830,39 +830,39 @@ class WriteAsyncTest < UMBaseTest
   def test_write_async
     r, w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     machine.write_async(w.fileno, 'foo')
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
 
-    machine.snooze while machine.pending_count > 0
-    assert_equal 0, machine.pending_count
+    machine.snooze while machine.metrics[:ops_pending] > 0
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 'foo', r.readpartial(3)
   end
 
   def test_write_async_dynamic_string
     r, w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     str = "foo#{123}#{'bar' * 48}"
     len = str.bytesize
     machine.write_async(w.fileno, str)
     str = nil
     # GC.start
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
 
-    machine.snooze while machine.pending_count > 0
-    assert_equal 0, machine.pending_count
+    machine.snooze while machine.metrics[:ops_pending] > 0
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal "foo#{123}#{'bar' * 48}", r.readpartial(len)
   end
 
   def test_write_async_bad_fd
     r, _w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     machine.write_async(r.fileno, 'foo')
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     machine.snooze
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_write_async_io_buffer
@@ -873,7 +873,7 @@ class WriteAsyncTest < UMBaseTest
     write_buffer.set_string(msg)
 
     machine.write_async(w, write_buffer)
-    machine.snooze while machine.pending_count > 0
+    machine.snooze while machine.metrics[:ops_pending] > 0
     machine.close(w)
 
     str = +''
@@ -890,12 +890,12 @@ class WriteAsyncTest < UMBaseTest
   def test_write_async_with_len
     r, w = IO.pipe
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     machine.write_async(w.fileno, 'foobar', 4)
 
-    assert_equal 1, machine.pending_count
-    machine.snooze while machine.pending_count > 0
-    assert_equal 0, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
+    machine.snooze while machine.metrics[:ops_pending] > 0
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 'foob', r.readpartial(6)
   end
 
@@ -906,8 +906,8 @@ class WriteAsyncTest < UMBaseTest
     fd = machine.open(fn, UM::O_WRONLY)
     machine.write_async(fd, 'baz', -1, 2)
 
-    assert_equal 1, machine.pending_count
-    machine.snooze while machine.pending_count > 0
+    assert_equal 1, machine.metrics[:ops_pending]
+    machine.snooze while machine.metrics[:ops_pending] > 0
     assert_equal 'fobazr', IO.read(fn)
   ensure
     machine.close(fd)
@@ -921,9 +921,9 @@ class CloseTest < UMBaseTest
     machine.write(w.fileno, 'foo')
     assert_equal 'foo', r.readpartial(3)
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     machine.close(w.fileno)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal '', r.read
 
     assert_raises(Errno::EBADF) { machine.close(w.fileno) }
@@ -943,11 +943,11 @@ class CloseAsyncTest < UMBaseTest
     machine.write(w.fileno, 'foo')
     assert_equal 'foo', r.readpartial(3)
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     machine.close_async(w.fileno) # fire and forget
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     machine.snooze
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal '', r.read
   end
 end
@@ -1030,9 +1030,9 @@ class AcceptTest < UMBaseTest
   def test_accept
     conn = TCPSocket.new('127.0.0.1', @port)
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     fd = machine.accept(@server.fileno)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_kind_of Integer, fd
     assert fd > 0
 
@@ -1069,7 +1069,7 @@ class AcceptEachTest < UMBaseTest
     end
 
     assert_equal 3, count
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   ensure
     t&.kill
   end
@@ -1104,9 +1104,9 @@ end
 
 class SocketTest < UMBaseTest
   def test_socket
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0);
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_kind_of Integer, fd
     assert fd > 0
 
@@ -1134,9 +1134,9 @@ class ConnectTest < UMBaseTest
     end
 
     fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 0, res
 
     buf = +''
@@ -1149,9 +1149,9 @@ class ConnectTest < UMBaseTest
 
   def test_connect_with_bad_addr
     fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0);
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_raises(Errno::ENETUNREACH) { machine.connect(fd, 'a.b.c.d', @port) }
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 end
 
@@ -1367,11 +1367,11 @@ class BindTest < UMBaseTest
   end
 
   def test_bind
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0)
     res = machine.bind(fd, '127.0.0.1', @port)
     assert_equal 0, res
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
 
     peer = UDPSocket.new
     peer.connect('127.0.0.1', @port)
@@ -1384,13 +1384,13 @@ class BindTest < UMBaseTest
   end
 
   def test_bind_invalid_args
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
 
     fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0)
     assert_raises(Errno::EACCES) { machine.bind(fd, 'foo.bar.baz', 3) }
     assert_raises(Errno::EBADF) { machine.bind(-3, '127.0.01', 1234) }
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 end
 
@@ -1405,7 +1405,7 @@ class ListenTest < UMBaseTest
     machine.bind(fd, '127.0.0.1', @port)
     res = machine.listen(fd, 5)
     assert_equal 0, res
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
 
     conn = nil
     t = Thread.new do
@@ -1459,7 +1459,7 @@ class SynchronizeTest < UMBaseTest
     end
 
     assert_equal [1, 2], buf
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_synchronize_pair
@@ -1491,7 +1491,7 @@ class SynchronizeTest < UMBaseTest
 
     machine.sleep(0.03)
     assert_equal [11, 12, 13, 21, 22, 23], buf
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 
   def test_synchronize_multi
@@ -1542,12 +1542,12 @@ class QueueTest < UMBaseTest
 
     machine.snooze
     assert_equal [], buf
-    assert_equal 2, machine.pending_count
+    assert_equal 2, machine.metrics[:ops_pending]
 
     machine.push(q, :foo)
     assert_equal 1, q.count
     machine.snooze
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     assert_equal [[1, :foo]], buf
 
     machine.push(q, :bar)

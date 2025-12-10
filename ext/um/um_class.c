@@ -116,16 +116,6 @@ VALUE UM_mark_m(VALUE self, VALUE mark) {
   return self;
 }
 
-VALUE UM_pending_count(VALUE self) {
-  struct um *machine = um_get_machine(self);
-  return UINT2NUM(machine->metrics.ops_pending);
-}
-
-VALUE UM_total_op_count(VALUE self) {
-  struct um *machine = um_get_machine(self);
-  return UINT2NUM(machine->metrics.total_ops);
-}
-
 VALUE UM_metrics(VALUE self) {
   struct um *machine = um_get_machine(self);
   return um_metrics(machine, &machine->metrics);
@@ -546,8 +536,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "initialize", UM_initialize, -1);
   rb_define_method(cUM, "size", UM_size, 0);
   rb_define_method(cUM, "mark", UM_mark_m, 1);
-  rb_define_method(cUM, "pending_count", UM_pending_count, 0);
-  rb_define_method(cUM, "total_op_count", UM_total_op_count, 0);
   rb_define_method(cUM, "metrics", UM_metrics, 0);
 
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);

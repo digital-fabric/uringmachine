@@ -11,22 +11,22 @@ class AsyncOpTest < UMBaseTest
   end
 
   def test_async_op_await
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     res = @op.await
     t1 = monotonic_clock
     assert_in_range 0.04..0.08, t1 - @t0
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal (-ETIME), res
     assert_equal true, @op.done?
     assert_equal false, @op.cancelled?
   end
 
   def test_async_op_join
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     res = @op.join
     t1 = monotonic_clock
     assert_in_range 0.04..0.08, t1 - @t0
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal (-ETIME), res
     assert_equal true, @op.done?
     assert_equal false, @op.cancelled?
@@ -34,13 +34,13 @@ class AsyncOpTest < UMBaseTest
 
   def test_async_op_cancel
     machine.sleep(0.01)
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     @op.cancel
     assert_equal false, @op.done?
 
     machine.sleep(0.01)
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal true, @op.done?
     assert_equal (-ECANCELED), @op.result
     assert_equal true, @op.cancelled?
@@ -53,7 +53,7 @@ class AsyncOpTest < UMBaseTest
 
     res = @op.await
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_equal true, @op.done?
     assert_equal (-ECANCELED), res
     assert_equal true, @op.cancelled?
@@ -71,7 +71,7 @@ class AsyncOpTest < UMBaseTest
     rescue => e
     end
 
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     assert_kind_of TOError, e
     assert_equal true, @op.done?
     assert_equal (-ECANCELED), @op.result
@@ -89,7 +89,7 @@ class AsyncOpTest < UMBaseTest
     end
 
     # machine.timeout is cancelled async, so CQE is not yet reaped
-    assert_equal 1, machine.pending_count
+    assert_equal 1, machine.metrics[:ops_pending]
     assert_nil e
     assert_equal true, @op.done?
     assert_equal (-ETIME), @op.result
@@ -97,7 +97,7 @@ class AsyncOpTest < UMBaseTest
 
     # wait for timeout cancellation
     machine.sleep(0.01)
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
   end
 end
 

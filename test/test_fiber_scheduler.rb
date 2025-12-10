@@ -234,14 +234,14 @@ class FiberSchedulerTest < UMBaseTest
 
   def test_fiber_scheduler_sleep
     t0 = monotonic_clock
-    assert_equal 0, machine.pending_count
+    assert_equal 0, machine.metrics[:ops_pending]
     Fiber.schedule do
       sleep(0.01)
     end
     Fiber.schedule do
       sleep(0.02)
     end
-    assert_equal 2, machine.pending_count
+    assert_equal 2, machine.metrics[:ops_pending]
     @scheduler.join
     t1 = monotonic_clock
     assert_in_range 0.02..0.025, t1 - t0
@@ -318,7 +318,7 @@ class FiberSchedulerTest < UMBaseTest
     buf = +''
     sent = nil
 
-    assert_equal 0, machine.total_op_count
+    assert_equal 0, machine.metrics[:total_ops]
     Fiber.schedule do
       buf = s1.recv(12)
     end
@@ -328,7 +328,7 @@ class FiberSchedulerTest < UMBaseTest
 
     # In Ruby, sockets are by default non-blocking. The recv will cause io_wait
     # to be invoked, the send should get through without needing to poll.
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     @scheduler.join
 
     assert_equal 6, sent
@@ -348,14 +348,14 @@ class FiberSchedulerTest < UMBaseTest
     Fiber.schedule do
       IO.write(fn, 'foobar')
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
 
     buf = nil
     Fiber.schedule do
       sleep 0.001
       buf = IO.read(fn)
     end
-    assert_equal 2, machine.total_op_count
+    assert_equal 2, machine.metrics[:total_ops]
 
     @scheduler.join
     assert_equal 'foobar', buf
@@ -376,14 +376,14 @@ class FiberSchedulerTest < UMBaseTest
     Fiber.schedule do
       File.open(fn, 'w') { it.write 'foobar' }
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
 
     buf = nil
     Fiber.schedule do
       sleep 0.001
       File.open(fn, 'r') { buf = it.read }
     end
-    assert_equal 2, machine.total_op_count
+    assert_equal 2, machine.metrics[:total_ops]
     @scheduler.join
     assert_equal 'foobar', buf
     assert_equal({
@@ -405,24 +405,24 @@ class FiberSchedulerTest < UMBaseTest
     Fiber.schedule do
       buf << 11
       mutex.synchronize {
-        buf << [12, machine.total_op_count]
+        buf << [12, machine.metrics[:total_ops]]
         sleep 0.01
-        buf << [13, machine.total_op_count]
+        buf << [13, machine.metrics[:total_ops]]
       }
       buf << 14
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
 
     Fiber.schedule do
       buf << 21
       mutex.synchronize {
-        buf << [22, machine.total_op_count]
+        buf << [22, machine.metrics[:total_ops]]
         sleep 0.01
-        buf << [23, machine.total_op_count]
+        buf << [23, machine.metrics[:total_ops]]
       }
       buf << 24
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
 
     @scheduler.join
     assert_equal [11, [12, 0], 21, [13, 2], 14, [22, 2], [23, 4], 24], buf
@@ -440,16 +440,16 @@ class FiberSchedulerTest < UMBaseTest
 
     buf = []
     Fiber.schedule do
-      buf << [11, machine.total_op_count]
+      buf << [11, machine.metrics[:total_ops]]
       buf << queue.shift
-      buf << [12, machine.total_op_count]
+      buf << [12, machine.metrics[:total_ops]]
     end
     Fiber.schedule do
-      buf << [21, machine.total_op_count]
+      buf << [21, machine.metrics[:total_ops]]
       queue << :foo
-      buf << [22, machine.total_op_count]
+      buf << [22, machine.metrics[:total_ops]]
     end
-    assert_equal 0, machine.total_op_count
+    assert_equal 0, machine.metrics[:total_ops]
     @scheduler.join
 
     assert_equal [[11, 0], [21, 0], [22, 0], :foo, [12, 1]], buf
@@ -466,14 +466,14 @@ class FiberSchedulerTest < UMBaseTest
 
     buf = []
     Fiber.schedule do
-      buf << [11, machine.total_op_count]
+      buf << [11, machine.metrics[:total_ops]]
       buf << queue.shift(timeout: 0.01)
-      buf << [12, machine.total_op_count]
+      buf << [12, machine.metrics[:total_ops]]
     end
     Fiber.schedule do
-      buf << [21, machine.total_op_count]
+      buf << [21, machine.metrics[:total_ops]]
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     @scheduler.join
 
     assert_equal [[11, 0], [21, 1], nil, [12, 2]], buf
@@ -493,10 +493,10 @@ class FiberSchedulerTest < UMBaseTest
     end
 
     # No ops are issued, except for a NOP SQE used to wakeup the waiting thread.
-    assert_equal 0, machine.total_op_count
+    assert_equal 0, machine.metrics[:total_ops]
 
     @scheduler.join
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     assert_equal({
       fiber: 1,
       block: 1,
@@ -532,7 +532,7 @@ class FiberSchedulerTest < UMBaseTest
     Fiber.schedule do
       buf << `echo 'foo'`
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     @scheduler.join
     assert_equal ["foo\n"], buf
     assert_equal({
@@ -552,14 +552,14 @@ class FiberSchedulerTest < UMBaseTest
     buf = []
     Fiber.schedule do
       IO.popen('ruby', 'r+') do |pipe|
-        buf << [11, machine.total_op_count]
+        buf << [11, machine.metrics[:total_ops]]
         pipe.puts 'puts "bar"'
-        buf << [12, machine.total_op_count]
+        buf << [12, machine.metrics[:total_ops]]
         pipe.close_write
-        buf << [13, pipe.gets.chomp, machine.total_op_count]
+        buf << [13, pipe.gets.chomp, machine.metrics[:total_ops]]
       end
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     @scheduler.join
     assert_equal [[11, 0], [12, 3], [13, "bar", 5]], buf
     assert_equal({
@@ -584,7 +584,7 @@ class FiberSchedulerTest < UMBaseTest
     rescue Exception => e
       exception = e
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     machine.snooze
     Thread.new {
       r.close
@@ -607,7 +607,7 @@ class FiberSchedulerTest < UMBaseTest
     Fiber.schedule do
       addrs = Addrinfo.getaddrinfo("localhost", 80, Socket::AF_INET, :STREAM)
     end
-    assert_equal 1, machine.total_op_count
+    assert_equal 1, machine.metrics[:total_ops]
     @scheduler.join
     assert_kind_of Array, addrs
     addr = addrs.first
@@ -634,7 +634,7 @@ class FiberSchedulerTest < UMBaseTest
       res = e
     end
     @scheduler.join
-    assert_equal 3, machine.total_op_count
+    assert_equal 3, machine.metrics[:total_ops]
     assert_kind_of Timeout::Error, res
     assert_equal({
       fiber: 1,

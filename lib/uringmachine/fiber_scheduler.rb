@@ -52,7 +52,7 @@ class UringMachine
 
     # @return [void]
     def run_worker_thread
-      machine = UM.new(4).mark(1)
+      machine = UM.new(4)
       loop do
         q, op = machine.shift(@job_queue)
         @pending_count += 1
@@ -65,6 +65,7 @@ class UringMachine
         machine.push(q, res)
       rescue => e
         UM.debug("worker e: #{e.inspect}")
+        exit!
       end
     end
   end
