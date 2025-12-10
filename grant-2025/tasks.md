@@ -152,7 +152,7 @@
           - When finally idle, calls `Process.warmup`
           - Starts replacing sibling workers with forked workers
         see also: https://www.youtube.com/watch?v=kAW5O2dkSU8
-  - [ ] Each worker is single-threaded (except for auxiliary threads)
+  - [ ] Each worker is single-threaded (except for worker threads)
   - [ ] Rack 3.0-compatible
         see: https://github.com/socketry/protocol-rack
   - [ ] Rails integration (Railtie)

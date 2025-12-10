@@ -21,12 +21,9 @@ implementations:
 
 - `UM`: fiber-based concurrency using the UringMachine low-level API.
 
-- `UM sqpoll`: UringMachine low-level API with [submission queue
-  polling](https://unixism.net/loti/tutorial/sq_poll.html).
-
 <img src="./chart.png">
 
-## Observations:
+## Observations
 
 - We see the stark difference between thread-based and fiber-based concurrency.
   For I/O-bound workloads, there's really no contest - and that's exactly why
@@ -38,15 +35,23 @@ implementations:
   C-extension.
 
 - The UringMachine low-level API is faster to use in most cases, and its
-  performance advantage grows with the level of concurrency.
-
-- SQ polling provides a performance advantage in high-concurrency scenarios,
-  depending on the context. It remains to be seen how it affects performance in
-  real-world situations.
+  performance advantage grows with the level of concurrency. Interestingly, when
+  performing CPU-bound work, it seems slightly slightly slower. This should be
+  investigated.
 
 - The [pg](https://github.com/ged/ruby-pg) gem supports the use of fiber
   schedulers, and there too we see a marked performance advantage to using
   fibers instead of threads.
+
+According to these benchmarks, for I/O-bound scenarios the different fiber-based
+solutions are faster than threads by the following factors:
+
+implementation|average factor
+---------------------
+Async epoll|x2.36
+Async uring|x2.42
+UM FS|x2.85
+UM|x6.20
 
 ## 1. I/O - Pipe
 
@@ -61,7 +66,6 @@ Async epoll  1.118937   0.254803   1.373740 (  1.374298)
 Async uring  1.363248   0.270063   1.633311 (  1.633696)
 UM FS        0.746332   0.183006   0.929338 (  0.929619)
 UM           0.237816   0.328352   0.566168 (  0.566265)
-UM sqpoll    0.091668   0.672238   0.763906 (  0.543311)
 ```
 
 ## 2. I/O - Socketpair
@@ -77,7 +81,6 @@ Async epoll  0.381400   0.846445   1.227845 (  1.227983)
 Async uring  0.472526   0.821467   1.293993 (  1.294166)
 UM FS        0.443023   0.734334   1.177357 (  1.177576)
 UM           0.116995   0.675997   0.792992 (  0.793183)
-UM sqpoll    0.100190   1.005174   1.105364 (  0.878040)
 ```
 
 ## 3. Mutex - CPU-bound
@@ -92,7 +95,6 @@ Async epoll  5.309793   0.000949   5.310742 (  5.311217)
 Async uring  5.341404   0.004860   5.346264 (  5.346963)
 UM FS        5.363719   0.001976   5.365695 (  5.366254)
 UM           5.351073   0.005986   5.357059 (  5.357602)
-UM sqpoll    5.516859   5.507814  11.024673 (  5.526788)
 ```
 
 ## 4. Mutex - I/O-bound
@@ -108,7 +110,6 @@ Async epoll  0.810375   0.744084   1.554459 (  1.554726)
 Async uring  0.854985   1.129260   1.984245 (  1.140749)
 UM FS        0.686329   0.872376   1.558705 (  0.845214)
 UM           0.250370   1.323227   1.573597 (  0.720928)
-UM sqpoll    0.350281   1.968795   2.319076 (  0.724318)
 ```
 
 ## 5. Postgres client
@@ -135,5 +136,4 @@ Async epoll  4.107208   0.006519   4.113727 (  4.114227)
 Async uring  4.206283   0.028974   4.235257 (  4.235705)
 UM FS        4.082394   0.001719   4.084113 (  4.084522)
 UM           4.099893   0.323569   4.423462 (  4.424089)
-UM sqpoll    4.126438   4.799612   8.926050 (  4.471530)
 ```

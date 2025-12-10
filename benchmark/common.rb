@@ -118,6 +118,8 @@ class UMBenchmark
     fds = []
     do_um(machine, fibers, fds)
     machine.await_fibers(fibers)
+    puts "UM:"
+    p machine.metrics
     fds.each { machine.close(it) }
   end
 
@@ -128,6 +130,8 @@ class UMBenchmark
     do_um(machine, fibers, fds)
     machine.await_fibers(fibers)
     fds.each { machine.close_async(it) }
+    puts "UM sqpoll:"
+    p machine.metrics
     machine.snooze
   end
 end
