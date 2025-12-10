@@ -140,7 +140,9 @@ VALUE UM_snooze(VALUE self) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, rb_fiber_current(), Qnil);
 
-  VALUE ret = um_yield(machine);
+  // the current fiber is already scheduled, and the runqueue is GC-marked, so
+  // we can safely call um_switch, which is faster than calling um_yield.
+  VALUE ret = um_switch(machine);
   RAISE_IF_EXCEPTION(ret);
   return ret;
 }
