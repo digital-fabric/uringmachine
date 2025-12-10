@@ -66,5 +66,13 @@ class UMBenchmark
         machine.close_async(r)
       end
     end
+    machine.spin {
+      6.times {
+        machine.sleep 0.1
+        puts
+        p machine.metrics
+        puts
+      }
+    }
   end
 end

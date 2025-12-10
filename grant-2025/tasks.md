@@ -16,6 +16,12 @@
     - [ ] runqueue depth
     - [ ] number of pending fibers
     - [ ] ops: transient count, free count
+    - [ ] watermark: unsubmitted SQE count, fiber switch count since last CQE
+          processing
+    - [ ] total fiber switches, total waiting for CQEs
+  - [ ] Performance tuning
+    - [ ] max fiber switches before checking for completions
+    - [ ] max fiber switches before submitting unsubmitted SQEs
 
   - [ ] Add support for using IO::Buffer in association with io_uring registered
     buffers / buffer rings
@@ -117,14 +123,10 @@
         cpu_time = Process.clock_gettime(Process::CLOCK_THREAD_CPUTIME_ID)
         ```
 
-        - my hunch is we'll be able to show with io_uring real_time is less,
-          while cpu_time is more. But it's just a hunch.
-
 - [ ] Ruby Fiber::Scheduler interface
   - [v] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.
-  - [ ]  hook for close
+  - [v] hook for close
   - [ ] hooks for send/recv/sendmsg/recvmsg
-  - [ ] Writes to a file (including `IO.write`) do not invoke `#io_write` (because writes to files cannot be non-blocking?) Instead, `blocking_operation_wait` is invoked.
 
 - [ ] SSL
   - [ ] openssl gem: custom BIO?

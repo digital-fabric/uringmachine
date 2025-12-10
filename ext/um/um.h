@@ -20,6 +20,8 @@ enum {
 #define DEBUG_PRINTF(...) \
   if (DEBUG) fprintf(stderr, __VA_ARGS__)
 
+#define SYM_DEF(name) SYM_#name = ID2SYM(rb_intern("#name"))
+
 // branching
 #ifndef unlikely
 #define unlikely(cond)	__builtin_expect(!!(cond), 0)
@@ -123,6 +125,21 @@ struct buf_ring_descriptor {
 	void *buf_base;
 };
 
+struct um_metrics {
+  ulong total_ops;        // total ops submitted
+  ulong total_switches;   // total fiber switches
+  ulong total_waits;      // total number of CQE waits
+
+  uint ops_pending;       // number of pending ops
+  uint ops_unsubmitted;   // number of unsubmitted
+  uint ops_runqueue;      // number of ops in runqueue
+  uint ops_free;          // number of ops in freelist
+  uint ops_transient;     // number of ops in transient list
+
+  double time_total_run;  // total CPU time running
+  double time_total_wait; // total CPU time waiting for CQEs
+};
+
 #define BUFFER_RING_MAX_COUNT 10
 
 struct um {
@@ -135,12 +152,12 @@ struct um {
   uint ring_initialized; // is the ring initialized successfully
   uint mark; // used to mark instances for debugging
 
-  uint unsubmitted_count; // number of unsubmitted SQEs pending
-  uint pending_count; // number of pending operations (i.e. not yet completed)
-  uint buffer_ring_count; // number of registered buffer rings
-  ulong total_op_count; // total number of operations submitted since ring was initialized
+  struct um_metrics metrics;
+  int profile_mode;
 
-  uint entries; // number of entries in SQ
+  uint buffer_ring_count; // number of registered buffer rings
+
+  uint size; // size of SQ
   uint sqpoll_mode; // SQPOLL mode enabled
 
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
@@ -207,8 +224,10 @@ extern VALUE cAsyncOp;
 extern VALUE eStreamRESPError;
 
 struct um *um_get_machine(VALUE self);
-void um_setup(VALUE self, struct um *machine, uint entries, uint sqpoll_timeout_msec);
+void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec);
 void um_teardown(struct um *machine);
+
+VALUE um_metrics(struct um *machine, struct um_metrics *metrics);
 
 const char * um_op_kind_name(enum um_op_kind kind);
 struct um_op *um_op_alloc(struct um *machine);

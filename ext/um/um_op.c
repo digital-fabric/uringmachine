@@ -50,6 +50,7 @@ inline void um_op_transient_add(struct um *machine, struct um_op *op) {
     machine->transient_head->prev = op;
   }
   machine->transient_head = op;
+  machine->metrics.ops_transient++;
 }
 
 inline void um_op_transient_remove(struct um *machine, struct um_op *op) {
@@ -60,6 +61,7 @@ inline void um_op_transient_remove(struct um *machine, struct um_op *op) {
 
   if (machine->transient_head == op)
     machine->transient_head = op->next;
+  machine->metrics.ops_transient--;
 }
 
 inline void um_runqueue_push(struct um *machine, struct um_op *op) {
@@ -71,6 +73,7 @@ inline void um_runqueue_push(struct um *machine, struct um_op *op) {
   else
     machine->runqueue_head = machine->runqueue_tail = op;
   op->next = NULL;
+  machine->metrics.ops_runqueue++;
 }
 
 inline struct um_op *um_runqueue_shift(struct um *machine) {
@@ -80,6 +83,7 @@ inline struct um_op *um_runqueue_shift(struct um *machine) {
   machine->runqueue_head = op->next;
   if (!machine->runqueue_head)
     machine->runqueue_tail = NULL;
+  machine->metrics.ops_runqueue--;
   return op;
 }
 
@@ -152,6 +156,7 @@ inline struct um_op *um_op_alloc(struct um *machine) {
   if (machine->op_freelist) {
     struct um_op *op = machine->op_freelist;
     machine->op_freelist = op->next;
+    machine->metrics.ops_free--;
     return op;
   }
   return malloc(sizeof(struct um_op));
@@ -160,4 +165,5 @@ inline struct um_op *um_op_alloc(struct um *machine) {
 inline void um_op_free(struct um *machine, struct um_op *op) {
   op->next = machine->op_freelist;
   machine->op_freelist = op;
+  machine->metrics.ops_free++;
 }

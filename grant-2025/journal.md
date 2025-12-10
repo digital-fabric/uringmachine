@@ -395,8 +395,24 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   wrote some "integration" tests - different scenarios not unlike those in the
   benchmarks, which exercise the different hooks in the fiber scheduler.
   
-- I also added some new APIs to help with testing: `UM#await_fibers` is a
-  method for waiting for one or more fibers to terminate. Unlike `UM#join`, it
-  doesn't return the return values of the given fibers, it just waits for them
-  to terminate. Another new API is `UM.socketpair`, which is like
+- Added some new APIs to help with testing: `UM#await_fibers` is a method for
+  waiting for one or more fibers to terminate. Unlike `UM#join`, it doesn't
+  return the return values of the given fibers, it just waits for them to
+  terminate. Another new API is `UM.socketpair`, which is like
   `Socket.socketpair` except it returns raw fd's.
+
+- Fixed a tricky bug that caused an occasional segmentation fault while running
+  benchmarks. Some fibers waiting an operation to complete were garbage
+  collected because there was no reference to them anywhere. I fixed this by
+  adding a map of pending fibers at the C-extension level and adding and
+  removing pending fibers from it automatically. I also added checking for
+  leaking fibers at the end of each test, so the UringMachine instance will not
+  hold onto fibers that have terminated.
+  
+# 2025-12-09
+
+- Added the Async fiber scheduler to the different benchmarks. Also added an
+  SQPOLL mode to the benchmarks. Added a PG client benchmark.
+  
+- Fixed some small issues in the UM fiber scheduler and in the UM low-level API
+  implementation.

@@ -8,6 +8,18 @@
 VALUE cUM;
 VALUE eUMError;
 
+VALUE SYM_size;
+VALUE SYM_total_ops;
+VALUE SYM_total_switches;
+VALUE SYM_total_waits;
+VALUE SYM_ops_pending;
+VALUE SYM_ops_unsubmitted;
+VALUE SYM_ops_runqueue;
+VALUE SYM_ops_free;
+VALUE SYM_ops_transient;
+VALUE SYM_time_total_run;
+VALUE SYM_time_total_wait;
+
 static ID id_fileno;
 
 static void UM_mark(void *ptr) {
@@ -93,9 +105,9 @@ VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
   return INT2NUM(bgid);
 }
 
-VALUE UM_entries(VALUE self) {
+VALUE UM_size(VALUE self) {
   struct um *machine = um_get_machine(self);
-  return UINT2NUM(machine->entries);
+  return UINT2NUM(machine->size);
 }
 
 VALUE UM_mark_m(VALUE self, VALUE mark) {
@@ -106,12 +118,17 @@ VALUE UM_mark_m(VALUE self, VALUE mark) {
 
 VALUE UM_pending_count(VALUE self) {
   struct um *machine = um_get_machine(self);
-  return UINT2NUM(machine->pending_count);
+  return UINT2NUM(machine->metrics.ops_pending);
 }
 
 VALUE UM_total_op_count(VALUE self) {
   struct um *machine = um_get_machine(self);
-  return UINT2NUM(machine->total_op_count);
+  return UINT2NUM(machine->metrics.total_ops);
+}
+
+VALUE UM_metrics(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return um_metrics(machine, &machine->metrics);
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -527,10 +544,12 @@ void Init_UM(void) {
   rb_define_alloc_func(cUM, UM_allocate);
 
   rb_define_method(cUM, "initialize", UM_initialize, -1);
-  rb_define_method(cUM, "entries", UM_entries, 0);
+  rb_define_method(cUM, "size", UM_size, 0);
   rb_define_method(cUM, "mark", UM_mark_m, 1);
   rb_define_method(cUM, "pending_count", UM_pending_count, 0);
   rb_define_method(cUM, "total_op_count", UM_total_op_count, 0);
+  rb_define_method(cUM, "metrics", UM_metrics, 0);
+
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
   rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
@@ -597,6 +616,18 @@ void Init_UM(void) {
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 
   um_define_net_constants(cUM);
+
+  SYM_size =            ID2SYM(rb_intern("size"));
+  SYM_total_ops =       ID2SYM(rb_intern("total_ops"));
+  SYM_total_switches =  ID2SYM(rb_intern("total_switches"));
+  SYM_total_waits =     ID2SYM(rb_intern("total_waits"));
+  SYM_ops_pending =     ID2SYM(rb_intern("ops_pending"));
+  SYM_ops_unsubmitted = ID2SYM(rb_intern("ops_unsubmitted"));
+  SYM_ops_runqueue =    ID2SYM(rb_intern("ops_runqueue"));
+  SYM_ops_free =        ID2SYM(rb_intern("ops_free"));
+  SYM_ops_transient =   ID2SYM(rb_intern("ops_transient"));
+  SYM_time_total_run =  ID2SYM(rb_intern("time_total_run"));
+  SYM_time_total_wait = ID2SYM(rb_intern("time_total_wait"));
 
   id_fileno = rb_intern_const("fileno");
 }

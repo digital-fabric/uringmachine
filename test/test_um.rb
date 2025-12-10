@@ -11,15 +11,15 @@ class UringMachineTest < Minitest::Test
   end
 end
 
-class EntriesTest < Minitest::Test
-  def test_default_entries
+class SizeTest < Minitest::Test
+  def test_default_size
     m = UM.new
-    assert_equal 4096, m.entries
+    assert_equal 4096, m.size
   end
 
-  def test_custom_entries_value
+  def test_custom_size_value
     m = UM.new(13)
-    assert_equal 13, m.entries
+    assert_equal 13, m.size
   end
 end
 
@@ -2266,5 +2266,124 @@ class NonBlockTest < UMBaseTest
 
     UM.io_set_nonblock(r, true)
     assert_equal true, UM.io_nonblock?(r)
+  end
+end
+
+class MetricsTest < UMBaseTest
+  def test_metrics_empty
+    m = machine.metrics
+    assert_equal({
+      size:             4096,
+      total_ops:        0,
+      total_switches:   0,
+      total_waits:      0,
+      ops_pending:      0,
+      ops_unsubmitted:  0,
+      ops_runqueue:     0,
+      ops_free:         0,
+      ops_transient:    0
+    }, m)
+  end
+
+  def test_metrics_size
+    m = UM.new(13)
+    assert_equal 13, m.metrics[:size]
+  end
+
+  def test_metrics_total_counters
+    r, w = UM.pipe
+    machine.write(w, 'foo')
+    assert_equal 1, machine.metrics[:total_ops]
+    assert_equal 1, machine.metrics[:total_switches]
+    assert_equal 1, machine.metrics[:total_waits]
+    machine.write_async(w, 'bar')
+    assert_equal 2, machine.metrics[:total_ops]
+    assert_equal 1, machine.metrics[:total_switches]
+    assert_equal 1, machine.metrics[:total_waits]
+    machine.snooze
+    assert_equal 2, machine.metrics[:total_ops]
+    assert_equal 2, machine.metrics[:total_switches]
+    assert_equal 2, machine.metrics[:total_waits]
+    machine.close(w)
+    assert_equal 3, machine.metrics[:total_ops]
+    assert_equal 3, machine.metrics[:total_switches]
+    assert_equal 3, machine.metrics[:total_waits]
+  ensure
+    machine.close(r) rescue nil
+    machine.close(w) rescue nil
+  end
+
+  def test_metrics_total_switches
+    f1 = machine.spin { 3.times { machine.snooze } }
+    f2 = machine.spin { machine.sleep(0.01) }
+    assert_equal 0, machine.metrics[:total_switches]
+    machine.snooze
+    assert_equal 3, machine.metrics[:total_switches]
+    machine.snooze
+    assert_equal 5, machine.metrics[:total_switches]
+    machine.join(f2)
+    assert_equal 9, machine.metrics[:total_switches]
+  ensure
+    machine.join(f1, f2)
+  end
+
+  def test_metrics_total_waits
+    r, w = UM.pipe
+
+    machine.sleep(0.001)
+    assert_equal 1, machine.metrics[:total_waits]
+
+    machine.write_async(w, 'foo')
+    assert_equal 1, machine.metrics[:total_waits]
+
+    res = machine.read(r, +'', 3)
+    assert_equal 2, machine.metrics[:total_waits]
+    assert_equal 3, res
+
+    machine.close_async(w)
+    assert_equal 2, machine.metrics[:total_waits]
+
+    machine.snooze
+    assert_equal 3, machine.metrics[:total_waits]
+  ensure
+    machine.close(r) rescue nil
+    machine.close(w) rescue nil
+  end
+
+  def ops_metrics
+    machine.metrics.values_at(
+      :ops_pending,
+      :ops_unsubmitted,
+      :ops_runqueue,
+      :ops_free,
+      :ops_transient
+    )
+  end
+
+  def test_metrics_ops
+    r, w = UM.pipe
+
+    f = machine.spin { machine.sleep(0.001) }
+    assert_equal [0, 0, 1, 0, 0], ops_metrics
+    machine.snooze
+    assert_equal [1, 1, 0, 2, 0], ops_metrics
+    machine.submit
+    assert_equal [1, 0, 0, 2, 0], ops_metrics
+    machine.join(f)
+    assert_equal [0, 0, 0, 2, 0], ops_metrics
+
+    machine.write_async(w, 'foo')
+    assert_equal [1, 1, 0, 1, 1], ops_metrics
+    machine.submit
+    assert_equal [1, 0, 0, 1, 1], ops_metrics
+    machine.snooze
+    assert_equal [0, 0, 0, 2, 0], ops_metrics
+
+    machine.write_async(w, 'foo')
+    assert_equal [1, 1, 0, 1, 1], ops_metrics
+    machine.snooze
+    assert_equal [0, 0, 0, 2, 0], ops_metrics
+  ensure
+    machine.join(f)
   end
 end
