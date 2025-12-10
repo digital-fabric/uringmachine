@@ -13,13 +13,14 @@
   - [v] Add `UM.socketpair`
 
   - [ ] Add more metrics
-    - [ ] runqueue depth
-    - [ ] number of pending fibers
-    - [ ] ops: transient count, free count
-    - [ ] watermark: unsubmitted SQE count, fiber switch count since last CQE
-          processing
-    - [ ] total fiber switches, total waiting for CQEs
-  - [ ] Performance tuning
+    - [v] runqueue depth
+    - [v] number of pending fibers
+    - [v] ops: transient count, free count
+    - [v] total fiber switches, total waiting for CQEs
+    - [ ] switches since last CQE processing
+    - [ ] watermark: ops_pending, ops_unsubmitted, ops_runqueue, ops_free, ops_transient
+          (only in profile mode)
+  - [ ] Performance tuning parameters
     - [ ] max fiber switches before checking for completions
     - [ ] max fiber switches before submitting unsubmitted SQEs
 
@@ -110,7 +111,7 @@
     - [v] Socket IO (with socketpair) raw UM / Ruby threaded / Ruby with UM fiber scheduler
 
           N groups where each group has a pair of reader / writer to a socketpair
-          
+
     - [v] Postgres test
 
     - [ ] Measure CPU (thread) time usage for above examples

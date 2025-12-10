@@ -10,7 +10,6 @@ class UringMachine
       @nameservers = get_nameservers
       @fiber = @machine.spin { handle_requests_loop }
       @last_id = 0
-      @cache = {}
     end
 
     def resolve(hostname, type)

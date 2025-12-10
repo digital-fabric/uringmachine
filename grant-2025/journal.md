@@ -385,16 +385,16 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   about the fiber scheduler interface is that it provides a significant boost to
   I/O-bound scenarios, with almost no change to the source code (basically, you
   just need to replace `Thread.new` with `Fiber.schedule`).
-  
+
   These results, though preliminary, seem to validate the approach I took with
   UringMachine - implementing a low-level API and tying it to the entire Ruby
   ecosystem by way of the fiber scheduler interface.
-  
+
 - Spent the rest of the day writing lots of tests for the fiber scheduler. I
   tried to cover the entire `IO` API - both class- and instance methods. I also
   wrote some "integration" tests - different scenarios not unlike those in the
   benchmarks, which exercise the different hooks in the fiber scheduler.
-  
+
 - Added some new APIs to help with testing: `UM#await_fibers` is a method for
   waiting for one or more fibers to terminate. Unlike `UM#join`, it doesn't
   return the return values of the given fibers, it just waits for them to
@@ -408,11 +408,43 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   removing pending fibers from it automatically. I also added checking for
   leaking fibers at the end of each test, so the UringMachine instance will not
   hold onto fibers that have terminated.
-  
+
 # 2025-12-09
 
 - Added the Async fiber scheduler to the different benchmarks. Also added an
   SQPOLL mode to the benchmarks. Added a PG client benchmark.
-  
+
 - Fixed some small issues in the UM fiber scheduler and in the UM low-level API
   implementation.
+
+# 2025-12-10
+
+- Refactored the benchmarks, abstracting away all the common code into a
+  common class that is then used in the different benchmarks. I also added a
+  test for ASync with an epoll selector. I'll try to find some time in the
+  coming days to update the results in the repo.
+
+- Added and streamlined metrics that indicate the following:
+
+  - The ring size
+  - Total number of ops
+  - Total number of fiber switches
+  - Total number of waits for CQEs
+  - Current number of pending ops
+  - Current number of unsubmitted ops
+  - Current size of runqueue
+  - Current number of transient ops
+  - Current number of free ops
+
+  I also added some basic time measurements:
+
+  - Total CPU time
+  - Total time spent waiting for CQEs
+
+  These are off by default, but can be enabled by calling `UM#profile(true)`.
+  I'd like to do a lot more with profiling, like measuring the CPU time spent on
+  each fiber, but I'm a bit apprehensive of the performance costs involved, as
+  getting the `CLOCK_THREAD_CPUTIME_ID` clock is relatively slow, and then
+  managing this for each fiber means getting and setting a couple of instance
+  variables, which can *really* slow things down. On top of that, I'm not that
+  sure this is really needed.

@@ -26,7 +26,7 @@ How can this be implemented:
     double last_cpu_time;
   }
   ```
-  
+
 - `UM#profile=` to turn it on/off.
 - On `machine.profile = true`, reset `total_time_xxx` and `last_cpu_time`
 
@@ -35,10 +35,10 @@ How can this be implemented:
   machine->total_time_wait = 0;
   machine->last_cpu_time = um_get_time_cpu();
   ```
-  
+
 - when profiling is active:
   - before processing CQEs:
-    
+
     ```c
     // before
     double cpu_time0;
@@ -61,9 +61,9 @@ How can this be implemented:
       machine->last_cpu_time = cpu_time1;
     }
     ```
-    
+
   - when doing switching, in `um_process_runqueue_op`:
-  
+
     ```c
     // before
     double cpu_time;
@@ -81,9 +81,9 @@ How can this be implemented:
     }
     do_fiber_transfer(...)
     ```
-    
+
   - updating fiber time instance vars:
-  
+
     ```c
     inline void um_update_fiber_time_run(VALUE fiber, double stamp, double elapsed) {
       // VALUE fiber_stamp = rb_ivar_get(fiber, ID_time_last_cpu);
@@ -93,7 +93,7 @@ How can this be implemented:
       rb_ivar_set(fiber, ID_time_total_run, DBL2NUM(total));
       rb_ivar_set(fiber, ID_time_last_cpu, DBL2NUM(stamp));
     }
-    
+
     inline void um_update_fiber_time_wait(VALUE fiber, double stamp) {
       VALUE fiber_last_stamp = rb_ivar_get(fiber, ID_time_last_cpu);
       if (likely(!NIL_P(fiber_last_stamp))) {
@@ -109,7 +109,7 @@ How can this be implemented:
       rb_ivar_set(fiber, ID_time_last_cpu, DBL2NUM(stamp));
     }
     ```
-    
+
 ## Metrics API
 
 - machine metrics: `UM#metrics` - returns a hash containing metrics:
@@ -135,14 +135,14 @@ How can this be implemented:
     time_total_wait:, # total CPU time waiting for CQEs
   }
   ```
-  
+
 - For this we need to add tracking for:
   - runqueue list size
   - transient list size
   - free list size
 - Those will be done in um_op.c (in linked list management code)
 
-- All metrics info in kept in 
+- All metrics info in kept in
 
 ## useful concurrency tools
 

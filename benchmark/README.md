@@ -6,17 +6,17 @@ implementations:
 
 - **Threads**: thread-based concurrency using the stock Ruby I/O and
   synchronization classes.
-  
+
 - **Async FS**: fiber-based concurrency with the
   [Async](https://github.com/socketry/async) fiber scheduler, using the stock
   Ruby I/O and synchronization classes.
-  
+
 - **UM FS**: fiber-based concurrency with the UringMachine fiber scheduler,
   using the stock Ruby I/O and synchronization classes.
-  
+
 - **UM pure**: fiber-based concurrency using the UringMachine low-level (pure)
   API.
-  
+
 - **UM sqpoll**: the same as **UM pure** with [submission queue
   polling](https://unixism.net/loti/tutorial/sq_poll.html).
 
@@ -39,7 +39,7 @@ implementations:
 - SQ polling provides a performance advantage in high-concurrency scenarios,
   depending on the context. It remains to be seen how it affects performance in
   real-world situations.
-  
+
 - The [pg](https://github.com/ged/ruby-pg) gem supports the use of fiber
   schedulers, and there too we see a marked performance advantage to using
   fibers instead of threads.
