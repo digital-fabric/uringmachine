@@ -44,14 +44,14 @@ implementations:
   fibers instead of threads.
 
 According to these benchmarks, for I/O-bound scenarios the different fiber-based
-solutions are faster than threads by the following factors:
+implementations present a average speedup as follows:
 
-implementation|average factor
----------------------
-Async epoll|x2.36
-Async uring|x2.42
-UM FS|x2.85
-UM|x6.20
+|implementation|average factor|
+|--------------|--------------|
+|Async epoll   |x2.36         |
+|Async uring   |x2.42         |
+|UM FS         |x2.85         |
+|UM            |x6.20         |
 
 ## 1. I/O - Pipe
 
