@@ -59,7 +59,7 @@ class UringMachine
       msg = Resolv::DNS::Message.decode buf
       addrs = []
       msg.each_answer do |name, ttl, data|
-        p [name, ttl, data]
+        # p [name, ttl, data]
         if data.kind_of?(Resolv::DNS::Resource::IN::A) ||
           data.kind_of?(Resolv::DNS::Resource::IN::AAAA)
           addrs << data.address.to_s
