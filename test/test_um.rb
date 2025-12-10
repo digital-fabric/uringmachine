@@ -2271,7 +2271,6 @@ end
 
 class MetricsTest < UMBaseTest
   def test_metrics_empty
-    m = machine.metrics
     assert_equal({
       size:             4096,
       total_ops:        0,
@@ -2282,7 +2281,7 @@ class MetricsTest < UMBaseTest
       ops_runqueue:     0,
       ops_free:         0,
       ops_transient:    0
-    }, m)
+    }, machine.metrics)
   end
 
   def test_metrics_size
@@ -2385,5 +2384,37 @@ class MetricsTest < UMBaseTest
     assert_equal [0, 0, 0, 2, 0], ops_metrics
   ensure
     machine.join(f)
+  end
+end
+
+class ProfileModeTest < UMBaseTest
+  def test_profile_mode_empty
+    assert_equal false, machine.profile?
+    assert_equal([
+      :size, :total_ops, :total_switches, :total_waits, :ops_pending,
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+    ], machine.metrics.keys)
+
+    machine.profile(true)
+    assert_equal true, machine.profile?
+    assert_equal([
+      :size, :total_ops, :total_switches, :total_waits, :ops_pending,
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :time_total_cpu, :time_total_wait,
+    ], machine.metrics.keys)
+
+    machine.profile(false)
+    assert_equal false, machine.profile?
+    assert_equal([
+      :size, :total_ops, :total_switches, :total_waits, :ops_pending,
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+    ], machine.metrics.keys)
+  end
+
+  def test_profile_mode_total_times
+    machine.profile(true)
+    machine.sleep(0.01)
+    assert_in_range 0.0..0.0005, machine.metrics[:time_total_cpu]
+    assert_in_range 0.01..0.015, machine.metrics[:time_total_wait]
   end
 end

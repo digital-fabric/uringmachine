@@ -136,8 +136,9 @@ struct um_metrics {
   uint ops_free;          // number of ops in freelist
   uint ops_transient;     // number of ops in transient list
 
-  double time_total_run;  // total CPU time running
   double time_total_wait; // total CPU time waiting for CQEs
+  double time_last_cpu; // last seen time stamp
+  double time_first_cpu; // last seen time stamp
 };
 
 #define BUFFER_RING_MAX_COUNT 10
@@ -250,6 +251,8 @@ void um_free_buffer_linked_list(struct um *machine);
 
 struct __kernel_timespec um_double_to_timespec(double value);
 double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
+double um_get_time_cpu();
+double um_get_time_monotonic();
 int um_value_is_exception_p(VALUE v);
 VALUE um_raise_exception(VALUE v);
 

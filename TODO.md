@@ -13,7 +13,7 @@
 
 How can this be implemented:
 
-- `um_cpu_time()` function for reading CPU time (CLOCK_THREAD_CPUTIME_ID) as
+- `um_get_time_cpu()` function for reading CPU time (CLOCK_THREAD_CPUTIME_ID) as
   double.
 - add to `struct um`:
 
@@ -33,7 +33,7 @@ How can this be implemented:
   ```c
   machine->total_time_run = 0;
   machine->total_time_wait = 0;
-  machine->last_cpu_time = um_cpu_time();
+  machine->last_cpu_time = um_get_time_cpu();
   ```
   
 - when profiling is active:
@@ -46,7 +46,7 @@ How can this be implemented:
     int profiling_mode = machine->profiling_mode;
     if (profiling_mode) {
       fiber = rb_fiber_current();
-      cpu_time0 = um_cpu_time();
+      cpu_time0 = um_get_time_cpu();
       double elapsed = cpu_time0 - machine->last_cpu_time;
       um_update_fiber_time_run(fiber, cpu_time0, elapsed);
       machine->total_time_run += elapsed;
@@ -54,7 +54,7 @@ How can this be implemented:
     process_cqes(...)
     // after
     if (profiling_mode) {
-      double cpu_time1 = um_cpu_time();
+      double cpu_time1 = um_get_time_cpu();
       double elapsed = cpu_time1 - cpu_time0;
       um_update_fiber_last_time(fiber, cpu_time1);
       machine->total_time_wait += elapsed;
@@ -72,7 +72,7 @@ How can this be implemented:
     int profiling_mode = machine->profiling_mode;
     if (profiling_mode) {
       cur_fiber = rb_fiber_current();
-      cpu_time = um_cpu_time();
+      cpu_time = um_get_time_cpu();
       double elapsed = cpu_time - machine->last_cpu_time;
       um_update_fiber_time_run(cur_fiber, cpu_time, elapsed);
       machine->total_time_run += elapsed;
@@ -86,16 +86,16 @@ How can this be implemented:
   
     ```c
     inline void um_update_fiber_time_run(VALUE fiber, double stamp, double elapsed) {
-      // VALUE fiber_stamp = rb_ivar_get(fiber, ID_time_last_stamp);
+      // VALUE fiber_stamp = rb_ivar_get(fiber, ID_time_last_cpu);
       VALUE fiber_total_run = rb_ivar_get(fiber, ID_time_total_run);
       double total = NIL_P(fiber_total_run) ?
         elapsed : NUM2DBL(fiber_total_run) + elapsed;
       rb_ivar_set(fiber, ID_time_total_run, DBL2NUM(total));
-      rb_ivar_set(fiber, ID_time_last_stamp, DBL2NUM(stamp));
+      rb_ivar_set(fiber, ID_time_last_cpu, DBL2NUM(stamp));
     }
     
     inline void um_update_fiber_time_wait(VALUE fiber, double stamp) {
-      VALUE fiber_last_stamp = rb_ivar_get(fiber, ID_time_last_stamp);
+      VALUE fiber_last_stamp = rb_ivar_get(fiber, ID_time_last_cpu);
       if (likely(!NIL_P(fiber_last_stamp))) {
         double last_stamp = NUM2DBL(fiber_last_stamp);
         double elapsed = stamp - last_stamp;
@@ -106,7 +106,7 @@ How can this be implemented:
       }
       else
         rb_ivar_set(fiber, ID_time_total_wait, DBL2NUM(0.0));
-      rb_ivar_set(fiber, ID_time_last_stamp, DBL2NUM(stamp));
+      rb_ivar_set(fiber, ID_time_last_cpu, DBL2NUM(stamp));
     }
     ```
     

@@ -253,13 +253,34 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   return NULL;
 }
 
+inline void um_profile_wait_cqe_pre(struct um *machine, double *time_monotonic0, VALUE *fiber) {
+  // *fiber = rb_fiber_current();
+  *time_monotonic0 = um_get_time_monotonic();
+  // double time_cpu = um_get_time_cpu();
+  // double elapsed = time_cpu - machine->metrics.time_last_cpu;
+  // um_update_fiber_time_run(fiber, time_monotonic0, elapsed);
+  // machine->metrics.time_last_cpu = time_cpu;
+}
+
+inline void um_profile_wait_cqe_post(struct um *machine, double time_monotonic0, VALUE fiber) {
+  // double time_cpu = um_get_time_cpu();
+  double elapsed = um_get_time_monotonic() - time_monotonic0;
+  // um_update_fiber_last_time(fiber, cpu_time1);
+  machine->metrics.time_total_wait += elapsed;
+  // machine->metrics.time_last_cpu = time_cpu;
+}
+
 // Waits for the given minimum number of completion entries. The wait_nr is
 // either 1 - where we wait for at least one CQE to be ready, or 0, where we
 // don't wait, and just process any CQEs that already ready.
 static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wait_nr) {
   struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL, .wait_nr = wait_nr };
   machine->metrics.total_waits++;
+  double time_monotonic0 = 0.0;
+  VALUE fiber;
+  if (machine->profile_mode) um_profile_wait_cqe_pre(machine, &time_monotonic0, &fiber);
   rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+  if (machine->profile_mode) um_profile_wait_cqe_post(machine, time_monotonic0, fiber);
 
   if (unlikely(ctx.result < 0)) {
     // the internal calls to (maybe submit) and wait for cqes may fail with:
@@ -283,6 +304,15 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
   }
 }
 
+inline void um_profile_switch(struct um *machine, VALUE next_fiber) {
+  // *current_fiber = rb_fiber_current();
+  // double time_cpu = um_get_time_cpu();
+  // double elapsed = time_cpu - machine->metrics.time_last_cpu;
+  // um_update_fiber_time_run(cur_fiber, time_cpu, elapsed);
+  // um_update_fiber_time_wait(next_fiber, time_cpu);
+  // machine->metrics.time_last_cpu = time_cpu;
+}
+
 inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   DEBUG_PRINTF("-> %p process_runqueue_op: op %p\n", &machine->ring, op);
 
@@ -293,6 +323,7 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   if (unlikely(op->flags & OP_F_TRANSIENT))
     um_op_free(machine, op);
 
+  if (machine->profile_mode) um_profile_switch(machine, fiber);
   VALUE ret = rb_fiber_transfer(fiber, 1, &value);
   RB_GC_GUARD(value);
   RB_GC_GUARD(ret);
@@ -1246,7 +1277,7 @@ extern VALUE SYM_ops_unsubmitted;
 extern VALUE SYM_ops_runqueue;
 extern VALUE SYM_ops_free;
 extern VALUE SYM_ops_transient;
-extern VALUE SYM_time_total_run;
+extern VALUE SYM_time_total_cpu;
 extern VALUE SYM_time_total_wait;
 
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics) {
@@ -1265,7 +1296,8 @@ VALUE um_metrics(struct um *machine, struct um_metrics *metrics) {
   rb_hash_aset(hash, SYM_ops_transient,   UINT2NUM(metrics->ops_transient));
 
   if (machine->profile_mode) {
-    rb_hash_aset(hash, SYM_time_total_run,  DBL2NUM(metrics->time_total_run));
+    double total_cpu = um_get_time_cpu() - metrics->time_first_cpu;
+    rb_hash_aset(hash, SYM_time_total_cpu,  DBL2NUM(total_cpu));
     rb_hash_aset(hash, SYM_time_total_wait, DBL2NUM(metrics->time_total_wait));
   }
 

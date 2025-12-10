@@ -17,7 +17,7 @@ VALUE SYM_ops_unsubmitted;
 VALUE SYM_ops_runqueue;
 VALUE SYM_ops_free;
 VALUE SYM_ops_transient;
-VALUE SYM_time_total_run;
+VALUE SYM_time_total_cpu;
 VALUE SYM_time_total_wait;
 
 static ID id_fileno;
@@ -119,6 +119,21 @@ VALUE UM_mark_m(VALUE self, VALUE mark) {
 VALUE UM_metrics(VALUE self) {
   struct um *machine = um_get_machine(self);
   return um_metrics(machine, &machine->metrics);
+}
+
+VALUE UM_profile_p(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return machine->profile_mode ? Qtrue : Qfalse;
+}
+
+VALUE UM_profile_set(VALUE self, VALUE value) {
+  struct um *machine = um_get_machine(self);
+  machine->profile_mode = RTEST(value);
+  if (machine->profile_mode) {
+    machine->metrics.time_total_wait = 0.0;
+    machine->metrics.time_last_cpu = machine->metrics.time_first_cpu = um_get_time_cpu();
+  }
+  return value;
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -537,6 +552,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "size", UM_size, 0);
   rb_define_method(cUM, "mark", UM_mark_m, 1);
   rb_define_method(cUM, "metrics", UM_metrics, 0);
+  rb_define_method(cUM, "profile?", UM_profile_p, 0);
+  rb_define_method(cUM, "profile", UM_profile_set, 1);
 
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 
@@ -614,7 +631,7 @@ void Init_UM(void) {
   SYM_ops_runqueue =    ID2SYM(rb_intern("ops_runqueue"));
   SYM_ops_free =        ID2SYM(rb_intern("ops_free"));
   SYM_ops_transient =   ID2SYM(rb_intern("ops_transient"));
-  SYM_time_total_run =  ID2SYM(rb_intern("time_total_run"));
+  SYM_time_total_cpu =  ID2SYM(rb_intern("time_total_cpu"));
   SYM_time_total_wait = ID2SYM(rb_intern("time_total_wait"));
 
   id_fileno = rb_intern_const("fileno");

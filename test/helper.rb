@@ -5,6 +5,7 @@ require_relative './coverage' if ENV['COVERAGE']
 require 'uringmachine'
 require 'socket'
 require 'minitest/autorun'
+require 'securerandom'
 
 STDOUT.sync = true
 STDERR.sync = true
@@ -74,7 +75,7 @@ class UMBaseTest < Minitest::Test
   def assign_port
     @@port_assign_mutex ||= Mutex.new
     @@port_assign_mutex.synchronize do
-      @@port ||= 1024 + rand(60000)
+      @@port ||= 1024 + SecureRandom.rand(60000)
       @@port += 1
     end
   end
