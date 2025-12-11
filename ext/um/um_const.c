@@ -425,7 +425,7 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, SIGTSTP);
   DEF_CONST_INT(mod, SIGCONT);
   DEF_CONST_INT(mod, SIGCHLD);
-  DEF_CONST_INT(mod, SIGCLD);
+  // DEF_CONST_INT(mod, SIGCLD);
   DEF_CONST_INT(mod, SIGTTIN);
   DEF_CONST_INT(mod, SIGTTOU);
   DEF_CONST_INT(mod, SIGIO);

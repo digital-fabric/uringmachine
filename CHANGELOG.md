@@ -1,3 +1,7 @@
+# 0.22.1 2025-12-11
+
+- Comment out SIGCLD constant
+
 # 0.22.0 2025-12-10
 
 - Fix use of `um_yield` in statx, multishot ops
