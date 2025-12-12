@@ -38,6 +38,20 @@ class UMBenchmark
     end
   end
 
+  def do_baseline
+    GROUPS.times do
+      r, w = IO.pipe
+      r.sync = true
+      w.sync = true
+      ITERATIONS.times {
+        w.write(DATA)
+        r.read(SIZE)
+      }
+      r.close
+      w.close
+    end
+  end
+
   def do_scheduler(scheduler, ios)
     GROUPS.times do
       r, w = IO.pipe

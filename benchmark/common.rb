@@ -54,6 +54,7 @@ class UMBenchmark
   end
 
   @@benchmarks = {
+    baseline:     [:baseline,     "No Concurrency"],
     threads:      [:threads,      "Threads"],
     thread_pool:  [:thread_pool,  "ThreadPool"],
     async_uring:  [:scheduler,    "Async uring"],
@@ -67,6 +68,10 @@ class UMBenchmark
     @@benchmarks.each do |sym, (doer, name)|
       b.report(name) { send(:"run_#{sym}") } if respond_to?(:"do_#{doer}")
     end
+  end
+
+  def run_baseline
+    do_baseline
   end
 
   def run_threads
