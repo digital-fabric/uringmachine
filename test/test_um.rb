@@ -789,6 +789,86 @@ class WriteTest < UMBaseTest
   end
 end
 
+class WritevTest < UMBaseTest
+  def test_writev
+    r, w = IO.pipe
+
+    assert_equal 0, machine.metrics[:ops_pending]
+    res = machine.writev(w.fileno, 'foo', 'bar', 'baz')
+    assert_equal 9, res
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 'foobarbaz', r.readpartial(9)
+
+    res = machine.writev(w.fileno, 'oofoof', 'rabrab')
+    assert_equal 12, res
+    assert_equal 'oofoofrabrab', r.readpartial(12)
+  end
+
+  def test_writev_bad_fd
+    r, _w = UM.pipe
+
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_raises(Errno::EBADF) do
+      machine.writev(r, 'foo', 'bar')
+    end
+    assert_equal 0, machine.metrics[:ops_pending]
+  end
+
+  def test_writev_zero_length
+    r, w = IO.pipe
+
+    res = machine.write(w.fileno, '')
+    assert_equal 0, res
+
+    res = machine.writev(w.fileno, '', '')
+    assert_equal 0, res
+
+    buf1 = IO::Buffer.new(0)
+    buf2 = IO::Buffer.new(0)
+    res = machine.writev(w.fileno, buf1, buf2)
+    assert_equal 0, res
+
+    w.close
+    assert_equal '', r.read
+  end
+
+  def test_writev_io_buffer
+    r, w = UM.pipe
+
+    buf1 = IO::Buffer.new(5)
+    buf1.set_string('Hello')
+    buf2 = IO::Buffer.new(6)
+    buf2.set_string(' world')
+
+    machine.writev(w, buf1, buf2)
+    machine.close(w)
+
+    str = +''
+    machine.read(r, str, 8192)
+    assert_equal 'Hello world', str
+  end
+
+  def test_writev_invalid_buffer
+    _r, w = UM.pipe
+    assert_raises(UM::Error) {
+      machine.writev(w, 'abc', [])
+    }
+  end
+
+  def test_writev_with_file_offset
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    IO.write(fn, 'foobar')
+
+    fd = machine.open(fn, UM::O_WRONLY)
+    result = machine.writev(fd, 'bar', 'baz', 2)
+    assert_equal 6, result
+    assert_equal 'fobarbaz', IO.read(fn)
+  ensure
+    machine.close(fd)
+    FileUtils.rm(fn) rescue nil
+  end
+end
+
 class WriteAsyncTest < UMBaseTest
   def test_write_async
     r, w = IO.pipe
@@ -1153,7 +1233,6 @@ class SendTest < UMBaseTest
     t&.kill
   end
 
-
   def test_send_io_buffer
     @port = assign_port
     @server = TCPServer.open('127.0.0.1', @port)
@@ -1223,6 +1302,49 @@ class SendTest < UMBaseTest
     assert_raises(UM::Error) { machine.send(fd, [], -1, 0) }
   ensure
     t&.kill
+  end
+end
+
+class SendvTest < UMBaseTest
+  def setup
+    super
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+  end
+
+  def teardown
+    @machine.close(@s1)
+    @machine.close(@s2)
+    super
+  end
+
+  def test_sendv
+    ret = machine.sendv(@s1, 'foo', 'bar', 'baz')
+    assert_equal 9, ret
+
+    buf = +''
+    ret = machine.read(@s2, buf, 8192)
+    assert_equal 9, ret
+    assert_equal 'foobarbaz', buf
+  end
+
+  def test_sendv_io_buffer
+    buf1 = IO::Buffer.new(6)
+    buf1.set_string('foobar')
+
+    buf2 = IO::Buffer.new(3)
+    buf2.set_string('baz')
+
+    ret = machine.sendv(@s1, buf1, buf2)
+    assert_equal 9, ret
+
+    buf = +''
+    ret = machine.read(@s2, buf, 8192)
+    assert_equal 9, ret
+    assert_equal 'foobarbaz', buf
+  end
+
+  def test_sendv_invalid_buffer
+    assert_raises(UM::Error) { machine.sendv(@s1, [], 'abc') }
   end
 end
 
