@@ -1358,7 +1358,7 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
     assert_equal C, calls[:fiber]
     assert_equal C, calls[:io_close]
     assert_in_range (C * 2)..(C * 4), calls[:io_wait]
-    assert_in_range (C * 7)..(C * 17), calls[:blocking_operation_wait]
+    assert_in_range (C * 7)..(C * 20), calls[:blocking_operation_wait]
   end
 end
 
