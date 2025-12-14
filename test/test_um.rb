@@ -2363,25 +2363,25 @@ class MetricsTest < UMBaseTest
     r, w = UM.pipe
 
     f = machine.spin { machine.sleep(0.001) }
-    assert_equal [0, 0, 1, 0, 0], ops_metrics
+    assert_equal [0, 0, 1, 99, 0], ops_metrics
     machine.snooze
-    assert_equal [1, 1, 0, 2, 0], ops_metrics
+    assert_equal [1, 1, 0, 100, 0], ops_metrics
     machine.submit
-    assert_equal [1, 0, 0, 2, 0], ops_metrics
+    assert_equal [1, 0, 0, 100, 0], ops_metrics
     machine.join(f)
-    assert_equal [0, 0, 0, 2, 0], ops_metrics
+    assert_equal [0, 0, 0, 100, 0], ops_metrics
 
     machine.write_async(w, 'foo')
-    assert_equal [1, 1, 0, 1, 1], ops_metrics
+    assert_equal [1, 1, 0, 99, 1], ops_metrics
     machine.submit
-    assert_equal [1, 0, 0, 1, 1], ops_metrics
+    assert_equal [1, 0, 0, 99, 1], ops_metrics
     machine.snooze
-    assert_equal [0, 0, 0, 2, 0], ops_metrics
+    assert_equal [0, 0, 0, 100, 0], ops_metrics
 
     machine.write_async(w, 'foo')
-    assert_equal [1, 1, 0, 1, 1], ops_metrics
+    assert_equal [1, 1, 0, 99, 1], ops_metrics
     machine.snooze
-    assert_equal [0, 0, 0, 2, 0], ops_metrics
+    assert_equal [0, 0, 0, 100, 0], ops_metrics
   ensure
     machine.join(f)
   end

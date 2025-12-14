@@ -1,5 +1,8 @@
 #include "um.h"
 
+#define UM_OP_ALLOC_BATCH_SIZE        256
+#define UM_OP_RESULT_ALLOC_BATCH_SIZE 256
+
 const char * um_op_kind_name(enum um_op_kind kind) {
   switch (kind) {
     case OP_TIMEOUT:            return "OP_TIMEOUT";
@@ -113,7 +116,13 @@ inline struct um_op_result *multishot_result_alloc(struct um *machine) {
     machine->result_freelist = result->next;
     return result;
   }
-  return malloc(sizeof(struct um_op_result));
+
+  struct um_op_result *batch = malloc(sizeof(struct um_op_result) * UM_OP_RESULT_ALLOC_BATCH_SIZE);
+  for (int i = 1; i < (UM_OP_RESULT_ALLOC_BATCH_SIZE - 1); i++) {
+    batch[i].next = &batch[i + 1];
+  }
+  machine->result_freelist = batch + 1;
+  return batch;
 }
 
 inline void multishot_result_free(struct um *machine, struct um_op_result *result) {
@@ -159,7 +168,14 @@ inline struct um_op *um_op_alloc(struct um *machine) {
     machine->metrics.ops_free--;
     return op;
   }
-  return malloc(sizeof(struct um_op));
+
+  struct um_op *batch = malloc(sizeof(struct um_op) * UM_OP_ALLOC_BATCH_SIZE);
+  for (int i = 1; i < (UM_OP_ALLOC_BATCH_SIZE - 1); i++) {
+    batch[i].next = &batch[i + 1];
+  }
+  machine->op_freelist = batch + 1;
+  machine->metrics.ops_free += (UM_OP_ALLOC_BATCH_SIZE - 1);
+  return batch;
 }
 
 inline void um_op_free(struct um *machine, struct um_op *op) {
