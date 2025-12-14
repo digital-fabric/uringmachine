@@ -18,11 +18,11 @@ class MethodCallAuditor
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
 
   def method_missing(sym, *args, &block)
-    ret = @target.send(sym, *args, &block)
-    @calls << ({ sym:, args:, ret:})
-    ret
+    res = @target.send(sym, *args, &block)
+    @calls << ({ sym:, args:, res:})
+    res
   rescue Exception => e
-    @calls << ({ sym:, args:, ret: e})
+    @calls << ({ sym:, args:, res: e})
     raise
   end
 
@@ -210,15 +210,15 @@ class FiberSchedulerTest < UMBaseTest
     fn = "/tmp/um_#{SecureRandom.hex}"
     IO.write(fn, 'foobar')
 
-    ret = nil
+    res = nil
     Fiber.schedule do
       File.open(fn, 'r+') do |f|
-        ret = f.pwrite('baz', 2)
+        res = f.pwrite('baz', 2)
       end
     end
 
     @scheduler.join
-    assert_equal 3, ret
+    assert_equal 3, res
 
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
@@ -624,18 +624,18 @@ class FiberSchedulerTest < UMBaseTest
   end
 
   def test_fiber_scheduler_timeout_after
-    ret = nil
+    res = nil
     Fiber.schedule do
       Timeout.timeout(0.05) do
         sleep 1
       end
-      ret = true
+      res = true
     rescue => e
-      ret = e
+      res = e
     end
     @scheduler.join
     assert_equal 3, machine.metrics[:total_ops]
-    assert_kind_of Timeout::Error, ret
+    assert_kind_of Timeout::Error, res
     assert_equal({
       fiber: 1,
       timeout_after: 1,

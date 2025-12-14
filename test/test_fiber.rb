@@ -85,10 +85,10 @@ class FiberJoinTest < UMBaseTest
       machine.push q, 2
     end
 
-    ret = machine.join(f)
+    res = machine.join(f)
     assert_equal 0, x
     assert_equal 3, machine.shift(q)
-    assert_equal 42, ret
+    assert_equal 42, res
   end
 
   def test_join_multiple
@@ -105,8 +105,8 @@ class FiberJoinTest < UMBaseTest
       :baz
     end
 
-    ret = machine.join(f1, f2, f3)
-    assert_equal [:foo, :bar, :baz], ret
+    res = machine.join(f1, f2, f3)
+    assert_equal [:foo, :bar, :baz], res
   end
 
   def test_join_cross_thread
@@ -124,8 +124,8 @@ class FiberJoinTest < UMBaseTest
 
     f = machine.shift(q)
     assert_kind_of Fiber, f
-    ret = machine.join(f)
-    assert_equal :foo, ret
+    res = machine.join(f)
+    assert_equal :foo, res
   ensure
     t2.join
   end
@@ -163,16 +163,16 @@ class WaitFibersTest < UMBaseTest
       machine.push q, 2
     end
 
-    ret = machine.await_fibers([f])
+    res = machine.await_fibers([f])
     assert_equal 0, x
     assert_equal 3, machine.shift(q)
-    assert_equal 1, ret
+    assert_equal 1, res
 
     done = nil
     f = machine.spin { machine.snooze; done = true }
-    ret = machine.await_fibers(f)
+    res = machine.await_fibers(f)
     assert done
-    assert_equal 1, ret
+    assert_equal 1, res
   end
 
   def test_await_fibers_multiple
@@ -189,8 +189,8 @@ class WaitFibersTest < UMBaseTest
       :baz
     end
 
-    ret = machine.await_fibers([f1, f2, f3])
-    assert_equal 3, ret
+    res = machine.await_fibers([f1, f2, f3])
+    assert_equal 3, res
   end
 
   def test_await_fibers_cross_thread
@@ -208,8 +208,8 @@ class WaitFibersTest < UMBaseTest
 
     f = machine.shift(q)
     assert_kind_of Fiber, f
-    ret = machine.await_fibers(f)
-    assert_equal 1, ret
+    res = machine.await_fibers(f)
+    assert_equal 1, res
   ensure
     t2.join
   end
@@ -219,8 +219,8 @@ class WaitFibersTest < UMBaseTest
       raise "Foobar"
     end
 
-    ret = machine.await_fibers(f)
-    assert_equal 1, ret
+    res = machine.await_fibers(f)
+    assert_equal 1, res
   end
 end
 
