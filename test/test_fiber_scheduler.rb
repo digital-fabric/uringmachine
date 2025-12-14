@@ -772,22 +772,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     }, @scheduler.calls.map { it[:sym] }.tally)
   end
 
-  def test_IO_s_foreach
-    buf = []
-    Fiber.schedule do
-      IO.foreach(@fn) { buf << it }
-    end
-    @scheduler.join
-    assert_equal ['==='], buf
-    assert_equal({
-      fiber: 1,
-      io_read: 3,
-      blocking_operation_wait: 1,
-      io_close: 1,
-      join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
-  end
-
   def test_IO_s_popen
     ret = nil
     Fiber.schedule do

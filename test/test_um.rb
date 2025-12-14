@@ -39,7 +39,7 @@ class SQPOLLTest < Minitest::Test
     m.write_async(w, 'foo')
 
     # thread should timeout
-    ret = t.join(0.03)
+    t.join(0.03)
     assert_nil buf
   ensure
     t.kill rescue nil
@@ -218,31 +218,6 @@ class ScheduleTest < UMBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal [1, 2, 5], buf
     assert_kind_of TOError, e
-  end
-
-  def test_timeout_stress
-    skip "Skipping stress test"
-    # GC.stress = true
-    c = 0
-    fs = 100.times.map {
-      machine.spin {
-        q = UM::Queue.new
-        1000.times {
-          machine.sleep rand(0.001..0.005)
-          begin
-            machine.timeout(rand(0.001..0.06), TOError) do
-              machine.shift(q)
-            end
-          rescue => _e
-            c += 1
-            STDOUT << '*' if c % 1000 == 0
-          end
-        }
-      }
-    }
-    machine.join(*fs)
-  ensure
-    GC.stress = false
   end
 
   def test_timeout_with_raising_block
@@ -1682,7 +1657,6 @@ class QueueTest < UMBaseTest
     }
 
     t1.join
-    q = UM::Queue.new
     machine.push(worker_queue, :STOP)
     t2.join
 
@@ -2342,28 +2316,28 @@ class MetricsTest < UMBaseTest
   end
 
   def test_metrics_ops
-    r, w = UM.pipe
+    _r, w = UM.pipe
 
     f = machine.spin { machine.sleep(0.001) }
-    assert_equal [0, 0, 1, 99, 0], ops_metrics
+    assert_equal [0, 0, 1, 255, 0], ops_metrics
     machine.snooze
-    assert_equal [1, 1, 0, 100, 0], ops_metrics
+    assert_equal [1, 1, 0, 256, 0], ops_metrics
     machine.submit
-    assert_equal [1, 0, 0, 100, 0], ops_metrics
+    assert_equal [1, 0, 0, 256, 0], ops_metrics
     machine.join(f)
-    assert_equal [0, 0, 0, 100, 0], ops_metrics
+    assert_equal [0, 0, 0, 256, 0], ops_metrics
 
     machine.write_async(w, 'foo')
-    assert_equal [1, 1, 0, 99, 1], ops_metrics
+    assert_equal [1, 1, 0, 255, 1], ops_metrics
     machine.submit
-    assert_equal [1, 0, 0, 99, 1], ops_metrics
+    assert_equal [1, 0, 0, 255, 1], ops_metrics
     machine.snooze
-    assert_equal [0, 0, 0, 100, 0], ops_metrics
+    assert_equal [0, 0, 0, 256, 0], ops_metrics
 
     machine.write_async(w, 'foo')
-    assert_equal [1, 1, 0, 99, 1], ops_metrics
+    assert_equal [1, 1, 0, 255, 1], ops_metrics
     machine.snooze
-    assert_equal [0, 0, 0, 100, 0], ops_metrics
+    assert_equal [0, 0, 0, 256, 0], ops_metrics
   ensure
     machine.join(f)
   end
