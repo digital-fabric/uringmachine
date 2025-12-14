@@ -437,5 +437,4 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, SIGUSR2);
   DEF_CONST_INT(mod, SIGPWR);
   DEF_CONST_INT(mod, SIGPOLL);
-
 }
