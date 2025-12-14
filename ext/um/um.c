@@ -562,6 +562,13 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
   return ret;
 }
 
+inline struct iovec *alloc_iovecs_for_writing(int argc, VALUE *argv) {
+  struct iovec *iovecs = malloc(sizeof(struct iovec) * argc);
+  for (int i = 0; i < argc; i++)
+    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
+  return iovecs;
+}
+
 VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv) {
   __u64 file_offset = -1;
   if (TYPE(argv[argc - 1]) == T_FIXNUM) {
@@ -569,20 +576,21 @@ VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv) {
     argc--;
   }
 
-  struct iovec *iovecs = alloca(sizeof(struct iovec) * argc);
-  for (int i = 0; i < argc; i++)
-    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
-
+  struct iovec *iovecs = alloc_iovecs_for_writing(argc, argv);
   struct um_op op;
   um_prep_op(machine, &op, OP_WRITEV, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
-
   io_uring_prep_writev(sqe, fd, iovecs, argc, file_offset);
 
   VALUE ret = um_yield(machine);
 
-  if (um_check_completion(machine, &op))
+  int completed = um_op_completed_p(&op);
+  if (unlikely(!completed)) um_cancel_and_wait(machine, &op);
+  free(iovecs);
+  if (likely(completed)) {
+    um_raise_on_error_result(op.result.res);
     ret = INT2NUM(op.result.res);
+  }
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
@@ -701,16 +709,15 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
+  // int ret = write(fd, base, len);
+  // return UINT2NUM(ret);
 }
 
 // for some reason we don't get this define from liburing/io_uring.h
 #define IORING_SEND_VECTORIZED		(1U << 5)
 
 VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv) {
-  struct iovec *iovecs = alloca(sizeof(struct iovec) * argc);
-  for (int i = 0; i < argc; i++)
-    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
-
+  struct iovec *iovecs = alloc_iovecs_for_writing(argc, argv);
   struct um_op op;
   um_prep_op(machine, &op, OP_SEND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
@@ -720,8 +727,13 @@ VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv) {
 
   VALUE ret = um_yield(machine);
 
-  if (um_check_completion(machine, &op))
+  int completed = um_op_completed_p(&op);
+  if (unlikely(!completed)) um_cancel_and_wait(machine, &op);
+  free(iovecs);
+  if (likely(completed)) {
+    um_raise_on_error_result(op.result.res);
     ret = INT2NUM(op.result.res);
+  }
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
