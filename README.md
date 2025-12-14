@@ -106,7 +106,7 @@ machine.write(stdout_fd, "Hello, world!\n")
 loop do
   machine.write(stdout_fd, "Say something: ")
   buf = +''
-  res = machine.read(stdin_fd, buf, 8192)
+  ret = machine.read(stdin_fd, buf, 8192)
   if res > 0
     machine.write(stdout_fd, "You said: #{buf}")
   else

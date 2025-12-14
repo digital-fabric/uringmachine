@@ -289,11 +289,11 @@ class SleepTest < UMBaseTest
   def test_sleep
     t0 = monotonic_clock
     assert_equal 0, machine.metrics[:ops_pending]
-    res = machine.sleep(0.1)
+    ret = machine.sleep(0.1)
     assert_equal 0, machine.metrics[:ops_pending]
     t1 = monotonic_clock
     assert_in_range 0.09..0.13, t1 - t0
-    assert_equal 0.1, res
+    assert_equal 0.1, ret
   end
 
   class C; end
@@ -417,20 +417,20 @@ class ReadTest < UMBaseTest
 
     buf = +''
     assert_equal 0, machine.metrics[:ops_pending]
-    res = machine.read(r.fileno, buf, 3)
+    ret = machine.read(r.fileno, buf, 3)
     assert_equal 0, machine.metrics[:ops_pending]
-    assert_equal 3, res
+    assert_equal 3, ret
     assert_equal 'foo', buf
 
     buf = +''
-    res = machine.read(r.fileno, buf, 128)
-    assert_equal 3, res
+    ret = machine.read(r.fileno, buf, 128)
+    assert_equal 3, ret
     assert_equal 'bar', buf
 
     w.close
     buf = +''
-    res = machine.read(r.fileno, buf, 128)
-    assert_equal 0, res
+    ret = machine.read(r.fileno, buf, 128)
+    assert_equal 0, ret
     assert_equal '', buf
   end
 
@@ -498,14 +498,14 @@ class ReadTest < UMBaseTest
     machine.write(w, 'foobar')
 
     read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 3)
-    assert_equal 3, res
+    ret = machine.read(r, read_buffer, 3)
+    assert_equal 3, ret
     assert_equal 'foo', read_buffer.get_string(0, 3)
 
     machine.close(w)
 
-    res = machine.read(r, read_buffer)
-    assert_equal 3, res
+    ret = machine.read(r, read_buffer)
+    assert_equal 3, ret
     assert_equal 'bar', read_buffer.get_string(0, 3)
   end
 
@@ -515,20 +515,20 @@ class ReadTest < UMBaseTest
     machine.close(w)
 
     read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 6)
-    assert_equal 6, res
+    ret = machine.read(r, read_buffer, 6)
+    assert_equal 6, ret
     assert_equal 6, read_buffer.size
-    assert_equal 'foobar', read_buffer.get_string(0, res)
+    assert_equal 'foobar', read_buffer.get_string(0, ret)
 
     r, w = UM.pipe
     machine.write(w, 'foobar')
     machine.close(w)
 
     read_buffer = IO::Buffer.new(3)
-    res = machine.read(r, read_buffer, 128, -1)
-    assert_equal 6, res
+    ret = machine.read(r, read_buffer, 128, -1)
+    assert_equal 6, ret
     assert_equal 131, read_buffer.size
-    assert_equal 'foobar', read_buffer.get_string(3, res)
+    assert_equal 'foobar', read_buffer.get_string(3, ret)
   end
 
   def test_read_invalid_buffer
@@ -689,13 +689,13 @@ class WriteTest < UMBaseTest
     r, w = IO.pipe
 
     assert_equal 0, machine.metrics[:ops_pending]
-    res = machine.write(w.fileno, 'foo')
-    assert_equal 3, res
+    ret = machine.write(w.fileno, 'foo')
+    assert_equal 3, ret
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 'foo', r.readpartial(3)
 
-    res = machine.write(w.fileno, 'bar', 2)
-    assert_equal 2, res
+    ret = machine.write(w.fileno, 'bar', 2)
+    assert_equal 2, ret
     assert_equal 'ba', r.readpartial(3)
   end
 
@@ -712,16 +712,16 @@ class WriteTest < UMBaseTest
   def test_write_zero_length
     r, w = IO.pipe
 
-    res = machine.write(w.fileno, '')
-    assert_equal 0, res
+    ret = machine.write(w.fileno, '')
+    assert_equal 0, ret
 
-    res = machine.write(w.fileno, 'bar', 0)
-    assert_equal 0, res
+    ret = machine.write(w.fileno, 'bar', 0)
+    assert_equal 0, ret
 
     buf = IO::Buffer.new(3)
     buf.set_string('baz')
-    res = machine.write(w.fileno, buf, 0, 0)
-    assert_equal 0, res
+    ret = machine.write(w.fileno, buf, 0, 0)
+    assert_equal 0, ret
 
     w.close
     assert_equal '', r.read
@@ -794,13 +794,13 @@ class WritevTest < UMBaseTest
     r, w = IO.pipe
 
     assert_equal 0, machine.metrics[:ops_pending]
-    res = machine.writev(w.fileno, 'foo', 'bar', 'baz')
-    assert_equal 9, res
+    ret = machine.writev(w.fileno, 'foo', 'bar', 'baz')
+    assert_equal 9, ret
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 'foobarbaz', r.readpartial(9)
 
-    res = machine.writev(w.fileno, 'oofoof', 'rabrab')
-    assert_equal 12, res
+    ret = machine.writev(w.fileno, 'oofoof', 'rabrab')
+    assert_equal 12, ret
     assert_equal 'oofoofrabrab', r.readpartial(12)
   end
 
@@ -817,16 +817,16 @@ class WritevTest < UMBaseTest
   def test_writev_zero_length
     r, w = IO.pipe
 
-    res = machine.write(w.fileno, '')
-    assert_equal 0, res
+    ret = machine.write(w.fileno, '')
+    assert_equal 0, ret
 
-    res = machine.writev(w.fileno, '', '')
-    assert_equal 0, res
+    ret = machine.writev(w.fileno, '', '')
+    assert_equal 0, ret
 
     buf1 = IO::Buffer.new(0)
     buf2 = IO::Buffer.new(0)
-    res = machine.writev(w.fileno, buf1, buf2)
-    assert_equal 0, res
+    ret = machine.writev(w.fileno, buf1, buf2)
+    assert_equal 0, ret
 
     w.close
     assert_equal '', r.read
@@ -998,27 +998,27 @@ end
 class ShutdownTest < UMBaseTest
   def test_shutdown
     c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    res = @machine.send(c_fd, 'abc', 3, 0)
-    assert_equal 3, res
+    ret = @machine.send(c_fd, 'abc', 3, 0)
+    assert_equal 3, ret
 
     buf = +''
-    res = @machine.recv(s_fd, buf, 256, 0)
-    assert_equal 3, res
+    ret = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 3, ret
     assert_equal 'abc', buf
 
-    res = @machine.shutdown(c_fd, UM::SHUT_WR)
-    assert_equal 0, res
+    ret = @machine.shutdown(c_fd, UM::SHUT_WR)
+    assert_equal 0, ret
 
     assert_raises(Errno::EPIPE) { @machine.send(c_fd, 'abc', 3, 0) }
 
-    res = @machine.shutdown(s_fd, UM::SHUT_RD)
-    assert_equal 0, res
+    ret = @machine.shutdown(s_fd, UM::SHUT_RD)
+    assert_equal 0, ret
 
-    res = @machine.recv(s_fd, buf, 256, 0)
-    assert_equal 0, res
+    ret = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 0, ret
 
-    res = @machine.shutdown(c_fd, UM::SHUT_RDWR)
-    assert_equal 0, res
+    ret = @machine.shutdown(c_fd, UM::SHUT_RDWR)
+    assert_equal 0, ret
 
     assert_raises(Errno::EINVAL) { @machine.shutdown(c_fd, -9999) }
   ensure
@@ -1030,28 +1030,28 @@ end
 class ShutdownAsyncTest < UMBaseTest
   def test_shutdown_async
     c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    res = @machine.send(c_fd, 'abc', 3, 0)
-    assert_equal 3, res
+    ret = @machine.send(c_fd, 'abc', 3, 0)
+    assert_equal 3, ret
 
     buf = +''
-    res = @machine.recv(s_fd, buf, 256, 0)
-    assert_equal 3, res
+    ret = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 3, ret
     assert_equal 'abc', buf
 
-    res = @machine.shutdown_async(c_fd, UM::SHUT_WR)
-    assert_equal c_fd, res
+    ret = @machine.shutdown_async(c_fd, UM::SHUT_WR)
+    assert_equal c_fd, ret
 
     machine.sleep(0.01)
     assert_raises(Errno::EPIPE) { @machine.send(c_fd, 'abc', 3, 0) }
 
-    res = @machine.shutdown_async(s_fd, UM::SHUT_RD)
-    assert_equal s_fd, res
+    ret = @machine.shutdown_async(s_fd, UM::SHUT_RD)
+    assert_equal s_fd, ret
 
-    res = @machine.recv(s_fd, buf, 256, 0)
-    assert_equal 0, res
+    ret = @machine.recv(s_fd, buf, 256, 0)
+    assert_equal 0, ret
 
-    res = @machine.shutdown_async(c_fd, UM::SHUT_RDWR)
-    assert_equal c_fd, res
+    ret = @machine.shutdown_async(c_fd, UM::SHUT_RDWR)
+    assert_equal c_fd, ret
   ensure
     @machine.close(c_fd)
     @machine.close(s_fd)
@@ -1178,13 +1178,13 @@ class ConnectTest < UMBaseTest
 
     fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     assert_equal 0, machine.metrics[:ops_pending]
-    res = machine.connect(fd, '127.0.0.1', @port)
+    ret = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, machine.metrics[:ops_pending]
-    assert_equal 0, res
+    assert_equal 0, ret
 
     buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 6, res
+    ret = machine.read(fd, buf, 42)
+    assert_equal 6, ret
     assert_equal 'foobar', buf
   ensure
     t&.kill
@@ -1201,107 +1201,51 @@ end
 class SendTest < UMBaseTest
   def setup
     super
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
   end
 
   def teardown
-    @server&.close
+    @machine.close(@s1)
+    @machine.close(@s2)
     super
   end
 
   def test_send
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str}")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    res = machine.send(fd, 'foobar', 6, 0)
-    assert_equal 6, res
+    ret = machine.send(@s1, 'foobar', 6, 0)
+    assert_equal 6, ret
 
     buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 16, res
-    assert_equal 'You said: foobar', buf
-  ensure
-    t&.kill
+    ret = machine.read(@s2, buf, 42)
+    assert_equal 6, ret
+    assert_equal 'foobar', buf
   end
 
   def test_send_io_buffer
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
-
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
     buffer = IO::Buffer.new(6)
     buffer.set_string('foobar')
-    res = machine.send(fd, buffer, 6, 0)
-    assert_equal 6, res
+    ret = machine.send(@s1, buffer, 6, 0)
+    assert_equal 6, ret
 
     buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 20, res
-    assert_equal 'You said: foobar (6)', buf
-  ensure
-    t&.kill
-    @server&.close
+    ret = machine.read(@s2, buf, 42)
+    assert_equal 6, ret
+    assert_equal 'foobar', buf
   end
 
   def test_send_io_buffer_negative_len
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
     buffer = IO::Buffer.new(6)
     buffer.set_string('foobar')
-    res = machine.send(fd, buffer, -1, 0)
-    assert_equal 6, res
+    ret = machine.send(@s1, buffer, -1, 0)
+    assert_equal 6, ret
 
     buf = +''
-    res = machine.read(fd, buf, 42)
-    assert_equal 20, res
-    assert_equal 'You said: foobar (6)', buf
-  ensure
-    t&.kill
+    ret = machine.read(@s2, buf, 42)
+    assert_equal 6, ret
+    assert_equal 'foobar', buf
   end
 
   def test_send_invalid_buffer
-    t = Thread.new do
-      conn = @server.accept
-      str = conn.readpartial(42)
-      conn.write("You said: #{str} (#{str.bytesize})")
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
-    assert_raises(UM::Error) { machine.send(fd, [], -1, 0) }
-  ensure
-    t&.kill
+    assert_raises(UM::Error) { machine.send(@s1, [], -1, 0) }
   end
 end
 
@@ -1355,82 +1299,56 @@ end
 class RecvTest < UMBaseTest
   def setup
     super
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
   end
 
   def teardown
-    @server&.close
+    @machine.close(@s1) rescue nil
+    @machine.close(@s2)
     super
   end
 
   def test_recv
-    t = Thread.new do
-      conn = @server.accept
-      conn.write('foobar')
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
-
+    machine.write(@s1, 'foobar')
+    
     buf = +''
-    res = machine.recv(fd, buf, 42, 0)
-    assert_equal 6, res
+    ret = machine.recv(@s2, buf, 42, 0)
+    assert_equal 6, ret
     assert_equal 'foobar', buf
-  ensure
-    t&.kill
   end
 
   def test_recv_io_buffer
-    t = Thread.new do
-      conn = @server.accept
-      conn.write('foobar')
-      sleep
-    end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
+    machine.write(@s1, 'foobar')
 
     buf = IO::Buffer.new(12)
-    res = machine.recv(fd, buf, 12, 0)
-    assert_equal 6, res
+    ret = machine.recv(@s2, buf, 12, 0)
+    assert_equal 6, ret
     assert_equal 'foobar', buf.get_string(0, 6)
-  ensure
-    t&.kill
   end
 end
 
 class RecvEachTest < UMBaseTest
   def setup
     super
-    @port = assign_port
-    @server = TCPServer.open('127.0.0.1', @port)
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
   end
 
   def teardown
-    @server&.close
+    @machine.close(@s1) rescue nil
+    @machine.close(@s2)
     super
   end
 
   def test_recv_each
-    t = Thread.new do
-      conn = @server.accept
-      conn.write('abc')
-      sleep 0.01
-      conn.write('def')
-      sleep 0.01
-      conn.write('ghi')
-      sleep 0.01
-      conn.close
-      sleep
+    f = machine.spin do
+      machine.write(@s1, 'abc')
+      machine.sleep 0.01
+      machine.write(@s1, 'def')
+      machine.sleep 0.01
+      machine.write(@s1, 'ghi')
+      machine.sleep 0.01
+      machine.close(@s1)
     end
-
-    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-    res = machine.connect(fd, '127.0.0.1', @port)
-    assert_equal 0, res
 
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -1440,12 +1358,12 @@ class RecvEachTest < UMBaseTest
 
     bufs = []
 
-    machine.recv_each(fd, bgid, 0) do |buf|
+    machine.recv_each(@s2, bgid, 0) do |buf|
       bufs << buf
     end
     assert_equal ['abc', 'def', 'ghi'], bufs
   ensure
-    t&.kill
+    machine.join(f)
   end
 end
 
@@ -1458,8 +1376,8 @@ class BindTest < UMBaseTest
   def test_bind
     assert_equal 0, machine.metrics[:ops_pending]
     fd = machine.socket(UM::AF_INET, UM::SOCK_DGRAM, 0, 0)
-    res = machine.bind(fd, '127.0.0.1', @port)
-    assert_equal 0, res
+    ret = machine.bind(fd, '127.0.0.1', @port)
+    assert_equal 0, ret
     assert_equal 0, machine.metrics[:ops_pending]
 
     peer = UDPSocket.new
@@ -1467,8 +1385,8 @@ class BindTest < UMBaseTest
     peer.send 'foo', 0
 
     buf = +''
-    res = machine.recv(fd, buf, 8192, 0)
-    assert_equal 3, res
+    ret = machine.recv(fd, buf, 8192, 0)
+    assert_equal 3, ret
     assert_equal 'foo', buf
   end
 
@@ -1492,8 +1410,8 @@ class ListenTest < UMBaseTest
   def test_listen
     fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
     machine.bind(fd, '127.0.0.1', @port)
-    res = machine.listen(fd, 5)
-    assert_equal 0, res
+    ret = machine.listen(fd, 5)
+    assert_equal 0, ret
     assert_equal 0, machine.metrics[:ops_pending]
 
     conn = nil
@@ -1527,8 +1445,8 @@ class GetSetSockOptTest < UMBaseTest
     reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
     assert_equal 0, reuseaddr
 
-    res = machine.setsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
-    assert_equal 0, res
+    ret = machine.setsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
+    assert_equal 0, ret
 
     reuseaddr = machine.getsockopt(fd, UM::SOL_SOCKET, UM::SO_REUSEADDR)
     assert_equal 1, reuseaddr
@@ -1766,8 +1684,8 @@ class QueueTest < UMBaseTest
       (1..10).each {
         q = UM::Queue.new
         m.push(worker_queue, [q, it])
-        res = m.shift(q)
-        buf << res
+        ret = m.shift(q)
+        buf << ret
       }
     }
 
@@ -1777,8 +1695,8 @@ class QueueTest < UMBaseTest
         q, v = m.shift(worker_queue)
         break if q == :STOP
 
-        res = v * 10
-        m.push(q, res)
+        ret = v * 10
+        m.push(q, ret)
       end
     }
 
@@ -1815,13 +1733,13 @@ class OpenTest < UMBaseTest
   end
 
   def test_open_with_block
-    res = machine.open(@fn, UM::O_CREAT | UM::O_WRONLY) do |fd|
+    ret = machine.open(@fn, UM::O_CREAT | UM::O_WRONLY) do |fd|
       machine.write(fd, 'bar')
       fd
     end
 
-    assert_kind_of Integer, res
-    assert_raises(Errno::EBADF) { machine.close(res) }
+    assert_kind_of Integer, ret
+    assert_raises(Errno::EBADF) { machine.close(ret) }
     assert_equal 'bar', IO.read(@fn)
   end
 
@@ -2417,9 +2335,9 @@ class MetricsTest < UMBaseTest
     machine.write_async(w, 'foo')
     assert_equal 1, machine.metrics[:total_waits]
 
-    res = machine.read(r, +'', 3)
+    ret = machine.read(r, +'', 3)
     assert_equal 2, machine.metrics[:total_waits]
-    assert_equal 3, res
+    assert_equal 3, ret
 
     machine.close_async(w)
     assert_equal 2, machine.metrics[:total_waits]
