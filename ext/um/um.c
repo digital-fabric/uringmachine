@@ -22,7 +22,7 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
-  RB_OBJ_WRITE(self, &machine->pending_fibers, rb_hash_new());
+  RB_OBJ_WRITE(self, &machine->pending_fibers, rb_set_new());
 
   machine->size = (size > 0) ? size : DEFAULT_SIZE;
   machine->sqpoll_mode = !!sqpoll_timeout_msec;
@@ -370,9 +370,9 @@ inline VALUE um_switch(struct um *machine) {
 
 inline VALUE um_yield(struct um *machine) {
   VALUE fiber = rb_fiber_current();
-  rb_hash_aset(machine->pending_fibers, fiber, Qtrue);
+  rb_set_add(machine->pending_fibers, fiber);
   VALUE ret = um_switch(machine);
-  rb_hash_delete(machine->pending_fibers, fiber);
+  rb_set_delete(machine->pending_fibers, fiber);
   return ret;
 }
 
@@ -385,11 +385,11 @@ inline void um_cancel_and_wait(struct um *machine, struct um_op *op) {
   um_cancel_op(machine, op);
 
   VALUE fiber = rb_fiber_current();
-  rb_hash_aset(machine->pending_fibers, fiber, Qtrue);
+  rb_set_add(machine->pending_fibers, fiber);
   while (!um_op_completed_p(op)) {
     um_switch(machine);
   }
-  rb_hash_delete(machine->pending_fibers, fiber);
+  rb_set_delete(machine->pending_fibers, fiber);
 }
 
 inline int um_check_completion(struct um *machine, struct um_op *op) {
@@ -1159,8 +1159,6 @@ VALUE multishot_complete(VALUE arg) {
 
   if (ctx->read_buf)
     free(ctx->read_buf);
-
-  rb_hash_delete(ctx->machine->pending_fibers, ctx->op->fiber);
 
   return Qnil;
 }
