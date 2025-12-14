@@ -13,23 +13,7 @@ require 'uringmachine'
 
 @machine = UM.new
 
-make_socket_pair = -> do
-  port = 10000 + rand(30000)
-  server_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-  @machine.setsockopt(server_fd, UM::SOL_SOCKET, UM::SO_REUSEADDR, true)
-  @machine.bind(server_fd, '127.0.0.1', port)
-  @machine.listen(server_fd, UM::SOMAXCONN)
-
-  client_conn_fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
-  @machine.connect(client_conn_fd, '127.0.0.1', port)
-
-  server_conn_fd = @machine.accept(server_fd)
-
-  @machine.close(server_fd)
-  [client_conn_fd, server_conn_fd]
-end
-
-@client_fd, @server_fd = make_socket_pair.()
+@client_fd, @server_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
 
 @read_buf = +''
 @read_fiber = @machine.spin do
@@ -38,12 +22,10 @@ end
   end
 end
 
-STR_COUNT = ARGV[0]&.to_i || 3
-STR_SIZE = ARGV[1]&.to_i || 100
+@parts = ['1' * 256, '2' * (1 << 14), '3' * 256]
+@total_len = @parts.map(&:bytesize).reduce(:+)
 
-@parts = ['*' * STR_SIZE] * STR_COUNT
-
-@server_io = IO.new(@server_fd)
+@server_io = IO.for_fd(@server_fd)
 @server_io.sync = true
 def io_write
   @server_io.write(*@parts)
@@ -61,9 +43,18 @@ def um_write
   end
 end
 
+def um_writev
+  len = @machine.writev(@server_fd, *@parts)
+  raise if len < @total_len 
+end
+
 def um_send
   str = @parts.join
   @machine.send(@server_fd, str, str.bytesize, UM::MSG_WAITALL)
+end
+
+def um_sendv
+  @machine.sendv(@server_fd, *@parts)
 end
 
 @bgid = @machine.setup_buffer_ring(0, 8)
@@ -71,12 +62,12 @@ def um_send_bundle
   @machine.send_bundle(@server_fd, @bgid, @parts)
 end
 
-p(STR_COUNT:, STR_SIZE:)
-
 Benchmark.ips do |x|
   x.report('IO#write')       { io_write }
   x.report('UM#write')       { um_write }
+  x.report('UM#writev')      { um_writev }
   x.report('UM#send')        { um_send }
+  x.report('UM#sendv')       { um_sendv }
   x.report('UM#send_bundle') { um_send_bundle }
 
   x.compare!(order: :baseline)

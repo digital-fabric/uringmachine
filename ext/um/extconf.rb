@@ -45,6 +45,10 @@ if !find_header 'liburing.h', File.join(liburing_path, 'src/include')
   raise "Couldn't find liburing.h"
 end
 
+if !find_header 'liburing/io_uring.h', File.join(liburing_path, 'src/include')
+  raise "Couldn't find liburing/io_uring.h"
+end
+
 if !find_library('uring', nil, File.join(liburing_path, 'src'))
   raise "Couldn't find liburing.a"
 end

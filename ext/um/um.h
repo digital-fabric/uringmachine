@@ -43,6 +43,7 @@ enum um_op_kind {
   OP_OPEN,
   OP_READ,
   OP_WRITE,
+  OP_WRITEV,
   OP_WRITE_ASYNC,
   OP_CLOSE,
   OP_CLOSE_ASYNC,
@@ -51,6 +52,7 @@ enum um_op_kind {
   OP_ACCEPT,
   OP_RECV,
   OP_SEND,
+  OP_SENDV,
   OP_SEND_BUNDLE,
   OP_SOCKET,
   OP_CONNECT,
@@ -288,6 +290,7 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t b
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
+VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv);
 VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
 VALUE um_close(struct um *machine, int fd);
 VALUE um_close_async(struct um *machine, int fd);
@@ -307,6 +310,7 @@ VALUE um_accept_each(struct um *machine, int fd);
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags);
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags);
+VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv);
 VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags);
 VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags);

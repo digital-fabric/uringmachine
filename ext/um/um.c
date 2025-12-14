@@ -3,6 +3,7 @@
 #include <ruby/thread.h>
 #include <assert.h>
 #include <poll.h>
+#include <liburing/io_uring.h>
 
 #define DEFAULT_SIZE 4096
 
@@ -561,6 +562,33 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
   return ret;
 }
 
+VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv) {
+  __u64 file_offset = -1;
+  if (TYPE(argv[argc - 1]) == T_FIXNUM) {
+    file_offset = NUM2UINT(argv[argc - 1]);
+    argc--;
+  }
+
+  struct iovec *iovecs = alloca(sizeof(struct iovec) * argc);
+  for (int i = 0; i < argc; i++)
+    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
+
+  struct um_op op;
+  um_prep_op(machine, &op, OP_WRITEV, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+  io_uring_prep_writev(sqe, fd, iovecs, argc, file_offset);
+
+  VALUE ret = um_yield(machine);
+
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return ret;
+}
+
 VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset) {
   const void *base;
   size_t size;
@@ -664,6 +692,31 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
   if ((len == (size_t)-1) || (len > size)) len = size;
 
   io_uring_prep_send(sqe, fd, base, len, flags);
+
+  VALUE ret = um_yield(machine);
+
+  if (um_check_completion(machine, &op))
+    ret = INT2NUM(op.result.res);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return ret;
+}
+
+// for some reason we don't get this define from liburing/io_uring.h
+#define IORING_SEND_VECTORIZED		(1U << 5)
+
+VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv) {
+  struct iovec *iovecs = alloca(sizeof(struct iovec) * argc);
+  for (int i = 0; i < argc; i++)
+    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
+
+  struct um_op op;
+  um_prep_op(machine, &op, OP_SEND, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+
+  io_uring_prep_send(sqe, fd, iovecs, argc, MSG_WAITALL);
+  sqe->ioprio |= IORING_SEND_VECTORIZED;
 
   VALUE ret = um_yield(machine);
 

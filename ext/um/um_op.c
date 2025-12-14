@@ -11,6 +11,7 @@ const char * um_op_kind_name(enum um_op_kind kind) {
     case OP_OPEN:               return "OP_OPEN";
     case OP_READ:               return "OP_READ";
     case OP_WRITE:              return "OP_WRITE";
+    case OP_WRITEV:             return "OP_WRITEV";
     case OP_WRITE_ASYNC:        return "OP_WRITE_ASYNC";
     case OP_CLOSE:              return "OP_CLOSE";
     case OP_CLOSE_ASYNC:        return "OP_CLOSE_ASYNC";
@@ -18,6 +19,7 @@ const char * um_op_kind_name(enum um_op_kind kind) {
     case OP_ACCEPT:             return "OP_ACCEPT";
     case OP_RECV:               return "OP_RECV";
     case OP_SEND:               return "OP_SEND";
+    case OP_SENDV:              return "OP_SENDV";
     case OP_SEND_BUNDLE:        return "OP_SEND_BUNDLE";
     case OP_SOCKET:             return "OP_SOCKET";
     case OP_CONNECT:            return "OP_CONNECT";
