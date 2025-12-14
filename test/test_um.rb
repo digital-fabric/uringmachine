@@ -221,7 +221,7 @@ class ScheduleTest < UMBaseTest
   end
 
   def test_timeout_stress
-    skip
+    skip "Skipping stress test"
     # GC.stress = true
     c = 0
     fs = 100.times.map {
@@ -580,8 +580,6 @@ end
 
 class ReadEachTest < UMBaseTest
   def test_read_each
-    skip if UringMachine.kernel_version < 607
-
     r, w = IO.pipe
     bufs = []
     bgid = machine.setup_buffer_ring(4096, 1024)
@@ -610,8 +608,6 @@ class ReadEachTest < UMBaseTest
 
   # send once and close write fd
   def test_read_each_raising_1
-    skip if UringMachine.kernel_version < 607
-
     r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -634,8 +630,6 @@ class ReadEachTest < UMBaseTest
 
   # send once and leave write fd open
   def test_read_each_raising_2
-    skip if UringMachine.kernel_version < 607
-
     r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -659,8 +653,6 @@ class ReadEachTest < UMBaseTest
 
   # send twice
   def test_read_each_raising_3
-    skip if UringMachine.kernel_version < 607
-
     r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
     assert_equal 0, bgid
@@ -684,8 +676,6 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_break
-    skip if UringMachine.kernel_version < 607
-
     r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
@@ -710,8 +700,6 @@ class ReadEachTest < UMBaseTest
   end
 
   def test_read_each_bad_file
-    skip if UringMachine.kernel_version < 607
-
     _r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
@@ -2019,7 +2007,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     msg = 'hello from child'
     _rfd, wfd = UM.pipe
@@ -2039,7 +2027,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status_invalid_pid
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     assert_raises(Errno::ECHILD) {
       machine.waitid_status(UM::P_PID, Process.pid + 1, UM::WEXITED)
@@ -2047,7 +2035,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status_invalid_idtype
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     assert_raises(Errno::EINVAL) {
       machine.waitid_status(1234, 0, UM::WEXITED)
@@ -2055,7 +2043,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status_invalid_options
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     assert_raises(Errno::EINVAL) {
       machine.waitid_status(P_ALL, 0, 1234)
@@ -2063,7 +2051,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status_P_ALL
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     msg = 'hello from child'
     _rfd, wfd = UM.pipe
@@ -2083,7 +2071,7 @@ class WaitidTest < UMBaseTest
   end
 
   def test_waitid_status_P_PGID
-    skip if !machine.respond_to?(:waitid_status)
+    skip "waitid_status not available" if !machine.respond_to?(:waitid_status)
 
     msg = 'hello from child'
     _rfd, wfd = UM.pipe
@@ -2198,8 +2186,6 @@ class SendBundleTest < UMBaseTest
   end
 
   def test_send_bundle_splat
-    skip if UringMachine.kernel_version < 610
-
     bgid = machine.setup_buffer_ring(0, 8)
     assert_equal 0, bgid
 
@@ -2216,8 +2202,6 @@ class SendBundleTest < UMBaseTest
   end
 
   def test_send_bundle_array
-    skip if UringMachine.kernel_version < 610
-
     bgid = machine.setup_buffer_ring(0, 8)
     assert_equal 0, bgid
 
@@ -2234,8 +2218,6 @@ class SendBundleTest < UMBaseTest
   end
 
   def test_send_bundle_non_strings
-    skip if UringMachine.kernel_version < 610
-
     bgid = machine.setup_buffer_ring(0, 8)
     assert_equal 0, bgid
 
