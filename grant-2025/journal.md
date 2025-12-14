@@ -55,7 +55,7 @@ Pidfds eliminate race conditions, improve cross-thread safety, and make process
 management reliably asynchronous. This enables safer job-runners, supervisors,
 and async orchestration patterns in Ruby.
 
-4. Proper fork support for Fiber Scheduler (Fiber::Scheduler#process_fork)
+4. [v] Proper fork support for Fiber Scheduler (Fiber::Scheduler#process_fork)
 
 Summary:
 
@@ -68,7 +68,7 @@ fork + async currently work inconsistently. This project makes forking
 predictable, allowing libraries and apps to do post-fork setup (e.g., reconnect
 I/O, restart loops) correctly and safely.
 
-5. Async-aware IO#close via io_uring prep_close + scheduler hook
+5. [v] Async-aware IO#close via io_uring prep_close + scheduler hook
 
 Summary:
 

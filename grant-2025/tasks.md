@@ -24,8 +24,13 @@
     - [ ] max fiber switches before submitting unsubmitted SQEs
     - [ ] measure switches since last submitting / last CQE processing
 
-  - [ ] Add support for using IO::Buffer in association with io_uring registered
-    buffers / buffer rings
+  - [ ] Better buffer management buffer rings
+    - [v] Add `UM#sendv` method (see below)
+    - [v] Benchmark `#sendv` vs `#send_bundle` (in concurrent situation)
+    - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
+    - [ ] Support for `IO::Buffer`? How's the API gonna look like?
+    - [ ] Some higher-level abstraction for managing a *pool* of buffer rings
+
   - [ ] Add some way to measure fiber CPU time.
         https://github.com/socketry/async/issues/428
 
@@ -113,16 +118,6 @@
           N groups where each group has a pair of reader / writer to a socketpair
 
     - [v] Postgres test
-
-    - [ ] Measure CPU (thread) time usage for above examples
-
-        - run each version 1M times
-        - measure total real time, total CPU time
-
-        ```ruby
-        real_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        cpu_time = Process.clock_gettime(Process::CLOCK_THREAD_CPUTIME_ID)
-        ```
 
 - [ ] Ruby Fiber::Scheduler interface
   - [v] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.

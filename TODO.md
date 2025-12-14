@@ -10,6 +10,20 @@ machine.read_each(fd) { |str| ... }
 machine.read_each(fd, io_buffer: true) { |iobuff, len| ... }
 ```
 
+## write/send multiple buffers at once
+
+This is done as vectored IO:
+
+```ruby
+machine.writev(fd, buf1, buf2, buf3)
+
+# with optional file offset:
+machine.writev(fd, buf1, buf2, buf3, 0)
+
+# for the moment it won't take flags
+machine.sendv(fd, buf1, buf2, buf3)
+```
+
 ## useful concurrency tools
 
 - debounce
@@ -31,10 +45,8 @@ machine.read_each(fd, io_buffer: true) { |iobuff, len| ... }
   - [v] machine.periodically(interval) { ... }
   - [ ] machine.prep_timeout_multishot(interval)
 
-- writev
 - splice / - tee
 - sendto
-- sendv (using `IORING_SEND_VECTORIZED`, see `io_uring_prep_send` manpage)
 - recvfrom
 - poll_multishot
 - fsync
