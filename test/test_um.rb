@@ -804,6 +804,83 @@ class WritevTest < UMBaseTest
     assert_equal 'oofoofrabrab', r.readpartial(12)
   end
 
+  def test_writev_incomplete
+    r, w = UM.pipe
+    strs = ['1' * 256, '2' * 30000, '3' * 256]
+    total_len = strs.map(&:bytesize).reduce(:+)
+
+    prelim_len = (65536 - 3);
+    prelim_msg = '*' * prelim_len
+    machine.write(w, prelim_msg)
+
+    reads = []
+    f = machine.spin {
+      loop {
+        buf = +''
+        res = machine.read(r, buf, 8192)
+        break if res == 0
+        
+        reads << buf
+      }
+    }
+
+    res = machine.writev(w, *strs)
+    assert_equal total_len, res
+
+    machine.close(w)
+    machine.join(f)
+
+    msg_read = reads.join
+    msg_expected = [prelim_msg, *strs].join
+
+    assert_equal msg_expected, msg_read
+  ensure
+    machine.close(w) rescue nil
+    machine.close(r) rescue nil
+    machine.join(f)
+  end
+
+  def test_writev_close_r
+    r, w = UM.pipe
+    strs = ['1' * 256, '2' * 30000, '3' * 256]
+
+    prelim_len = (65536 - 3);
+    prelim_msg = '*' * prelim_len
+    machine.write(w, prelim_msg)
+
+    f = machine.spin {
+      buf = +''
+      3.times { machine.read(r, buf, 8192) }
+      machine.close(w)
+    }
+
+    assert_raises(Errno::EBADF) { machine.writev(w, *strs) }
+  ensure
+    machine.close(w) rescue nil
+    machine.close(r) rescue nil
+    machine.join(f)
+  end
+
+  class TOError < RuntimeError; end
+
+  def test_writev_timeout
+    r, w = UM.pipe
+    strs = ['1' * 256, '2' * 30000, '3' * 256]
+
+    prelim_len = (65536 - 3);
+    prelim_msg = '*' * prelim_len
+    machine.write(w, prelim_msg)
+
+    assert_raises(TOError) {
+      machine.timeout(0.01, TOError) {
+        machine.writev(w, *strs)
+      }
+    }
+  ensure
+    machine.close(w) rescue nil
+    machine.close(r) rescue nil
+  end
+
   def test_writev_bad_fd
     r, _w = UM.pipe
 
