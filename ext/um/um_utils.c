@@ -199,3 +199,30 @@ inline void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE st
 inline void um_raise_internal_error(const char *msg) {
   rb_raise(eUMError, "UringMachine error: %s", msg);
 }
+
+inline struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *total_len) {
+  struct iovec *iovecs = malloc(sizeof(struct iovec) * argc);
+  size_t len = 0;
+
+  for (int i = 0; i < argc; i++) {
+    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
+    len += iovecs[i].iov_len;
+  }
+  if (total_len) *total_len = len;
+  return iovecs;
+}
+
+inline void um_advance_iovecs_for_writing(struct iovec **ptr, int *len, size_t adv) {
+  while (adv) {
+    if (adv < (*ptr)->iov_len) {
+      (*ptr)->iov_base += adv;
+      (*ptr)->iov_len -= adv;
+      return;
+    }
+    else {
+      adv -= (*ptr)->iov_len;
+      (*ptr)++;
+      (*len)--;
+    }
+  }
+}

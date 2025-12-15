@@ -268,6 +268,9 @@ void um_update_read_buffer(struct um *machine, VALUE buffer, ssize_t buffer_offs
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
+struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *total_len);
+void um_advance_iovecs_for_writing(struct iovec **ptr, int *len, size_t adv);
+
 
 struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op);
 
