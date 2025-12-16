@@ -284,6 +284,11 @@ VALUE UM_accept_each(VALUE self, VALUE fd) {
   return um_accept_each(machine, NUM2INT(fd));
 }
 
+VALUE UM_accept_into_queue(VALUE self, VALUE fd, VALUE queue) {
+  struct um *machine = um_get_machine(self);
+  return um_accept_into_queue(machine, NUM2INT(fd), queue);
+}
+
 VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
@@ -622,6 +627,7 @@ void Init_UM(void) {
 
   rb_define_method(cUM, "accept", UM_accept, 1);
   rb_define_method(cUM, "accept_each", UM_accept_each, 1);
+  rb_define_method(cUM, "accept_into_queue", UM_accept_into_queue, 2);
   rb_define_method(cUM, "bind", UM_bind, 3);
   rb_define_method(cUM, "connect", UM_connect, 3);
   rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);

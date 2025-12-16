@@ -437,6 +437,7 @@ struct op_ctx {
   int fd;
   int bgid;
 
+  struct um_queue *queue;
   void *read_buf;
   int read_maxlen;
   struct __kernel_timespec ts;
@@ -1146,9 +1147,43 @@ VALUE accept_each_start(VALUE arg) {
       more = (result->flags & IORING_CQE_F_MORE);
       if (result->res < 0) {
         um_op_multishot_results_clear(ctx->machine, ctx->op);
-        return Qnil;
+        rb_syserr_fail(-result->res, strerror(-result->res));
       }
       rb_yield(INT2NUM(result->res));
+      result = result->next;
+    }
+    um_op_multishot_results_clear(ctx->machine, ctx->op);
+    if (more)
+      ctx->op->flags &= ~OP_F_COMPLETED;
+    else
+      break;
+  }
+
+  return Qnil;
+}
+
+VALUE accept_into_queue_start(VALUE arg) {
+  struct op_ctx *ctx = (struct op_ctx *)arg;
+  struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
+  io_uring_prep_multishot_accept(sqe, ctx->fd, NULL, NULL, 0);
+
+  while (true) {
+    VALUE ret = um_yield(ctx->machine);
+    if (!um_op_completed_p(ctx->op)) {
+      RAISE_IF_EXCEPTION(ret);
+      return ret;
+    }
+    RB_GC_GUARD(ret);
+
+    int more = false;
+    struct um_op_result *result = &ctx->op->result;
+    while (result) {
+      more = (result->flags & IORING_CQE_F_MORE);
+      if (result->res < 0) {
+        um_op_multishot_results_clear(ctx->machine, ctx->op);
+        rb_syserr_fail(-result->res, strerror(-result->res));
+      }
+      um_queue_push(ctx->machine, ctx->queue, INT2NUM(result->res));
       result = result->next;
     }
     um_op_multishot_results_clear(ctx->machine, ctx->op);
@@ -1184,6 +1219,16 @@ VALUE um_accept_each(struct um *machine, int fd) {
 
   struct op_ctx ctx = { .machine = machine, .op = &op, .fd = fd, .read_buf = NULL };
   return rb_ensure(accept_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
+}
+
+VALUE um_accept_into_queue(struct um *machine, int fd, VALUE queue) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_ACCEPT_MULTISHOT, OP_F_MULTISHOT);
+
+  struct op_ctx ctx = {
+    .machine = machine, .op = &op, .fd = fd, .queue = Queue_data(queue), .read_buf = NULL
+  };
+  return rb_ensure(accept_into_queue_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
 int um_read_each_singleshot_loop(struct op_ctx *ctx) {

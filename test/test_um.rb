@@ -1220,6 +1220,82 @@ class AcceptEachTest < UMBaseTest
   ensure
     s.close
   end
+
+  def test_accept_each_bad_fd
+    queue = UM::Queue.new
+    assert_raises(Errno::ENOTSOCK) { machine.accept_each(STDOUT.fileno) }
+  end
+end
+
+class AcceptIntoQueueTest < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+    @server = TCPServer.open('127.0.0.1', @port)
+    @server_fd = @server.fileno
+  end
+
+  def teardown
+    @server&.close rescue nil
+    super
+  end
+
+  def test_accept_into_queue
+    conns = []
+    t = Thread.new do
+      sleep 0.05
+      3.times do
+        conns << TCPSocket.new('127.0.0.1', @port)
+      end
+    end
+
+    queue = UM::Queue.new
+    f = machine.spin do
+      machine.accept_into_queue(@server_fd, queue)
+    end
+    t.join
+    machine.sleep(0.01)
+    assert_equal 3, queue.count
+  ensure
+    machine.close(@server_fd)
+    machine.schedule(f, nil)
+    machine.join(f)
+    t&.kill
+  end
+
+  def test_accept_into_queue_interrupted
+    count = 0
+    terminated = nil
+    queue = UM::Queue.new
+    f = @machine.spin do
+      machine.accept_into_queue(@server_fd, queue)
+    rescue UM::Terminate
+      terminated = true
+    end
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    @machine.sleep(0.01)
+
+    assert_equal 1, queue.count
+    refute terminated
+
+    @machine.schedule(f, UM::Terminate.new)
+    @machine.sleep(0.01)
+
+    assert f.done?
+    assert terminated
+  ensure
+    s.close
+  end
+
+  def test_accept_into_queue_bad_fd
+    queue = UM::Queue.new
+    assert_raises(Errno::ENOTSOCK) { machine.accept_into_queue(STDOUT.fileno, queue) }
+  end
+
+  def test_accept_into_queue_bad_queue
+    assert_raises(TypeError) { machine.accept_into_queue(@server_fd, nil) }
+  end
 end
 
 class SocketTest < UMBaseTest

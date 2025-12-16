@@ -310,6 +310,7 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
 
 VALUE um_accept(struct um *machine, int fd);
 VALUE um_accept_each(struct um *machine, int fd);
+VALUE um_accept_into_queue(struct um *machine, int fd, VALUE queue);
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags);
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags);
