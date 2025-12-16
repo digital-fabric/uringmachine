@@ -1425,6 +1425,8 @@ class SendvTest < UMBaseTest
   end
 
   def test_sendv_invalid_buffer
+    skip "Unavailable on kernel version < 6.17" if UM.kernel_version < 617
+
     assert_raises(UM::Error) { machine.sendv(@s1, [], 'abc') }
   end
 end
