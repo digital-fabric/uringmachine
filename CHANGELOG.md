@@ -1,3 +1,12 @@
+
+# 0.23.0 2025-12-16
+
+- Add `UM#accept_into_queue`, fix `#accept_each` to throw on error
+- Use Set instead of Hash for holding pending fibers
+- Add `UM#writev`, `UM#sendv` methods
+- Allocate um_op and um_op_result in batches of 256
+- Remove `SIGCLD` const
+
 # 0.22.1 2025-12-11
 
 - Comment out SIGCLD constant
@@ -12,6 +21,7 @@
 - More tests and benchmarks
 - Add `UM#await_fibers` for awaiting fibers
 - Add `UM.socketpair` for creating a socket pair
+- Fix segfault caused by waiting fibers not being marked
 - Fiber scheduler:
   - Use fiber's mailbox for processing blocking operations
   - Add `#io_close`, `#yield` hooks, remove `#process_fork` hook
@@ -26,8 +36,8 @@
 - Add debug logging for key io_uring interactions
 - Add UM#mark and DEBUG_MARK for debugging specific UM instances
 - Short-circuit zero-length writes
-- Add optional file_offset argument to #read, #write. Add optional len and file_off
-set arguments to #write_async
+- Add optional file_offset argument to #read, #write. Add optional len and
+  file_offset arguments to #write_async
 - Add support for specifying SQPOLL mode and SQ idle timeout in `UM#initialize`
 - Add support for specifying number of SQ entries in `UM#initialize`
 - Implement global worker pool for blocking operations in fiber scheduler
