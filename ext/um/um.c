@@ -738,7 +738,7 @@ VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv) {
   um_prep_op(machine, &op, OP_SEND, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
-  io_uring_prep_send(sqe, fd, iovecs, argc, MSG_WAITALL);
+  io_uring_prep_send(sqe, fd, iovecs, argc, MSG_NOSIGNAL | MSG_WAITALL);
   sqe->ioprio |= IORING_SEND_VECTORIZED;
 
   VALUE ret = um_yield(machine);
@@ -763,7 +763,7 @@ VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
   um_prep_op(machine, &op, OP_SEND_BUNDLE, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
 
-	io_uring_prep_send_bundle(sqe, fd, 0, MSG_WAITALL);
+	io_uring_prep_send_bundle(sqe, fd, 0, MSG_NOSIGNAL | MSG_WAITALL);
 	sqe->flags |= IOSQE_BUFFER_SELECT;
 	sqe->buf_group = bgid;
 
