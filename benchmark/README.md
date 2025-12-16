@@ -21,7 +21,7 @@ implementations:
 
 - `UM`: fiber-based concurrency using the UringMachine low-level API.
 
-<img src="./chart.png">
+<img src="./chart_all.png">
 
 ## Observations
 
