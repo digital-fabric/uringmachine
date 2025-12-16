@@ -24,7 +24,8 @@ def get_config
   {
     kernel_version:       combined_version,
     prep_bind:            combined_version >= 611,
-    prep_listen:          combined_version >= 611
+    prep_listen:          combined_version >= 611,
+    send_vectoized:       combined_version >= 617
   }
 end
 
@@ -58,6 +59,7 @@ have_func("&rb_process_status_new")
 $defs << "-DUM_KERNEL_VERSION=#{config[:kernel_version]}"
 $defs << '-DHAVE_IO_URING_PREP_BIND'            if config[:prep_bind]
 $defs << '-DHAVE_IO_URING_PREP_LISTEN'          if config[:prep_listen]
+$defs << '-DHAVE_IO_URING_SEND_VECTORIZED'      if config[:send_vectoized]
 
 $CFLAGS << ' -Wno-pointer-arith'
 

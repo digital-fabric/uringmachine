@@ -316,6 +316,7 @@ VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
   return um_send(machine, NUM2INT(fd), buffer, NUM2INT(len), NUM2INT(flags));
 }
 
+#ifdef HAVE_IO_URING_SEND_VECTORIZED
 VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   if (argc < 1)
@@ -325,6 +326,7 @@ VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
 
   return um_sendv(machine, fd, argc - 1, argv + 1);
 }
+#endif
 
 VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
@@ -627,7 +629,11 @@ void Init_UM(void) {
   rb_define_method(cUM, "recv", UM_recv, 4);
   rb_define_method(cUM, "recv_each", UM_recv_each, 3);
   rb_define_method(cUM, "send", UM_send, 4);
+
+  #ifdef HAVE_IO_URING_SEND_VECTORIZED
   rb_define_method(cUM, "sendv", UM_sendv, -1);
+  #endif
+  
   rb_define_method(cUM, "send_bundle", UM_send_bundle, -1);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
