@@ -1,3 +1,6 @@
+# 0.23.1 2025-12-16
+
+- Add `MSG_NOSIGNAL` to default flags for `#sendv` and `#send_bundle`
 
 # 0.23.0 2025-12-16
 
