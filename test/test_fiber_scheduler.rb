@@ -18,6 +18,7 @@ class MethodCallAuditor
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
 
   def method_missing(sym, *args, &block)
+    UM.debug({sym:}.inspect)
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
     res
@@ -42,6 +43,10 @@ class FiberSchedulerTest < UMBaseTest
   def teardown
     Fiber.set_scheduler(nil)
     super
+  end
+
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
   end
 
   def test_fiber_scheduler_initialize_without_machine
@@ -105,7 +110,7 @@ class FiberSchedulerTest < UMBaseTest
       io_read: 3,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     i.close rescue nil
     o.close rescue nil
@@ -128,7 +133,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     i.close rescue nil
     o.close rescue nil
@@ -153,7 +158,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     i.close rescue nil
     o.close rescue nil
@@ -174,7 +179,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     i.close rescue nil
     o.close rescue nil
@@ -201,7 +206,7 @@ class FiberSchedulerTest < UMBaseTest
       io_pread: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     FileUtils.rm(fn) rescue nil
   end
@@ -227,7 +232,7 @@ class FiberSchedulerTest < UMBaseTest
       io_pwrite: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     FileUtils.rm(fn) rescue nil
   end
@@ -250,7 +255,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 2,
       kernel_sleep: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_block
@@ -275,7 +280,7 @@ class FiberSchedulerTest < UMBaseTest
       block: 1,
       unblock: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_process_wait
@@ -303,7 +308,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       process_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     if child_pid
       Process.wait(child_pid) rescue nil
@@ -337,7 +342,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 2,
       io_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     s1.close rescue nil
     s2.close rescue nil
@@ -366,7 +371,7 @@ class FiberSchedulerTest < UMBaseTest
       io_close: 2,
       kernel_sleep: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     FileUtils.rm(fn) rescue nil
   end
@@ -381,7 +386,7 @@ class FiberSchedulerTest < UMBaseTest
     buf = nil
     Fiber.schedule do
       sleep 0.001
-      File.open(fn, 'r') { buf = it.read }
+      File.open(fn, 'r') { buf = it.read  }
     end
     assert_equal 2, machine.metrics[:total_ops]
     @scheduler.join
@@ -393,9 +398,63 @@ class FiberSchedulerTest < UMBaseTest
       io_close: 2,
       kernel_sleep: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     FileUtils.rm(fn) rescue nil
+  end
+
+  def test_fiber_scheduler_file_write_buffered
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    Fiber.schedule do
+      File.open(fn, 'w') {
+        it << 'foo'
+      }
+    end
+    @scheduler.join
+    assert_equal 'foo', IO.read(fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, scheduler_calls_tally)
+  end
+
+  def test_fiber_scheduler_file_write_buffered_flush
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    Fiber.schedule do
+      File.open(fn, 'w') {
+        it << 'foo'
+        it.flush
+      }
+    end
+    @scheduler.join
+    assert_equal 'foo', IO.read(fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1,
+      io_close: 1,
+      join: 1
+    }, scheduler_calls_tally)
+  end
+
+  def test_fiber_scheduler_file_write_unbuffered
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    Fiber.schedule do
+      File.open(fn, 'w') {
+        it.sync = true
+        it << 'foo'
+      }
+    end
+    @scheduler.join
+    assert_equal 'foo', IO.read(fn)
+    assert_equal({
+      fiber: 1,
+      blocking_operation_wait: 1, # open
+      io_write: 1,
+      io_close: 1,
+      join: 1
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_mutex
@@ -432,7 +491,7 @@ class FiberSchedulerTest < UMBaseTest
       block: 1,
       unblock: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_queue_shift
@@ -458,7 +517,7 @@ class FiberSchedulerTest < UMBaseTest
       block: 1,
       unblock: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_queue_shift_with_timeout
@@ -481,7 +540,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 2,
       block: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_thread_join
@@ -502,7 +561,7 @@ class FiberSchedulerTest < UMBaseTest
       block: 1,
       unblock: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_system
@@ -519,7 +578,7 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       process_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     Process.wait(0, Process::WNOHANG) rescue nil
   end
@@ -540,7 +599,7 @@ class FiberSchedulerTest < UMBaseTest
       io_read: 2,
       process_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     Process.wait(0, Process::WNOHANG) rescue nil
   end
@@ -569,7 +628,7 @@ class FiberSchedulerTest < UMBaseTest
       blocking_operation_wait: 1,
       process_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     Process.wait(0, Process::WNOHANG) rescue nil
   end
@@ -596,7 +655,7 @@ class FiberSchedulerTest < UMBaseTest
       io_read: 2,
       fiber_interrupt: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     r.close rescue nil
     w.close rescue nil
@@ -620,7 +679,7 @@ class FiberSchedulerTest < UMBaseTest
       blocking_operation_wait: 1,
       address_resolve: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_timeout_after
@@ -641,7 +700,7 @@ class FiberSchedulerTest < UMBaseTest
       timeout_after: 1,
       kernel_sleep: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_io_select
@@ -705,6 +764,10 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     super
   end
 
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
+  end
+
   def test_IO_s_binread
     ret = nil
     Fiber.schedule do
@@ -718,7 +781,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_binwrite
@@ -734,7 +797,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_copy_stream
@@ -751,7 +814,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 3,
       io_close: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     FileUtils.rm(fn2) rescue nil
   end
@@ -769,7 +832,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_popen
@@ -784,7 +847,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       io_read: 2,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_read
@@ -800,7 +863,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_readlines
@@ -816,7 +879,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_s_select
@@ -831,7 +894,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       fiber: 1,
       io_select: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     io.close rescue nil
   end
@@ -849,7 +912,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
       blocking_operation_wait: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 end
 
@@ -872,6 +935,10 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
     super
   end
 
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
+  end
+
   def test_IO_i_double_left_chevron
     Fiber.schedule do
       @io.seek(2)
@@ -883,7 +950,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_close
@@ -897,7 +964,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_close: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_close_read
@@ -910,7 +977,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_close_write
@@ -923,7 +990,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_each_byte
@@ -937,7 +1004,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_each_char
@@ -951,7 +1018,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_each_line
@@ -965,7 +1032,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 3,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_getbyte
@@ -979,7 +1046,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_getc
@@ -993,7 +1060,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_gets
@@ -1007,7 +1074,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_pread
@@ -1021,7 +1088,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_pread: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_print
@@ -1036,7 +1103,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 3,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_printf
@@ -1051,7 +1118,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_putc
@@ -1066,7 +1133,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_puts
@@ -1081,7 +1148,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_pwrite
@@ -1096,7 +1163,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_pwrite: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_read
@@ -1110,7 +1177,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_readbyte
@@ -1124,7 +1191,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_readchar
@@ -1138,7 +1205,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_readline
@@ -1152,7 +1219,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_readlines
@@ -1166,7 +1233,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 3,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_readpartial
@@ -1180,7 +1247,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_sysread
@@ -1194,7 +1261,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_read: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_syswrite
@@ -1209,7 +1276,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_wait
@@ -1223,7 +1290,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_wait_pipe_read_timeout
@@ -1238,7 +1305,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     r.close rescue nil
     w.close rescue nil
@@ -1255,7 +1322,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_wait_writable
@@ -1269,7 +1336,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_wait: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 
   def test_IO_i_write
@@ -1284,7 +1351,7 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       fiber: 1,
       io_write: 1,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 end
 
@@ -1300,6 +1367,10 @@ class FiberSchedulerQueueTest < UMBaseTest
   def teardown
     Fiber.set_scheduler(nil)
     super
+  end
+
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
   end
 
   I = 5
@@ -1324,7 +1395,7 @@ class FiberSchedulerQueueTest < UMBaseTest
       block: 25,
       unblock: 25,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   end
 end
 
@@ -1340,6 +1411,10 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
   def teardown
     Fiber.set_scheduler(nil)
     super
+  end
+
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
   end
 
   C = 10
@@ -1376,6 +1451,10 @@ class FiberSchedulerMultiPipeTest < UMBaseTest
     super
   end
 
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
+  end
+
   C = 10
   I = 100
   SIZE = 1024
@@ -1405,13 +1484,18 @@ class FiberSchedulerMultiPipeTest < UMBaseTest
       io_write: 1000,
       io_close: 10,
       join: 1
-    }, @scheduler.calls.map { it[:sym] }.tally)
+    }, scheduler_calls_tally)
   ensure
     ios.each { it.close rescue nil }
   end
 end
 
 class FiberSchedulerMultiTCPTest < UMBaseTest
+
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
+  end
+
   C = 10
   W = 10
   I = 10
@@ -1497,7 +1581,7 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
       end
     end
     @machine.await_fibers(fibers)
-    @calls = @scheduler.calls.map { it[:sym] }.tally
+    @calls = scheduler_calls_tally
   ensure
     # p ensure: ios
     ios.each { it.close rescue nil }
