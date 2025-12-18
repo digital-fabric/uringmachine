@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-# require 'bundler/inline'
+require 'bundler/inline'
 
-# gemfile do
-#   source 'https://rubygems.org'
-#   gem 'uringmachine', path: '..'
-#   gem 'benchmark-ips'
-#   gem 'http_parser.rb'
-# end
+gemfile do
+  source 'https://rubygems.org'
+  gem 'uringmachine', path: '..'
+  gem 'benchmark'
+  gem 'benchmark-ips'
+  gem 'http_parser.rb'
+end
 
-require 'bundler/setup'
 require 'uringmachine'
 require 'benchmark/ips'
 require 'http/parser'

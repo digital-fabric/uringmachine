@@ -54,24 +54,48 @@ class UMBenchmark
   end
 
   @@benchmarks = {
-    baseline:     [:baseline,     "No Concurrency"],
-    threads:      [:threads,      "Threads"],
-    thread_pool:  [:thread_pool,  "ThreadPool"],
-    async_uring:  [:scheduler,    "Async uring"],
-    async_epoll:  [:scheduler,    "Async epoll"],
-    um_fs:        [:scheduler,    "UM FS"],
-    um:           [:um,           "UM"],
-    um_sqpoll:    [:um,           "UM sqpoll"]
+    # baseline:     [:baseline,     "No Concurrency"],
+    # baseline_um:  [:baseline_um,  "UM no concurrency"],
+    # thread_pool:  [:thread_pool,  "ThreadPool"],
+
+    threads:        [:threads,      "Threads"],
+
+    async_uring:    [:scheduler,    "Async uring"],
+    async_uring_x2: [:scheduler_x,  "Async uring x2"],
+
+    # async_epoll:    [:scheduler,    "Async epoll"],
+    # async_epoll_x2: [:scheduler_x,  "Async epoll x2"],
+
+    um_fs:          [:scheduler,    "UM FS"],
+    um_fs_x2:       [:scheduler_x,  "UM FS x2"],
+
+    um:             [:um,           "UM"],
+    # um_sqpoll:      [:um,           "UM sqpoll"],
+    um_x2:          [:um_x,         "UM x2"],
+    um_x4:          [:um_x,         "UM x4"],
+    um_x8:          [:um_x,         "UM x8"],
   }
 
   def run_benchmarks(b)
     @@benchmarks.each do |sym, (doer, name)|
-      b.report(name) { send(:"run_#{sym}") } if respond_to?(:"do_#{doer}")
+      if respond_to?(:"do_#{doer}")
+        puts "Running #{name}..."
+        b.report(name) { send(:"run_#{sym}") }
+        cleanup
+      end
     end
+  end
+
+  def cleanup
   end
 
   def run_baseline
     do_baseline
+  end
+
+  def run_baseline_um
+    machine = UM.new(4096)
+    do_baseline_um(machine)
   end
 
   def run_threads
@@ -117,14 +141,56 @@ class UMBenchmark
     ios.each { it.close rescue nil }
   end
 
+  def run_async_uring_x2
+    threads  = 2.times.map do
+      Thread.new do
+        selector ||= IO::Event::Selector::URing.new(Fiber.current)
+        scheduler = Async::Scheduler.new(selector:)
+        Fiber.set_scheduler(scheduler)
+        ios = []
+        scheduler.run { do_scheduler_x(2, scheduler, ios) }
+        ios.each { it.close rescue nil }
+      end
+    end
+    threads.each(&:join)
+  end
+
+  def run_async_epoll_x2
+    threads  = 2.times.map do
+      Thread.new do
+        selector ||= IO::Event::Selector::EPoll.new(Fiber.current)
+        scheduler = Async::Scheduler.new(selector:)
+        Fiber.set_scheduler(scheduler)
+        ios = []
+        scheduler.run { do_scheduler_x(2, scheduler, ios) }
+        ios.each { it.close rescue nil }
+      end
+    end
+    threads.each(&:join)
+  end
+
+  def run_um_fs_x2
+    threads  = 2.times.map do
+      Thread.new do
+        machine = UM.new
+        thread_pool = UM::BlockingOperationThreadPool.new(2)
+        scheduler = UM::FiberScheduler.new(machine, thread_pool)
+        Fiber.set_scheduler(scheduler)
+        ios = []
+        do_scheduler_x(2, scheduler, ios)
+        scheduler.join
+        ios.each { it.close rescue nil } 
+      end
+    end
+    threads.each(&:join)
+  end
+
   def run_um
     machine = UM.new(4096)
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
     machine.await_fibers(fibers)
-    puts "UM:"
-    p machine.metrics
     fds.each { machine.close(it) }
   end
 
@@ -134,10 +200,49 @@ class UMBenchmark
     fds = []
     do_um(machine, fibers, fds)
     machine.await_fibers(fibers)
-    fds.each { machine.close_async(it) }
-    puts "UM sqpoll:"
-    p machine.metrics
-    machine.snooze
+    fds.each { machine.close(it) }
+  end
+
+  def run_um_x2
+    threads  = 2.times.map do
+      Thread.new do
+        machine = UM.new(4096)
+        fibers = []
+        fds = []
+        do_um_x(2, machine, fibers, fds)
+        machine.await_fibers(fibers)
+        fds.each { machine.close(it) }
+      end
+    end
+    threads.each(&:join)
+  end
+
+  def run_um_x4
+    threads  = 4.times.map do
+      Thread.new do
+        machine = UM.new(4096)
+        fibers = []
+        fds = []
+        do_um_x(4, machine, fibers, fds)
+        machine.await_fibers(fibers)
+        fds.each { machine.close(it) }
+      end
+    end
+    threads.each(&:join)
+  end
+
+  def run_um_x8
+    threads  = 8.times.map do
+      Thread.new do
+        machine = UM.new(4096)
+        fibers = []
+        fds = []
+        do_um_x(8, machine, fibers, fds)
+        machine.await_fibers(fibers)
+        fds.each { machine.close(it) }
+      end
+    end
+    threads.each(&:join)
   end
 end
 

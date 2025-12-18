@@ -3,10 +3,10 @@
 require_relative './common'
 require 'socket'
 
-GROUPS = 50
+GROUPS = 48
 ITERATIONS = 10000
 
-SIZE = 1024
+SIZE = 1 << 14
 DATA = '*' * SIZE
 
 class UMBenchmark
@@ -55,8 +55,38 @@ class UMBenchmark
     end
   end
 
+  def do_scheduler_x(div, scheduler, ios)
+    (GROUPS/div).times do
+      r, w = Socket.socketpair(:AF_UNIX, :SOCK_STREAM, 0)
+      r.sync = true
+      w.sync = true
+      Fiber.schedule do
+        ITERATIONS.times { w.send(DATA, 0) }
+        w.close
+      end
+      Fiber.schedule do
+        ITERATIONS.times { r.recv(SIZE) }
+        r.close
+      end
+    end
+  end
+
   def do_um(machine, fibers, fds)
     GROUPS.times do
+      r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+      fibers << machine.spin do
+        ITERATIONS.times { machine.send(w, DATA, SIZE, UM::MSG_WAITALL) }
+        machine.close_async(w)
+      end
+      fibers << machine.spin do
+        ITERATIONS.times { machine.recv(r, +'', SIZE, 0) }
+        machine.close_async(r)
+      end
+    end
+  end
+
+  def do_um_x(div, machine, fibers, fds)
+    (GROUPS/div).times do
       r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
       fibers << machine.spin do
         ITERATIONS.times { machine.send(w, DATA, SIZE, UM::MSG_WAITALL) }
