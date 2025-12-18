@@ -73,6 +73,10 @@ class UMBaseTest < Minitest::Test
     GC.start
   end
 
+  def scheduler_calls_tally
+    @scheduler.calls.map { it[:sym] }.tally
+  end
+
   def assign_port
     @@port_assign_mutex ||= Mutex.new
     @@port_assign_mutex.synchronize do

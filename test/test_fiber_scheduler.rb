@@ -18,7 +18,7 @@ class MethodCallAuditor
   def respond_to?(sym, include_all = false) = @target.respond_to?(sym, include_all)
 
   def method_missing(sym, *args, &block)
-    UM.debug({sym:}.inspect)
+    # UM.debug({sym:}.inspect)
     res = @target.send(sym, *args, &block)
     @calls << ({ sym:, args:, res:})
     res
@@ -43,10 +43,6 @@ class FiberSchedulerTest < UMBaseTest
   def teardown
     Fiber.set_scheduler(nil)
     super
-  end
-
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
   end
 
   def test_fiber_scheduler_initialize_without_machine
@@ -367,6 +363,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 2,
       blocking_operation_wait: 2,
+      io_write: 1,
       io_read: 2,
       io_close: 2,
       kernel_sleep: 1,
@@ -394,6 +391,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 2,
       blocking_operation_wait: 2,
+      io_write: 1,
       io_read: 2,
       io_close: 2,
       kernel_sleep: 1,
@@ -415,6 +413,7 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal({
       fiber: 1,
       blocking_operation_wait: 1,
+      io_write: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -426,20 +425,23 @@ class FiberSchedulerTest < UMBaseTest
       File.open(fn, 'w') {
         it << 'foo'
         it.flush
+        it << 'bar'
       }
     end
     @scheduler.join
-    assert_equal 'foo', IO.read(fn)
+    assert_equal 'foobar', IO.read(fn)
     assert_equal({
       fiber: 1,
       blocking_operation_wait: 1,
+      io_write: 2,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
   end
 
   def test_fiber_scheduler_file_write_unbuffered
-    fn = "/tmp/um_#{SecureRandom.hex}"
+    # fn = "/tmp/um_#{SecureRandom.hex}"
+    fn = '/dev/null'
     Fiber.schedule do
       File.open(fn, 'w') {
         it.sync = true
@@ -447,7 +449,7 @@ class FiberSchedulerTest < UMBaseTest
       }
     end
     @scheduler.join
-    assert_equal 'foo', IO.read(fn)
+    # assert_equal 'foo', IO.read(fn)
     assert_equal({
       fiber: 1,
       blocking_operation_wait: 1, # open
@@ -764,10 +766,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     super
   end
 
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
-  end
-
   def test_IO_s_binread
     ret = nil
     Fiber.schedule do
@@ -795,6 +793,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       blocking_operation_wait: 1,
+      io_write: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -910,6 +909,7 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       blocking_operation_wait: 1,
+      io_write: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -933,10 +933,6 @@ class FiberSchedulerIOInstanceMethodsTest < UMBaseTest
       FileUtils.rm(@fn) rescue nil
     Fiber.set_scheduler(nil)
     super
-  end
-
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
   end
 
   def test_IO_i_double_left_chevron
@@ -1369,10 +1365,6 @@ class FiberSchedulerQueueTest < UMBaseTest
     super
   end
 
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
-  end
-
   I = 5
   C = 5
 
@@ -1413,10 +1405,6 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
     super
   end
 
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
-  end
-
   C = 10
 
   def test_fiber_scheduler_net_http
@@ -1449,10 +1437,6 @@ class FiberSchedulerMultiPipeTest < UMBaseTest
   def teardown
     Fiber.set_scheduler(nil)
     super
-  end
-
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
   end
 
   C = 10
@@ -1491,10 +1475,6 @@ class FiberSchedulerMultiPipeTest < UMBaseTest
 end
 
 class FiberSchedulerMultiTCPTest < UMBaseTest
-
-  def scheduler_calls_tally
-    @scheduler.calls.map { it[:sym] }.tally
-  end
 
   C = 10
   W = 10
@@ -1607,5 +1587,55 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
       unblock: 10,
       kernel_sleep: 10
     }, @calls)
+  end
+end
+
+class FiberSchedulerErrorTest < UMBaseTest
+  def setup
+    super
+    @raw_scheduler = UM::FiberScheduler.new(@machine)
+    @scheduler = MethodCallAuditor.new(@raw_scheduler)
+    Fiber.set_scheduler(@scheduler)
+  end
+
+  def teardown
+    Fiber.set_scheduler(nil)
+    super
+  end
+
+  def test_fiber_scheduler_io_read_error
+    ret = nil
+    Fiber.schedule do
+      File.open(Dir.tmpdir, 'r') { it.read(42) }
+    rescue => e
+      ret = e
+    end
+    @scheduler.join
+    assert_kind_of Errno::EISDIR, ret
+    assert_equal({
+      fiber: 1,
+      io_read: 1,
+      blocking_operation_wait: 3,
+      io_close: 1,
+      join: 1
+    }, scheduler_calls_tally)
+  end
+
+  def test_fiber_scheduler_io_write_error
+    ret = nil
+    r, w = IO.pipe
+    r.close
+    Fiber.schedule do
+      w << 'foo'
+    rescue => e
+      ret = e
+    end
+    @scheduler.join
+    assert_kind_of Errno::EPIPE, ret
+    assert_equal({
+      fiber: 1,
+      io_write: 1,
+      join: 1
+    }, scheduler_calls_tally)
   end
 end

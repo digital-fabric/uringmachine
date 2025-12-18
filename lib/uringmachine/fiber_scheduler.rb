@@ -253,6 +253,8 @@ class UringMachine
       end
     rescue Errno::EINTR
       retry
+    rescue Errno => e
+      -e.errno
     end
 
     # Reads from the given IO at the given file offset
@@ -277,6 +279,8 @@ class UringMachine
       end
     rescue Errno::EINTR
       retry
+    rescue Errno => e
+      -e.errno
     end
 
     # Writes to the given IO.
@@ -302,6 +306,8 @@ class UringMachine
       end
     rescue Errno::EINTR
       retry
+    rescue Errno => e
+      -e.errno
     end
 
     # Writes to the given IO at the given file offset.
@@ -328,6 +334,8 @@ class UringMachine
       end
     rescue Errno::EINTR
       retry
+    rescue Errno => e
+      -e.errno
     end
 
     # Closes the given fd.
@@ -337,6 +345,8 @@ class UringMachine
     def io_close(fd)
       # p(io_close: fd)
       @machine.close_async(fd)
+    rescue Errno => e
+      -e.errno
     end
 
     if UM.method_defined?(:waitid_status)
