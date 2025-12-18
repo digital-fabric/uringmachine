@@ -121,18 +121,24 @@ VALUE UM_metrics(VALUE self) {
   return um_metrics(machine, &machine->metrics);
 }
 
-VALUE UM_profile_p(VALUE self) {
+VALUE UM_profile_mode_p(VALUE self) {
   struct um *machine = um_get_machine(self);
   return machine->profile_mode ? Qtrue : Qfalse;
 }
 
-VALUE UM_profile_set(VALUE self, VALUE value) {
+VALUE UM_profile_mode_set(VALUE self, VALUE value) {
   struct um *machine = um_get_machine(self);
   machine->profile_mode = RTEST(value);
   if (machine->profile_mode) {
     machine->metrics.time_total_wait = 0.0;
     machine->metrics.time_last_cpu = machine->metrics.time_first_cpu = um_get_time_cpu();
   }
+  return value;
+}
+
+VALUE UM_test_mode_set(VALUE self, VALUE value) {
+  struct um *machine = um_get_machine(self);
+  machine->test_mode = RTEST(value);
   return value;
 }
 
@@ -581,8 +587,9 @@ void Init_UM(void) {
   rb_define_method(cUM, "size", UM_size, 0);
   rb_define_method(cUM, "mark", UM_mark_m, 1);
   rb_define_method(cUM, "metrics", UM_metrics, 0);
-  rb_define_method(cUM, "profile?", UM_profile_p, 0);
-  rb_define_method(cUM, "profile", UM_profile_set, 1);
+  rb_define_method(cUM, "profile_mode?", UM_profile_mode_p, 0);
+  rb_define_method(cUM, "profile_mode=", UM_profile_mode_set, 1);
+  rb_define_method(cUM, "test_mode=", UM_test_mode_set, 1);
 
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 

@@ -156,6 +156,7 @@ struct um {
   uint mark; // used to mark instances for debugging
 
   struct um_metrics metrics;
+  int test_mode;
   int profile_mode;
 
   uint buffer_ring_count; // number of registered buffer rings

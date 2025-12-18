@@ -13,10 +13,11 @@ class UringMachine
     # Initializes a new worker pool.
     #
     # @return [void]
-    def initialize
+    def initialize(max_workers = Etc.nprocessors)
+      @max_workers = max_workers
       @pending_count = 0
       @worker_count = 0
-      @max_workers = Etc.nprocessors
+
       @worker_mutex = UM::Mutex.new
       @job_queue = UM::Queue.new
       @workers = []
@@ -76,7 +77,7 @@ class UringMachine
   class FiberScheduler
 
     # The blocking operation thread pool is shared by all fiber schedulers.
-    @@blocking_operation_thread_pool = BlockingOperationThreadPool.new
+    DEFAULT_THREAD_POOL = BlockingOperationThreadPool.new
 
     # UringMachine instance associated with scheduler.
     attr_reader :machine
@@ -92,8 +93,9 @@ class UringMachine
     #
     # @param machine [UringMachine, nil] UringMachine instance
     # @return [void]
-    def initialize(machine = nil)
+    def initialize(machine = nil, thread_pool = DEFAULT_THREAD_POOL)
       @machine = machine || UM.new
+      @thread_pool = thread_pool
       @fiber_map = ObjectSpace::WeakMap.new
       @thread = Thread.current
     end
@@ -145,7 +147,8 @@ class UringMachine
     # @param op [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(op)
-      @@blocking_operation_thread_pool.process(@machine, op)
+      # p(blocking_operation: op)
+      @thread_pool.process(@machine, op)
     end
 
     # Blocks the current fiber by yielding to the machine. This hook is called
@@ -155,6 +158,7 @@ class UringMachine
     # @param timeout [Number, nil] optional timeout
     # @return [bool] was the operation successful
     def block(blocker, timeout = nil)
+      # p(block: blocker)
       if timeout
         @machine.timeout(timeout, Timeout::Error) { @machine.yield }
       else
@@ -173,6 +177,7 @@ class UringMachine
     # @param fiber [Fiber] fiber to resume
     # @return [void]
     def unblock(blocker, fiber)
+      # p(unblock: blocker)
       @machine.schedule(fiber, nil)
       @machine.wakeup if Thread.current != @thread
     end
@@ -182,11 +187,13 @@ class UringMachine
     # @param duration [Number, nil] sleep duration
     # @return [void]
     def kernel_sleep(duration = nil)
+      # p(kernel_sleep: duration)
       duration ? @machine.sleep(duration) : @machine.yield
     end
 
     # Yields to the next runnable fiber.
     def yield
+      # p(yield: true)
       @machine.snooze
       # @machine.yield
     end
@@ -198,7 +205,7 @@ class UringMachine
     # @param timeout [Number, nil] optional timeout
     # @param return
     def io_wait(io, events, timeout = nil)
-      # p(io_wait: io, events:)
+      # p(io_wait: io, events:, timeout:)
       timeout ||= io.timeout
       if timeout
         @machine.timeout(timeout, Timeout::Error) {
@@ -216,6 +223,7 @@ class UringMachine
     # @param eios [Array<IO>] exceptable IOs
     # @param timeout [Number, nil] optional timeout
     def io_select(rios, wios, eios, timeout = nil)
+      # p(select: [rios, wios, eios])
       map_r = map_fds(rios)
       map_w = map_fds(wios)
       map_e = map_fds(eios)
@@ -240,6 +248,7 @@ class UringMachine
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes read
     def io_read(io, buffer, length, offset)
+      # p(io_read: io)
       length = buffer.size if length == 0
 
       if (timeout = io.timeout)
@@ -266,6 +275,7 @@ class UringMachine
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes read
     def io_pread(io, buffer, from, length, offset)
+      # p(io_pread: io)
       length = buffer.size if length == 0
 
       if (timeout = io.timeout)
@@ -368,6 +378,7 @@ class UringMachine
     # @param exception [Exception] Exception
     # @return [void]
     def fiber_interrupt(fiber, exception)
+      # p(fiber_interrupt: fiber)
       @machine.schedule(fiber, exception)
       @machine.wakeup
     end
@@ -377,6 +388,7 @@ class UringMachine
     # @param hostname [String] hostname to resolve
     # @return [Array<Addrinfo>] array of resolved addresses
 		def address_resolve(hostname)
+      # p(address_resolve: hostname)
 			Resolv.getaddresses(hostname)
 		end
 
@@ -388,6 +400,7 @@ class UringMachine
 		# @param block [Proc] block to run
 		# @return [any] block return value
     def timeout_after(duration, exception, message, &block)
+      # p(timeout_after: duration)
       @machine.timeout(duration, exception, &block)
     end
 

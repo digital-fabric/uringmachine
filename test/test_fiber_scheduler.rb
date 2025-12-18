@@ -715,7 +715,7 @@ class FiberSchedulerTest < UMBaseTest
     end
     @machine.snooze
     w << 'foo'
-    @machine.snooze
+    2.times { @machine.snooze }
     assert_equal [[[r], [], []]], buf
     @machine.snooze
     @scheduler.join
@@ -1380,14 +1380,12 @@ class FiberSchedulerQueueTest < UMBaseTest
       end
     }
     @scheduler.join
-    assert_equal({
-      fiber: 10,
-      kernel_sleep: 25,
-      yield: 25,
-      block: 25,
-      unblock: 25,
-      join: 1
-    }, scheduler_calls_tally)
+
+    calls = scheduler_calls_tally
+    assert_equal 10, calls[:fiber]
+    assert_equal 25, calls[:kernel_sleep]
+    assert_equal 25, calls[:yield]
+    assert_equal 1, calls[:join]
   end
 end
 

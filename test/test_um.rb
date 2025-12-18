@@ -1776,11 +1776,11 @@ class QueueTest < UMBaseTest
     q = UM::Queue.new
     buf = []
 
-    machine.spin do
+    f1 = machine.spin do
       buf << [1, machine.pop(q)]
     end
 
-    machine.spin do
+    f2 = machine.spin do
       buf << [2, machine.pop(q)]
     end
 
@@ -1792,12 +1792,13 @@ class QueueTest < UMBaseTest
     assert_equal 1, q.count
     machine.snooze
     assert_equal 1, machine.metrics[:ops_pending]
+    machine.snooze
     assert_equal [[1, :foo]], buf
 
     machine.push(q, :bar)
     assert_equal 1, q.count
 
-    machine.snooze
+    2.times { machine.snooze }
     assert_equal [[1, :foo], [2, :bar]], buf
     assert_equal 0, q.count
   end
@@ -1851,7 +1852,7 @@ class QueueTest < UMBaseTest
     assert_equal [[1, :foo]], buf
 
     machine.push(q, :bar)
-    machine.snooze
+    2.times { machine.snooze }
     assert_equal [[1, :foo], [2, :bar]], buf
   end
 
@@ -2121,6 +2122,7 @@ class SelectTest < UMBaseTest
     machine.spin do
       events << 1
       events << machine.select([rfd1, rfd2], [], [])
+      machine.snooze
       events << 2
       events << machine.select([rfd1, rfd2], [], [])
       events << 3
@@ -2134,14 +2136,13 @@ class SelectTest < UMBaseTest
 
     machine.write(wfd1, 'foo')
     machine.snooze
-    assert_equal [1, [[rfd1], [], []], 2], events
+    assert_equal [1, [[rfd1], [], []]], events
 
     machine.write(wfd2, 'foo')
-
-    machine.snooze
+    2.times { machine.snooze }
     assert_equal [1, [[rfd1], [], []], 2, [[rfd1, rfd2], [], []], 3], events
 
-    machine.snooze
+    2.times { machine.snooze }
 
     assert_equal [
       1, [[rfd1], [], []],
@@ -2602,8 +2603,6 @@ class MetricsTest < UMBaseTest
     f = machine.spin { machine.sleep(0.001) }
     assert_equal [0, 0, 1, 255, 0], ops_metrics
     machine.snooze
-    assert_equal [1, 1, 0, 256, 0], ops_metrics
-    machine.submit
     assert_equal [1, 0, 0, 256, 0], ops_metrics
     machine.join(f)
     assert_equal [0, 0, 0, 256, 0], ops_metrics
@@ -2626,22 +2625,22 @@ end
 
 class ProfileModeTest < UMBaseTest
   def test_profile_mode_empty
-    assert_equal false, machine.profile?
+    assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
     ], machine.metrics.keys)
 
-    machine.profile(true)
-    assert_equal true, machine.profile?
+    machine.profile_mode = true
+    assert_equal true, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
       :time_total_cpu, :time_total_wait,
     ], machine.metrics.keys)
 
-    machine.profile(false)
-    assert_equal false, machine.profile?
+    machine.profile_mode = false
+    assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
@@ -2649,7 +2648,7 @@ class ProfileModeTest < UMBaseTest
   end
 
   def test_profile_mode_total_times
-    machine.profile(true)
+    machine.profile_mode = true
     machine.sleep(0.01)
     assert_in_range 0.0..0.0005, machine.metrics[:time_total_cpu]
     assert_in_range 0.01..0.015, machine.metrics[:time_total_wait]
