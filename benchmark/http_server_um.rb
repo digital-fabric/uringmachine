@@ -35,7 +35,7 @@ def get_headers(stream, buf)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
-    raise "Invalid header" if !m
+    raise InvalidHeadersError, "Invalid header" if !m
 
     headers[m[1]] = m[2]
   end
