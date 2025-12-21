@@ -9,6 +9,7 @@ gemfile do
   gem 'io-event'
   gem 'async'
   gem 'pg'
+  gem 'gvltools'
 end
 
 require 'uringmachine/fiber_scheduler'
@@ -77,10 +78,15 @@ class UMBenchmark
   }
 
   def run_benchmarks(b)
+    STDOUT.sync = true
     @@benchmarks.each do |sym, (doer, name)|
       if respond_to?(:"do_#{doer}")
-        puts "Running #{name}..."
-        b.report(name) { send(:"run_#{sym}") }
+        STDOUT << "Running #{name}... "
+        ts = nil
+        b.report(name) {
+          ts = measure_time { send(:"run_#{sym}") }
+        }
+        p ts
         cleanup
       end
     end
@@ -145,7 +151,8 @@ class UMBenchmark
     threads  = 2.times.map do
       Thread.new do
         selector ||= IO::Event::Selector::URing.new(Fiber.current)
-        scheduler = Async::Scheduler.new(selector:)
+        worker_pool = Async::Scheduler::WorkerPool.new
+        scheduler = Async::Scheduler.new(selector:, worker_pool:)
         Fiber.set_scheduler(scheduler)
         ios = []
         scheduler.run { do_scheduler_x(2, scheduler, ios) }
@@ -243,6 +250,28 @@ class UMBenchmark
       end
     end
     threads.each(&:join)
+  end
+
+  def measure_time
+    GVLTools::GlobalTimer.enable
+    t0s = [
+      Process.clock_gettime(Process::CLOCK_MONOTONIC),
+      Process.clock_gettime(Process::CLOCK_PROCESS_CPUTIME_ID),
+      GVLTools::GlobalTimer.monotonic_time / 1_000_000_000.0
+    ]
+    yield
+    t1s = [
+      Process.clock_gettime(Process::CLOCK_MONOTONIC),
+      Process.clock_gettime(Process::CLOCK_PROCESS_CPUTIME_ID),
+      GVLTools::GlobalTimer.monotonic_time / 1_000_000_000.0
+    ]
+    {
+      monotonic:  t1s[0] - t0s[0],
+      cpu:        t1s[1] - t0s[1],
+      gvl:        t1s[2] - t0s[2]
+    }
+  ensure
+    GVLTools::GlobalTimer.disable
   end
 end
 

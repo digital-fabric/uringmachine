@@ -123,8 +123,9 @@ def um2_teardown
 end
 
 def um2_run(times)
-  (GROUPS * 2).times { @machine.push(@um2_start_queue, times) }
-  (GROUPS * 2).times { @machine.shift(@um2_stop_queue); @machine.snooze }
+  @um2_machine ||= UM.new
+  (GROUPS * 2).times { @um2_machine.push(@um2_start_queue, times) }
+  (GROUPS * 2).times { @um2_machine.shift(@um2_stop_queue); @um2_machine.snooze }
 end
 
 threads_setup

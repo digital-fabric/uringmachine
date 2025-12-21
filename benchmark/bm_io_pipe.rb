@@ -3,7 +3,7 @@
 require_relative './common'
 
 GROUPS = 48
-ITERATIONS = 20000
+ITERATIONS = 10000
 
 SIZE = 1024
 DATA = '*' * SIZE
