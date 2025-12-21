@@ -468,3 +468,96 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   runqueue, or to process available CQE's. This method is useful for testing,
   but also for yielding control periodically when performing CPU-bound work, in
   order to keep the application responsive and improve latency.
+
+# 2025-12-14
+
+- Changed how `struct um_op`s are allocated. This struct is used to represent
+  any io_uring operation. It is also used to represent runqueue entries. Now,
+  for most I/O operations, this struct is stack-allocated. But when a new fiber
+  is scheduled, or when using the `#timeout` or any of the `#xxx_async` methods,
+  like `#close_async` or `#write_async`, we need to use a heap-allocated
+  `um_op`, because we don't control its lifetime. In order to minimize
+  allocations, once a `um_op` is done with (it's been pulled out of the
+  runqueue, or its corresponding CQE has been processed), it is put on a
+  freelist in order to be reused when needed. Previously, when the freelist was
+  empty, UringMachine would just allocate a new one using `malloc`. Now
+  UringMachine allocates a array of 256 structs at once and puts all of them on
+  the freelist.
+- Implemented the vectorized versions of `#write` and `#send`, so now one can
+  use `#writev` and `#sendv` to send multiple buffers at once. This could be
+  very useful for situations like sending an HTTP response, which is made of a
+  headers part and a body part. Also, `#writev` and `#sendv` are guaranteed to
+  write/send the entirety of the given buffers, unlike `#write` and `#send`
+  which can do partial write/send (for `#send` you can specify the
+  `UM::MSG_WAITALL` flag) to guarantee a complete send.
+- With the new built-in `Set` class and its new [C
+  API](https://github.com/ruby/ruby/pull/13735), I've switched the internal
+  `pending_fibers` holding fibers waiting for an operation to complete, from a
+  hash to a set.
+
+# 2025-12-15
+
+- Working more with benchmarks, it has occurred to me that with the current
+  design of UringMachine, whenever we check for I/O completions (which is also
+  the moment when we make I/O submissions to the kernel), we leave some
+  performance on the table. This is because when we call `io_uring_submit` or
+  `io_uring_wait_cqes`, we make a blocking system call (namely,
+  `io_uring_enter`), and correspondigly we release the GVL.
+  
+  What this means is that while we're waiting for the system call to return, the
+  GVL is available for another Ruby thread to do CPU-bound work. Normally when
+  there's a discussion about concurrency in Ruby, there's this dichotomy: it's
+  either threads or fibers. But as described above, even when using fibers and
+  io_uring for concurrent I/O, we still need to enter the kernel periodically in
+  order to submit operations and process completions. So this is an opportunity
+  to yield the GVL to a different thread, which can run some Ruby code while the
+  first thread is waiting for the system call to return.
+
+  With that in mind, I modified the benchmark code to see what would happen if
+  we run two UringMachine instances on two separate threads. The results are
+  quite interesting: splitting the work load between two UringMachine instances
+  running on separate threads, we get a marked improvement in performance.
+  Depending on the benchmark, we get even better performance if we increase the
+  thread count to 4.
+
+  But, as we increase the thread count, we eventually hit diminishing returns
+  and risk actually having worse performance than with just a single thread. So,
+  at least for the workloads I tested (including a very primitive HTTP/1.1
+  server), the sweet spot is between 2 and 4 threads.
+
+  One thing I have noticed though, is that while the pure UM version (i.e. using
+  the UM low-level API) gets a boost from running on multiple threads, the UM
+  fiber scheduler actually can perform worse. This is also the case for the
+  Async fiber scheduler, so this might have to do with the fact that the Ruby IO
+  class does a lot of work behind the scenes, including locking write mutexes
+  and other stuff that's done when the IO is closed. This is still to be
+  investigated...
+
+# 2025-12-16
+
+- Added `UM#accept_into_queue`, which accepts incoming socket connections in a
+  loop and pushes them to the given queue.
+
+- Improved error handling in the fiber scheduler, and added more tests. There
+  are now about 4.2KLoC of test code, with 255 test cases and 780 assertions. And
+  that's without all the tests that depend on the
+  [`rb_process_new`](https://github.com/ruby/ruby/pull/15213) API, the PR for
+  which is currently still not merged.
+
+- Added a test mode to UringMachine that affects runqueue processing, without
+  impacting performance under normal conditions.
+
+# 2025-12-17
+
+- I noticed that the fiber scheduler `#io_write` was not being called on
+  `IO#flush` or when closing an IO with buffered writes. So any time the IO
+  write buffer needs to be flushed, instead of calling the `#io_write` hook, the
+  Ruby I/O layer would just run this on a worker thread by calling the
+  `#blocking_operation_wait` hook. I've made a
+  [PR](https://github.com/ruby/ruby/pull/15609) to fix this.
+
+# 2025-12-18
+
+- Added a [PR](https://github.com/ruby/ruby/pull/15629) to update Ruby NEWS with
+  changes to the FiberScheduler interface.
+

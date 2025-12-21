@@ -1,6 +1,18 @@
 ## immediate
 
-## buffer rings - automatic management
+## Sidecar thread
+
+The sidecar thread is an auxiliary thread that is used to wait for CQEs. It
+calls `io_uring_wait_cqe` (or equivalent lower-level interface) in a loop, and
+each time a CQE is available, it signals this to the primary UringMachine
+thread (using a futex).
+
+The primary UringMachine thread runs fibers from the runqueue. When the runqueue
+is exhausted, it performs a `io_uring_submit` for unsubmitted ops. It then waits
+for the futex to become signalled (non-zero), and then processes all available
+completions.
+
+## Buffer rings - automatic management
 
 ```ruby
 # completely hands off
@@ -10,19 +22,24 @@ machine.read_each(fd) { |str| ... }
 machine.read_each(fd, io_buffer: true) { |iobuff, len| ... }
 ```
 
-## write/send multiple buffers at once
+## Balancing I/O with the runqueue
 
-This is done as vectored IO:
+- in some cases where there are many entries in the runqueue, this can
+  negatively affect latency. In some cases, this can also lead to I/O
+  starvation. If the runqueue is never empty, then SQEs are not submitted and
+  CQEs are not processed.
+- So we want to limit the number of consecutive fiber switches before processing
+  I/O.
+- Some possible approaches:
 
-```ruby
-machine.writev(fd, buf1, buf2, buf3)
+  1. limit consecutive switches with a parameter
+  2. limit consecutive switches relative to the runqueue size and/or the amount
+     of pending SQEs
+  3. an adaptive algorithm that occasionally measures the time between I/O
+     processing iterations, and adjusts the consecutive switches limit?
 
-# with optional file offset:
-machine.writev(fd, buf1, buf2, buf3, 0)
-
-# for the moment it won't take flags
-machine.sendv(fd, buf1, buf2, buf3)
-```
+- We also want to devise some benchmark that measures throughput / latency with
+  different settings, in a situation with very high concurrency.
 
 ## useful concurrency tools
 

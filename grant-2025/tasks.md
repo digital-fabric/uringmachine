@@ -12,29 +12,36 @@
         https://unixism.net/loti/tutorial/sq_poll.html
   - [v] Add `UM.socketpair`
 
-  - [ ] Add more metrics
+  - [v] Add more metrics
     - [v] runqueue depth
     - [v] number of pending fibers
     - [v] ops: transient count, free count
     - [v] total fiber switches, total waiting for CQEs
-    - [ ] watermark: ops_pending, ops_unsubmitted, ops_runqueue, ops_free, ops_transient
-          (only in profile mode)
-  - [ ] Performance tuning parameters
-    - [ ] max fiber switches before processing CQEs
-    - [ ] max fiber switches before submitting unsubmitted SQEs
-    - [ ] measure switches since last submitting / last CQE processing
+
+  - [v] Make writev automatically complete partial writes
+
+  - [ ] Add inotify API
+
+    https://www.man7.org/linux/man-pages/man7/inotify.7.html
 
   - [ ] Better buffer management buffer rings
     - [v] Add `UM#sendv` method (see below)
     - [v] Benchmark `#sendv` vs `#send_bundle` (in concurrent situation)
     - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
-    - [ ] Support for `IO::Buffer`? How's the API gonna look like?
+    - [v] Support for `IO::Buffer`?
     - [ ] Some higher-level abstraction for managing a *pool* of buffer rings
+  
+  - [ ] Sidecar mode
+    - [ ] Convert `UM#initialize` to take kwargs
+      - [ ] `:size` - SQ entries
+      - [ ] `:sqpoll` - sqpoll mode
+      - [ ] `:sidecar` - sidecar mode
+    - [ ] Sidecar implementation
+      - [ ] sidecar thread
+      - [ ] futex handling
+      - [ ] submission logic
 
-  - [ ] Add some way to measure fiber CPU time.
-        https://github.com/socketry/async/issues/428
-
-- [ ] UringMachine Fiber::Scheduler implementation
+- [v] UringMachine Fiber::Scheduler implementation
   - [v] Check how scheduler interacts with `fork`.
   - [v] Implement `process_wait` (with `rb_process_status_new`)
   - [v] Implement `fiber_interrupt` hook
@@ -97,7 +104,7 @@
     - [v] pipes: multiple pairs of fibers - reader / writer
     - [v] sockets: echo server + many clients
 
-  - [ ] Benchmarks
+  - [v] Benchmarks
     - [v] UM queue / Ruby queue (threads) / Ruby queue with UM fiber scheduler
 
           N groups where each group has M producers and O consumers accessing the same queue.
