@@ -158,6 +158,9 @@ struct um {
   struct um_metrics metrics;
   int test_mode;
   int profile_mode;
+  int sidecar_mode;
+  pthread_t sidecar_thread;
+  uint32_t *sidecar_signal;
 
   uint buffer_ring_count; // number of registered buffer rings
 
@@ -358,5 +361,10 @@ void write_buffer_init(struct um_write_buffer *buf, VALUE str);
 void write_buffer_update_len(struct um_write_buffer *buf);
 
 void um_define_net_constants(VALUE mod);
+
+void um_sidecar_setup(struct um *machine);
+void um_sidecar_teardown(struct um *machine);
+void um_sidecar_signal_wait(struct um *machine);
+void um_sidecar_signal_wake(struct um *machine);
 
 #endif // UM_H
