@@ -1,5 +1,7 @@
 ## immediate
 
+- Fix all futex value (Queue, Mutex) to be aligned
+
 ## Sidecar thread
 
 The sidecar thread is an auxiliary thread that is used to wait for CQEs. It
