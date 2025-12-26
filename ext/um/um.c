@@ -69,8 +69,7 @@ inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
   sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
 
-  fprintf(stderr, "!!!Failed to get SQE\n");
-  um_raise_internal_error("Failed to get SQE");
+  um_raise_internal_error("Submission queue full. Consider raising the machine size.");
 
   // TODO: retry getting SQE?
 
