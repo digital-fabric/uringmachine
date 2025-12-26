@@ -72,6 +72,7 @@ inline struct um *um_get_machine(VALUE self) {
 static inline uint get_sqpoll_timeout_msec(VALUE sqpoll_timeout) {
   switch (TYPE(sqpoll_timeout)) {
     case T_NIL:
+    case T_UNDEF:
     case T_FALSE:
       return 0;
     case T_FLOAT:
@@ -86,16 +87,24 @@ static inline uint get_sqpoll_timeout_msec(VALUE sqpoll_timeout) {
 }
 
 VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
+  static ID kwargs_ids[3];
   struct um *machine = RTYPEDDATA_DATA(self);
-  VALUE entries;
-  VALUE sqpoll_timeout;
-  rb_scan_args(argc, argv, "02", &entries, &sqpoll_timeout);
+  VALUE opts, kwargs[3] = {Qnil, Qnil, Qnil};
 
-  uint entries_i = NIL_P(entries) ? 0 : NUM2UINT(entries);
-  uint sqpoll_timeout_msec = get_sqpoll_timeout_msec(sqpoll_timeout);
+  if (!kwargs_ids[0]) {
+    kwargs_ids[0] = rb_intern_const("size");
+    kwargs_ids[1] = rb_intern_const("sqpoll");
+    kwargs_ids[2] = rb_intern_const("sidecar");
+  }
+  rb_scan_args(argc, argv, "0:", &opts);
+  if (!NIL_P(opts)) {
+    rb_get_kwargs(opts, kwargs_ids, 0, 3, kwargs);
+  }
 
-
-  um_setup(self, machine, entries_i, sqpoll_timeout_msec);
+  uint entries_i = TYPE(kwargs[0]) == T_FIXNUM ? NUM2UINT(kwargs[0]) : 0;
+  uint sqpoll_timeout_msec = get_sqpoll_timeout_msec(kwargs[1]);
+  um_setup(self, machine, entries_i, sqpoll_timeout_msec, RTEST(kwargs[2]));
+  
   return self;
 }
 
@@ -126,6 +135,11 @@ VALUE UM_profile_mode_p(VALUE self) {
   return machine->profile_mode ? Qtrue : Qfalse;
 }
 
+VALUE UM_sqpoll_mode_p(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return machine->sqpoll_mode ? Qtrue : Qfalse;
+}
+
 VALUE UM_profile_mode_set(VALUE self, VALUE value) {
   struct um *machine = um_get_machine(self);
   machine->profile_mode = RTEST(value);
@@ -140,6 +154,23 @@ VALUE UM_test_mode_set(VALUE self, VALUE value) {
   struct um *machine = um_get_machine(self);
   machine->test_mode = RTEST(value);
   return value;
+}
+
+VALUE UM_sidecar_mode_p(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  return machine->sidecar_mode ? Qtrue : Qfalse;
+}
+
+VALUE UM_sidecar_start(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  um_sidecar_setup(machine);
+  return self;
+}
+
+VALUE UM_sidecar_stop(VALUE self) {
+  struct um *machine = um_get_machine(self);
+  um_sidecar_teardown(machine);
+  return self;
 }
 
 VALUE UM_snooze(VALUE self) {
@@ -587,9 +618,14 @@ void Init_UM(void) {
   rb_define_method(cUM, "size", UM_size, 0);
   rb_define_method(cUM, "mark", UM_mark_m, 1);
   rb_define_method(cUM, "metrics", UM_metrics, 0);
+  rb_define_method(cUM, "sqpoll_mode?", UM_sqpoll_mode_p, 0);
   rb_define_method(cUM, "profile_mode?", UM_profile_mode_p, 0);
   rb_define_method(cUM, "profile_mode=", UM_profile_mode_set, 1);
   rb_define_method(cUM, "test_mode=", UM_test_mode_set, 1);
+
+  rb_define_method(cUM, "sidecar_mode?", UM_sidecar_mode_p, 0);
+  rb_define_method(cUM, "sidecar_start", UM_sidecar_start, 0);
+  rb_define_method(cUM, "sidecar_stop", UM_sidecar_stop, 0);
 
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
 

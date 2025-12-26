@@ -231,7 +231,7 @@ extern VALUE cAsyncOp;
 extern VALUE eStreamRESPError;
 
 struct um *um_get_machine(VALUE self);
-void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec);
+void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec, int sidecar_mode);
 void um_teardown(struct um *machine);
 
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics);

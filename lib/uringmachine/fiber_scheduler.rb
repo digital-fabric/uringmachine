@@ -53,7 +53,7 @@ class UringMachine
 
     # @return [void]
     def run_worker_thread
-      machine = UM.new(4)
+      machine = UM.new(size: 4)
       loop do
         q, op = machine.shift(@job_queue)
         @pending_count += 1

@@ -6,24 +6,61 @@
 #include <unistd.h>
 
 #define FUTEX2_SIZE_U32		        0x02
-#define SIDECAR_THREAD_STACK_SIZE 8192
+#define SIDECAR_THREAD_STACK_SIZE PTHREAD_STACK_MIN
 
 #define RAISE_ON_ERR(ret) if (ret) rb_syserr_fail(errno, strerror(errno))
 
+static inline int futex(uint32_t *uaddr, int op, uint32_t val, const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
+  return syscall(SYS_futex, uaddr, op, val, timeout, uaddr2, val3);
+}
+
+static inline void xchg_futex_wait(uint32_t *futexp, uint32_t oldval, uint32_t newval) {
+  while (1) {
+    if (atomic_compare_exchange_strong(futexp, &newval, oldval))
+      break;
+
+    int ret = futex(futexp, FUTEX_WAIT, oldval, NULL, NULL, 0);
+  }
+}
+
+static inline void xchg_futex_wake(uint32_t *futexp, uint32_t oldval, uint32_t newval) {
+  while (1) {
+    if (atomic_compare_exchange_strong(futexp, &newval, oldval))
+      break;
+
+    usleep(1);
+  }
+
+  futex(futexp, FUTEX_WAKE, 1, NULL, NULL, 0);
+}
+
+inline void um_sidecar_signal_wait(struct um *machine) {
+  // wait for machine->sidecar_signal to equal 1, then reset it to 0
+  xchg_futex_wait(machine->sidecar_signal, 0, 1);
+}
+
+inline void um_sidecar_signal_wake(struct um *machine) {
+  // busy-wait for machine->sidecar_signal to equal 0, then set it to 1 and wakeup futex waiter
+  xchg_futex_wake(machine->sidecar_signal, 1, 0);
+}
+
 static void *sidecar_start(void *arg) {
+  pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
   struct um *machine = arg;
   while (1) {
-
+    int ret = io_uring_enter2(machine->ring.enter_ring_fd, 0, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+    if (!ret) {
+      um_sidecar_signal_wake(machine);
+  }
   }
   return NULL;
 }
 
 void um_sidecar_setup(struct um *machine) {
+  if (machine->sidecar_thread) return;
+
   int                 ret;
   pthread_attr_t      attr;
-
-  machine->sidecar_signal = aligned_alloc(4, sizeof(uint32_t));
-  memset(machine->sidecar_signal, 0, sizeof(uint32_t));
 
   ret = pthread_attr_init(&attr);
   RAISE_ON_ERR(ret);
@@ -40,58 +77,18 @@ void um_sidecar_setup(struct um *machine) {
   RAISE_ON_ERR(ret);
 
   ret = pthread_attr_destroy(&attr);
+  RAISE_ON_ERR(ret);
 }
 
 
 void um_sidecar_teardown(struct um *machine) {
-  int ret;
+  if (machine->sidecar_thread) {
+    int ret = pthread_cancel(machine->sidecar_thread);
+    // RAISE_ON_ERR(ret);
 
-  ret = pthread_cancel(machine->sidecar_thread);
-  RAISE_ON_ERR(ret);
+    ret = pthread_join(machine->sidecar_thread, NULL);
+    // RAISE_ON_ERR(ret);
 
-  ret = pthread_join(machine->sidecar_thread, NULL);
-  RAISE_ON_ERR(ret);
-
-  free(machine->sidecar_signal);
-}
-
-static inline int futex(uint32_t *uaddr, int op, uint32_t val, const struct timespec *timeout, uint32_t *uaddr2, uint32_t val3) {
-  return syscall(SYS_futex, uaddr, op, val, timeout, uaddr2, val3);
-}
-
-static void xchg_futex_wait(uint32_t *futexp, uint32_t oldval, uint32_t newval) {
-  while (1) {
-
-    /* Is the futex available? */
-    if (atomic_compare_exchange_strong(futexp, &newval, oldval))
-      break;      /* Yes */
-
-    /* Futex is not available; wait. */
-
-    int ret = futex(futexp, FUTEX_WAIT, oldval, NULL, NULL, 0);
-    if (ret == -1 && errno != EAGAIN) rb_syserr_fail(errno, strerror(errno));
+    machine->sidecar_thread = 0;
   }
-}
-
-static void xchg_futex_wake(uint32_t *futexp, uint32_t oldval, uint32_t newval) {
-  while (1) {
-
-    /* Is the futex available? */
-    if (atomic_compare_exchange_strong(futexp, &newval, oldval))
-      break;      /* Yes */
-
-    usleep(1);
-  }
-
-  futex(futexp, FUTEX_WAKE, newval, NULL, NULL, 0);
-}
-
-void um_sidecar_signal_wait(struct um *machine) {
-  // wait for machine->sidecar_signal to equal 1, then reset it to 0
-  xchg_futex_wait(machine->sidecar_signal, 0, 1);
-}
-
-void um_sidecar_signal_wake(struct um *machine) {
-  // busy-wait for machine->sidecar_signal to equal 0, then set it to 1 and wakeup futex waiter
-  xchg_futex_wake(machine->sidecar_signal, 1, 0);
 }

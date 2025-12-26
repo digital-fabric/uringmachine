@@ -18,7 +18,7 @@ inline void prepare_io_uring_params(struct io_uring_params *params, uint sqpoll_
     params->flags |= IORING_SETUP_COOP_TASKRUN;
 }
 
-void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec) {
+void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec, int sidecar_mode) {
   memset(machine, 0, sizeof(struct um));
 
   RB_OBJ_WRITE(self, &machine->self, self);
@@ -27,15 +27,25 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   machine->size = (size > 0) ? size : DEFAULT_SIZE;
   machine->sqpoll_mode = !!sqpoll_timeout_msec;
 
+  // sidecar handling
+  machine->sidecar_mode = sidecar_mode;
+  machine->sidecar_signal = aligned_alloc(4, sizeof(uint32_t));
+  memset(machine->sidecar_signal, 0, sizeof(uint32_t));
+
   struct io_uring_params params;
   prepare_io_uring_params(&params, sqpoll_timeout_msec);
   int ret = io_uring_queue_init_params(machine->size, &machine->ring, &params);
   if (ret) rb_syserr_fail(-ret, strerror(-ret));
   machine->ring_initialized = 1;
+
+  if (machine->sidecar_mode) um_sidecar_setup(machine);
 }
 
 inline void um_teardown(struct um *machine) {
   if (!machine->ring_initialized) return;
+
+  if (machine->sidecar_mode) um_sidecar_teardown(machine);
+  if (machine->sidecar_signal) free(machine->sidecar_signal);
 
   for (unsigned i = 0; i < machine->buffer_ring_count; i++) {
     struct buf_ring_descriptor *desc = machine->buffer_rings + i;
@@ -271,37 +281,59 @@ inline void um_profile_wait_cqe_post(struct um *machine, double time_monotonic0,
   // machine->metrics.time_last_cpu = time_cpu;
 }
 
+inline void *um_wait_for_sidecar_signal(void *ptr) {
+  struct um *machine = ptr;
+  um_sidecar_signal_wait(machine);
+  return NULL;
+}
+
 // Waits for the given minimum number of completion entries. The wait_nr is
 // either 1 - where we wait for at least one CQE to be ready, or 0, where we
 // don't wait, and just process any CQEs that already ready.
 static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wait_nr) {
   struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL, .wait_nr = wait_nr };
   machine->metrics.total_waits++;
-  double time_monotonic0 = 0.0;
-  VALUE fiber;
-  if (machine->profile_mode) um_profile_wait_cqe_pre(machine, &time_monotonic0, &fiber);
-  rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
-  if (machine->profile_mode) um_profile_wait_cqe_post(machine, time_monotonic0, fiber);
 
-  if (unlikely(ctx.result < 0)) {
-    // the internal calls to (maybe submit) and wait for cqes may fail with:
-    // -EINTR (interrupted by signal)
-    // -EAGAIN (apparently can be returned when wait_nr = 0)
-    // both should not raise an exception.
-    switch (ctx.result) {
-      case -EINTR:
-      case -EAGAIN:
-        // do nothing
-        break;
-      default:
-        rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+  if (machine->sidecar_mode) {
+    // fprintf(stderr, ">> sidecar wait cqes (unsubmitted: %d)\n", machine->metrics.ops_unsubmitted);
+    if (machine->metrics.ops_unsubmitted) {
+      io_uring_submit(&machine->ring);
+      machine->metrics.ops_unsubmitted = 0;
     }
-  }
-
-  if (ctx.cqe) {
-    um_process_cqe(machine, ctx.cqe);
-    io_uring_cq_advance(&machine->ring, 1);
+    if (wait_nr) {
+      // fprintf(stderr, ">> um_wait_for_sidecar_signal\n");
+      rb_thread_call_without_gvl(um_wait_for_sidecar_signal, (void *)machine, RUBY_UBF_PROCESS, 0);
+      // fprintf(stderr, "<< um_wait_for_sidecar_signal\n");
+    }
     um_process_ready_cqes(machine);
+    // fprintf(stderr, "<< sidecar wait cqes\n");
+  } 
+  else {
+    double time_monotonic0 = 0.0;
+    VALUE fiber;
+    if (machine->profile_mode) um_profile_wait_cqe_pre(machine, &time_monotonic0, &fiber);
+    rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+    if (machine->profile_mode) um_profile_wait_cqe_post(machine, time_monotonic0, fiber);
+
+    if (unlikely(ctx.result < 0)) {
+      // the internal calls to (maybe submit) and wait for cqes may fail with:
+      // -EINTR (interrupted by signal)
+      // -EAGAIN (apparently can be returned when wait_nr = 0)
+      // both should not raise an exception.
+      switch (ctx.result) {
+        case -EINTR:
+        case -EAGAIN:
+          // do nothing
+          break;
+        default:
+          rb_syserr_fail(-ctx.result, strerror(-ctx.result));
+      }
+    }
+    if (ctx.cqe) {
+      um_process_cqe(machine, ctx.cqe);
+      io_uring_cq_advance(&machine->ring, 1);
+      um_process_ready_cqes(machine);
+    }
   }
 }
 
