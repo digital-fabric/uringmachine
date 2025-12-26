@@ -301,8 +301,9 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
     }
     if (wait_nr) {
       // fprintf(stderr, ">> um_wait_for_sidecar_signal\n");
-      rb_thread_call_without_gvl(um_wait_for_sidecar_signal, (void *)machine, RUBY_UBF_PROCESS, 0);
+      // rb_thread_call_without_gvl(um_wait_for_sidecar_signal, (void *)machine, RUBY_UBF_PROCESS, 0);
       // fprintf(stderr, "<< um_wait_for_sidecar_signal\n");
+      um_sidecar_signal_wait(machine);
     }
     um_process_ready_cqes(machine);
     // fprintf(stderr, "<< sidecar wait cqes\n");

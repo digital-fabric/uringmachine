@@ -4,6 +4,7 @@
 #include <sys/syscall.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <ruby/thread.h>
 
 #define FUTEX2_SIZE_U32		        0x02
 #define SIDECAR_THREAD_STACK_SIZE PTHREAD_STACK_MIN
@@ -14,12 +15,26 @@ static inline int futex(uint32_t *uaddr, int op, uint32_t val, const struct time
   return syscall(SYS_futex, uaddr, op, val, timeout, uaddr2, val3);
 }
 
+struct futex_wait_ctx {
+  uint32_t *futexp;
+  uint32_t oldval;
+};
+
+void *futex_wait_without_gvl(void *ptr) {
+  struct futex_wait_ctx *ctx = ptr;
+  futex(ctx->futexp, FUTEX_WAIT, ctx->oldval, NULL, NULL, 0);
+  return NULL;
+}
+
 static inline void xchg_futex_wait(uint32_t *futexp, uint32_t oldval, uint32_t newval) {
+  struct futex_wait_ctx ctx = { futexp, oldval };
   while (1) {
     if (atomic_compare_exchange_strong(futexp, &newval, oldval))
       break;
 
-    int ret = futex(futexp, FUTEX_WAIT, oldval, NULL, NULL, 0);
+    rb_thread_call_without_gvl(futex_wait_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
+    // int ret = futex(futexp, FUTEX_WAIT, oldval, NULL, NULL, 0);
+    
   }
 }
 
@@ -83,11 +98,8 @@ void um_sidecar_setup(struct um *machine) {
 
 void um_sidecar_teardown(struct um *machine) {
   if (machine->sidecar_thread) {
-    int ret = pthread_cancel(machine->sidecar_thread);
-    // RAISE_ON_ERR(ret);
-
-    ret = pthread_join(machine->sidecar_thread, NULL);
-    // RAISE_ON_ERR(ret);
+    pthread_cancel(machine->sidecar_thread);
+    pthread_join(machine->sidecar_thread, NULL);
 
     machine->sidecar_thread = 0;
   }
