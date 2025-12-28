@@ -7,10 +7,8 @@ require 'uringmachine/dns_resolver'
 UM = UringMachine
 
 class UringMachine
-  @@fiber_map = {}
-
   def fiber_map
-    @@fiber_map
+    @fiber_map ||= {}
   end
 
   class Terminate < Exception
@@ -20,13 +18,13 @@ class UringMachine
     fiber = klass.new { |v| run_block_in_fiber(block, fiber, v) }
     self.schedule(fiber, value)
 
-    @@fiber_map[fiber] = fiber
+    fiber_map[fiber] = fiber
   end
 
   def run(fiber, &block)
     run_block_in_fiber(block, fiber, nil)
     self.schedule(fiber, nil)
-    @@fiber_map[fiber] = fiber
+    fiber_map[fiber] = fiber
   end
 
   def join(*fibers)
@@ -97,7 +95,7 @@ class UringMachine
   ensure
     fiber.mark_as_done
     # cleanup
-    @@fiber_map.delete(fiber)
+    fiber_map.delete(fiber)
     self.notify_done_listeners(fiber)
 
     # switch away to a different fiber

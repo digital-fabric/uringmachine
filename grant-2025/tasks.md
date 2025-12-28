@@ -32,14 +32,15 @@
     - [ ] Some higher-level abstraction for managing a *pool* of buffer rings
   
   - [ ] Sidecar mode
-    - [ ] Convert `UM#initialize` to take kwargs
-      - [ ] `:size` - SQ entries
-      - [ ] `:sqpoll` - sqpoll mode
-      - [ ] `:sidecar` - sidecar mode
-    - [ ] Sidecar implementation
-      - [ ] sidecar thread
-      - [ ] futex handling
-      - [ ] submission logic
+    - [v] Convert `UM#initialize` to take kwargs
+      - [v] `:size` - SQ entries
+      - [v] `:sqpoll` - sqpoll mode
+      - [v] `:sidecar` - sidecar mode
+    - [v] Sidecar implementation
+      - [v] sidecar thread
+      - [v] futex handling
+      - [v] submission logic
+    - [ ] 
 
 - [v] UringMachine Fiber::Scheduler implementation
   - [v] Check how scheduler interacts with `fork`.

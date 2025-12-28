@@ -71,6 +71,7 @@ class UMBenchmark
     um_fs_x2:       [:scheduler_x,  "UM FS x2"],
 
     um:             [:um,           "UM"],
+    um_sidecar:     [:um,           "UM sidecar"],
     # um_sqpoll:      [:um,           "UM sqpoll"],
     um_x2:          [:um_x,         "UM x2"],
     um_x4:          [:um_x,         "UM x4"],
@@ -193,7 +194,16 @@ class UMBenchmark
   end
 
   def run_um
-    machine = UM.new(4096)
+    machine = UM.new
+    fibers = []
+    fds = []
+    do_um(machine, fibers, fds)
+    machine.await_fibers(fibers)
+    fds.each { machine.close(it) }
+  end
+
+  def run_um_sidecar
+    machine = UM.new(sidecar: true)
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
@@ -202,7 +212,7 @@ class UMBenchmark
   end
 
   def run_um_sqpoll
-    machine = UM.new(4096, true)
+    machine = UM.new(sqpoll: true)
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
@@ -213,7 +223,7 @@ class UMBenchmark
   def run_um_x2
     threads  = 2.times.map do
       Thread.new do
-        machine = UM.new(4096)
+        machine = UM.new
         fibers = []
         fds = []
         do_um_x(2, machine, fibers, fds)
@@ -227,7 +237,7 @@ class UMBenchmark
   def run_um_x4
     threads  = 4.times.map do
       Thread.new do
-        machine = UM.new(4096)
+        machine = UM.new
         fibers = []
         fds = []
         do_um_x(4, machine, fibers, fds)
@@ -241,7 +251,7 @@ class UMBenchmark
   def run_um_x8
     threads  = 8.times.map do
       Thread.new do
-        machine = UM.new(4096)
+        machine = UM.new
         fibers = []
         fds = []
         do_um_x(8, machine, fibers, fds)
