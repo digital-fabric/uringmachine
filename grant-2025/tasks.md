@@ -24,14 +24,17 @@
 
     https://www.man7.org/linux/man-pages/man7/inotify.7.html
 
-  - [ ] Better buffer management buffer rings
+  - [ ] Better buffer management
     - [v] Add `UM#sendv` method (see below)
     - [v] Benchmark `#sendv` vs `#send_bundle` (in concurrent situation)
-    - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
     - [v] Support for `IO::Buffer`?
-    - [ ] Some higher-level abstraction for managing a *pool* of buffer rings
+    - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
+    - [ ] Implement automatic buffer pool:
+      - [ ] Automatic buffer allocation,registration and management.
+      - [ ] Support for partial buffer consumption.
+      - [ ] Data processing through a rewritten stream implementation.
 
-  - [ ] Sidecar mode
+  - [v] Sidecar mode
     - [v] Convert `UM#initialize` to take kwargs
       - [v] `:size` - SQ entries
       - [v] `:sqpoll` - sqpoll mode
@@ -40,7 +43,6 @@
       - [v] sidecar thread
       - [v] futex handling
       - [v] submission logic
-    - [ ]
 
 - [v] UringMachine Fiber::Scheduler implementation
   - [v] Check how scheduler interacts with `fork`.

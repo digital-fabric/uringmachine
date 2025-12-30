@@ -561,3 +561,28 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 - Added a [PR](https://github.com/ruby/ruby/pull/15629) to update Ruby NEWS with
   changes to the FiberScheduler interface.
 
+- I did some more verification work on the fiber scheduler implementation. I
+  added more tests and improved error handling in read/write hooks.
+
+- Made some small changes to fiber scheduling. I added a test mode which peeks
+  at CQEs on each snooze, in order to facilitate testing.
+
+# 2025-12-20
+
+- Did some more work on benchmarks, and added provisory GVL time measurement.
+
+- Implemented sidecar mode - the basic idea is that UringMachine starts an
+  auxiliary thread that loops entering the kernel with a call to
+  `io_uring_enter` in order to make CQEs available. On return from the system
+  call, it signals through a futex that ready CQEs can be processed. 
+
+  On fiber switch, the next fiber to run is shifted from the runqueue. If the
+  runqueue is empty, the UringMachine will wait for the signal, and then process
+  all CQEs. The idea is that in a single threaded environment, under high enough
+  I/O load,  we don't need to release the GVL in order to process ready CQEs,
+  and thus we can better saturate the CPU.
+
+# 2025-12-26
+
+- Finished up the sidecar mode implementation. I did some preliminary benchmarks and this mode does provide a small performance benefit, depending on the context. But for the moment, I consider this mode experimental.
+
