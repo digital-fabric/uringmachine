@@ -70,7 +70,7 @@ class UMBaseTest < Minitest::Test
 
     # pending_fibers = @machine.pending_fibers
     # raise "leaked fibers: #{pending_fibers}" if pending_fibers.size > 0
-    
+
     GC.start
   end
 

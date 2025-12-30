@@ -37,7 +37,7 @@
 - `periodically(interval) { ... }` - runs the given block at regular intervals
   in an infinite loop.
 - `poll(fd, mask)` - waits for the given fd to become ready according to the
-  given event mask. 
+  given event mask.
 - `pop(queue)` - removes and returns a value off the end of the given queue.
 - `prep_timeout(interval)` - returns a timeout AsyncOp with the given interval.
 - `push(queue, value)` - adds the given value to the end of the given queue.

@@ -49,7 +49,7 @@ end
 
 def um_setup
   @machine = UM.new
-  
+
   @um_start_queue = UM::Queue.new
   @um_stop_queue = UM::Queue.new
 
@@ -86,7 +86,7 @@ def um2_setup
 
   thread_count = 2
   tgroups = GROUPS / thread_count
-  
+
   @um2_machines = []
   @um2_done = UM::Queue.new
   @um2_threads = thread_count.times.map do

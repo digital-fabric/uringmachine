@@ -455,13 +455,13 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   [Extralite](https://github.com/digital-fabric/extralite/)): normally, using an
   actor interface, or protected by a mutex. I'll try to follow up with a
   benchmark measuring concurrent access to SQLite DBs, similar to the PG one.
-  
+
   Another interesting benchmark I found was one for resolving DNS addresses
   using Ruby's builtin `Addrinfo` API, the bundled `resolv` gem, and a basic DNS
   resolver included in UringMachine (I totally forgot I made one). Here too, I'd
   like to add a benchmark to measure how these different solutions do in a
   highly concurrent scenario.
-  
+
 - Thanks to one of these old benchmarks I made a change that more than doubled
   the performance of `UM#snooze`. What this method does is it adds the current
   fiber to the end of the runqueue, and yields control to the next fiber in the
@@ -503,7 +503,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   performance on the table. This is because when we call `io_uring_submit` or
   `io_uring_wait_cqes`, we make a blocking system call (namely,
   `io_uring_enter`), and correspondigly we release the GVL.
-  
+
   What this means is that while we're waiting for the system call to return, the
   GVL is available for another Ruby thread to do CPU-bound work. Normally when
   there's a discussion about concurrency in Ruby, there's this dichotomy: it's

@@ -187,7 +187,7 @@ class UMBenchmark
         ios = []
         do_scheduler_x(2, scheduler, ios)
         scheduler.join
-        ios.each { it.close rescue nil } 
+        ios.each { it.close rescue nil }
       end
     end
     threads.each(&:join)

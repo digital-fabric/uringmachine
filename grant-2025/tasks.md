@@ -30,7 +30,7 @@
     - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
     - [v] Support for `IO::Buffer`?
     - [ ] Some higher-level abstraction for managing a *pool* of buffer rings
-  
+
   - [ ] Sidecar mode
     - [v] Convert `UM#initialize` to take kwargs
       - [v] `:size` - SQ entries
@@ -40,7 +40,7 @@
       - [v] sidecar thread
       - [v] futex handling
       - [v] submission logic
-    - [ ] 
+    - [ ]
 
 - [v] UringMachine Fiber::Scheduler implementation
   - [v] Check how scheduler interacts with `fork`.

@@ -41,12 +41,6 @@ end
 class SQPOLLTest < Minitest::Test
   def test_sqpoll_mode
     m = UM.new()
-  end
-end
-
-class SQPOLLTest < Minitest::Test
-  def test_sqpoll_mode
-    m = UM.new()
     assert_equal false, m.sqpoll_mode?
 
     m = UM.new(sqpoll: true)
@@ -861,7 +855,7 @@ class WritevTest < UMBaseTest
         buf = +''
         res = machine.read(r, buf, 8192)
         break if res == 0
-        
+
         reads << buf
       }
     }
@@ -1264,7 +1258,6 @@ class AcceptEachTest < UMBaseTest
   end
 
   def test_accept_each_bad_fd
-    queue = UM::Queue.new
     assert_raises(Errno::ENOTSOCK) { machine.accept_each(STDOUT.fileno) }
   end
 end
@@ -1306,7 +1299,6 @@ class AcceptIntoQueueTest < UMBaseTest
   end
 
   def test_accept_into_queue_interrupted
-    count = 0
     terminated = nil
     queue = UM::Queue.new
     f = @machine.spin do
@@ -1818,11 +1810,11 @@ class QueueTest < UMBaseTest
     q = UM::Queue.new
     buf = []
 
-    f1 = machine.spin do
+    machine.spin do
       buf << [1, machine.pop(q)]
     end
 
-    f2 = machine.spin do
+    machine.spin do
       buf << [2, machine.pop(q)]
     end
 

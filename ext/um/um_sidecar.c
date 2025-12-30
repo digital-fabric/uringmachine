@@ -34,7 +34,7 @@ static inline void xchg_futex_wait(uint32_t *futexp, uint32_t oldval, uint32_t n
 
     rb_thread_call_without_gvl(futex_wait_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
     // int ret = futex(futexp, FUTEX_WAIT, oldval, NULL, NULL, 0);
-    
+
   }
 }
 

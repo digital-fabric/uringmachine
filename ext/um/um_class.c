@@ -104,7 +104,7 @@ VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   uint entries_i = TYPE(kwargs[0]) == T_FIXNUM ? NUM2UINT(kwargs[0]) : 0;
   uint sqpoll_timeout_msec = get_sqpoll_timeout_msec(kwargs[1]);
   um_setup(self, machine, entries_i, sqpoll_timeout_msec, RTEST(kwargs[2]));
-  
+
   return self;
 }
 
@@ -682,7 +682,7 @@ void Init_UM(void) {
   #ifdef HAVE_IO_URING_SEND_VECTORIZED
   rb_define_method(cUM, "sendv", UM_sendv, -1);
   #endif
-  
+
   rb_define_method(cUM, "send_bundle", UM_send_bundle, -1);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);

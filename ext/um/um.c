@@ -307,7 +307,7 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
     }
     um_process_ready_cqes(machine);
     // fprintf(stderr, "<< sidecar wait cqes\n");
-  } 
+  }
   else {
     double time_monotonic0 = 0.0;
     VALUE fiber;
@@ -609,10 +609,10 @@ VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv) {
 
     int completed = um_op_completed_p(&op);
     if (unlikely(!completed)) goto cancelled;
-  
+
     writev_res = op.result.res;
     if (unlikely(writev_res < 0)) goto done;
-      
+
     len -= writev_res;
     if (len) {
       um_advance_iovecs_for_writing(&iovecs_ptr, &iovecs_len, (size_t)writev_res);
