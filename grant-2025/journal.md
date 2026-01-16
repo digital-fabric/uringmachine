@@ -584,5 +584,51 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 
 # 2025-12-26
 
-- Finished up the sidecar mode implementation. I did some preliminary benchmarks and this mode does provide a small performance benefit, depending on the context. But for the moment, I consider this mode experimental.
+- Finished up the sidecar mode implementation. I did some preliminary benchmarks
+  and this mode does provide a small performance benefit, depending on the
+  context. But for the moment, I consider this mode experimental.
 
+# 2026-01-07
+
+- In the last week I've been working on implementing a buffer pool  
+  with automatic buffer manangement. I've been contemplating the design for a
+  few weeks already, and after the vacation has decided the idea is solid enough
+  for me to start writing some code. But let me back up and explain what I'm
+  trying to achieve.
+
+  The io_uring interface includes a facility for setting up buffer rings. The
+  idea is that the application provides buffers to the kernel, which uses those
+  buffers for reading or receiving repeatedly from an fd, letting the
+  application know with each CQE which buffer was used and with how much data.
+  This is particularly useful when dealing with bursts of incoming data.
+  
+  The application initiates multishot read/recv operations on each connection,
+  and the kernel has at its disposition a pool of application-provided buffers
+  it can use whenever a chunk of data is read / received. So the kernel consumes
+  those buffers as needed, and fills them with data when it becomes available.
+  Those data will be processed by the application at some later time when it's
+  ready to process CQEs. The application will then add the consumed buffers back
+  to the buffer ring, making them available to the kernel again.
+
+  Multiple buffer rings may be registered by the application, each with a set
+  maxmimum number of buffers and with a buffer group id (`bgid`). The buffers
+  added to a buffer ring may be of any size. Each buffer in a buffer ring also
+  has an id (`bid`). So buffers are identified by the tuple `[bgid, bid]`. When
+  submitting a multishot read/recv operation, we indicate the buffer group id
+  (`bgid`), letting the kernel know which buffer ring to use. The kernel then
+  generates CQEs (completion queue entries) which contain the id of the buffer
+  that contains the data (`bid`). Crucially, a single buffer ring may be used in
+  multiple concurrent multishot read/recv operations on different fd's.
+
+  In addition,on recent kernels io_uring is capable of partially consuming
+  buffers, which prevents wasting buffer space. When a buffer ring is set up for
+  [partial buffer
+  consumption](https://www.man7.org/linux/man-pages/man3/io_uring_setup_buf_ring.3.html),
+  each CQE relating to a multishot read/recv operation will also have a flag
+  telling the application [whether the buffer will be further
+  used](https://www.man7.org/linux/man-pages/man3/io_uring_prep_recv.3.html)
+  beyond the amount of data readily available. Each completion of a given buffer
+  ID will continue where the previous one left off. So it's great that buffer
+  space can be used fully by the kernel, but the application is required to keep
+  track of a "cursor" for each buffer.
+  

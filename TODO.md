@@ -48,15 +48,36 @@ machine.read_each(fd, io_buffer: true) { |iobuff, len| ... }
 - debounce
 
   ```ruby
-  debouncer = UM.debounce { }
+  debouncer = machine.debounce { }
   ```
 
+- read multiple files
 
+  ```ruby
+  # with a block
+  machine.read_files(*fns) { |fn, data| ... }
+
+  # without a block
+  machine.read_files(*fns) #=> { fn1:, fn2:, fn3:, ...}
+  ```
 
 ## polyvalent select
 
 - select on multiple queues (ala Go)
 - select on mixture of queues and fds
+
+(see also simplified op management below)
+
+## simplified op management
+
+Op lifecycle management can be much much simpler
+
+- make all ops heap-allocated
+- clear up state transitions:
+
+  - kernel-side state: unsubmitted, submitted, completed, done (for multishot ops)
+  - app-side state: unsubmitted, submitted, ...
+
 
 ## ops
 
