@@ -109,7 +109,8 @@ class UringMachine
     # the fiber map, scheduled on the scheduler machine, and started before this
     # method returns (by calling snooze).
     #
-    # @param block [Proc] fiber block @return [Fiber]
+    # @param block [Proc] fiber block
+    # @return [Fiber]
     def fiber(&block)
       fiber = Fiber.new(blocking: false) { @machine.run(fiber, &block) }
 
@@ -147,7 +148,6 @@ class UringMachine
     # @param op [callable] blocking operation
     # @return [void]
     def blocking_operation_wait(op)
-      # p(blocking_operation: op)
       @thread_pool.process(@machine, op)
     end
 
@@ -158,7 +158,6 @@ class UringMachine
     # @param timeout [Number, nil] optional timeout
     # @return [bool] was the operation successful
     def block(blocker, timeout = nil)
-      # p(block: blocker)
       if timeout
         @machine.timeout(timeout, Timeout::Error) { @machine.yield }
       else
@@ -177,7 +176,6 @@ class UringMachine
     # @param fiber [Fiber] fiber to resume
     # @return [void]
     def unblock(blocker, fiber)
-      # p(unblock: blocker)
       @machine.schedule(fiber, nil)
       @machine.wakeup if Thread.current != @thread
     end
@@ -187,15 +185,12 @@ class UringMachine
     # @param duration [Number, nil] sleep duration
     # @return [void]
     def kernel_sleep(duration = nil)
-      # p(kernel_sleep: duration)
       duration ? @machine.sleep(duration) : @machine.yield
     end
 
     # Yields to the next runnable fiber.
     def yield
-      # p(yield: true)
       @machine.snooze
-      # @machine.yield
     end
 
     # Waits for the given io to become ready.
@@ -205,7 +200,6 @@ class UringMachine
     # @param timeout [Number, nil] optional timeout
     # @param return
     def io_wait(io, events, timeout = nil)
-      # p(io_wait: io, events:, timeout:)
       timeout ||= io.timeout
       if timeout
         @machine.timeout(timeout, Timeout::Error) {
@@ -223,7 +217,6 @@ class UringMachine
     # @param eios [Array<IO>] exceptable IOs
     # @param timeout [Number, nil] optional timeout
     def io_select(rios, wios, eios, timeout = nil)
-      # p(select: [rios, wios, eios])
       map_r = map_fds(rios)
       map_w = map_fds(wios)
       map_e = map_fds(eios)
@@ -248,11 +241,10 @@ class UringMachine
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes read
     def io_read(io, buffer, length, offset)
-      # p(io_read: io)
       length = buffer.size if length == 0
 
       if (timeout = io.timeout)
-				@machine.timeout(timeout, Timeout::Error) do
+        @machine.timeout(timeout, Timeout::Error) do
           @machine.read(io.fileno, buffer, length, offset)
         rescue Errno::EINTR
           retry
@@ -275,11 +267,10 @@ class UringMachine
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes read
     def io_pread(io, buffer, from, length, offset)
-      # p(io_pread: io)
       length = buffer.size if length == 0
 
       if (timeout = io.timeout)
-				@machine.timeout(timeout, Timeout::Error) do
+        @machine.timeout(timeout, Timeout::Error) do
           @machine.read(io.fileno, buffer, length, offset, from)
         rescue Errno::EINTR
           retry
@@ -301,12 +292,11 @@ class UringMachine
     # @param offset [Integer] write offset
     # @return [Integer] bytes written
     def io_write(io, buffer, length, offset)
-      # p(io_write: io, length:, offset:, timeout: io.timeout)
       length = buffer.size if length == 0
       buffer = buffer.slice(offset) if offset > 0
 
       if (timeout = io.timeout)
-				@machine.timeout(timeout, Timeout::Error) do
+        @machine.timeout(timeout, Timeout::Error) do
           @machine.write(io.fileno, buffer, length)
         rescue Errno::EINTR
           retry
@@ -329,12 +319,11 @@ class UringMachine
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes written
     def io_pwrite(io, buffer, from, length, offset)
-      # p(io_pwrite: io, from:, length:, offset:, timeout: io.timeout)
       length = buffer.size if length == 0
       buffer = buffer.slice(offset) if offset > 0
 
       if (timeout = io.timeout)
-				@machine.timeout(timeout, Timeout::Error) do
+        @machine.timeout(timeout, Timeout::Error) do
           @machine.write(io.fileno, buffer, length, from)
         rescue Errno::EINTR
           retry
@@ -353,7 +342,6 @@ class UringMachine
     # @param fd [Integer] file descriptor
     # @return [Integer] file descriptor
     def io_close(fd)
-      # p(io_close: fd)
       @machine.close_async(fd)
     rescue Errno => e
       -e.errno
@@ -378,7 +366,6 @@ class UringMachine
     # @param exception [Exception] Exception
     # @return [void]
     def fiber_interrupt(fiber, exception)
-      # p(fiber_interrupt: fiber)
       @machine.schedule(fiber, exception)
       @machine.wakeup
     end
@@ -387,20 +374,18 @@ class UringMachine
     #
     # @param hostname [String] hostname to resolve
     # @return [Array<Addrinfo>] array of resolved addresses
-		def address_resolve(hostname)
-      # p(address_resolve: hostname)
-			Resolv.getaddresses(hostname)
-		end
+    def address_resolve(hostname)
+      Resolv.getaddresses(hostname)
+    end
 
-		# Run the given block with a timeout.
-		#
-		# @param duration [Number] timeout duration
-		# @param exception [Class] exception Class
-		# @param message [String] exception message
-		# @param block [Proc] block to run
-		# @return [any] block return value
+    # Run the given block with a timeout.
+    #
+    # @param duration [Number] timeout duration
+    # @param exception [Class] exception Class
+    # @param message [String] exception message
+    # @param block [Proc] block to run
+    # @return [any] block return value
     def timeout_after(duration, exception, message, &block)
-      # p(timeout_after: duration)
       @machine.timeout(duration, exception, &block)
     end
 
