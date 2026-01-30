@@ -48,7 +48,7 @@
   given fd int o the given buffer (String or IO::Buffer).
 - `recv_each(fd, bgid, flags)` - receives from the given fd using the given
   buffer group id, with the given flags.
-- `recv(fd, buffer, laxmen, flags)` - receives from the given fd into the given
+- `recv(fd, buffer, maxlen, flags)` - receives from the given fd into the given
   buffer.
 - `schedule(fiber, value)` - adds the given fiber to the runqueue with the given
   resume value.

@@ -393,3 +393,34 @@ void resp_encode(struct um_write_buffer *buf, VALUE obj) {
       um_raise_internal_error("Can't encode object");
   }
 }
+
+void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv) {
+  char tmp1[48];
+  char tmp2[60];
+
+  sprintf(tmp1, "*%d\r\n", argc);
+  write_buffer_append_cstr(buf, tmp1);
+  for (int i = 0; i < argc; i++) {
+    switch (TYPE(argv[i])) {
+      case T_FIXNUM:
+        sprintf(tmp1, "%ld", NUM2LONG(argv[i]));
+        sprintf(tmp2, "$%ld\r\n%s\r\n", strlen(tmp1), (char *)tmp1);
+        write_buffer_append_cstr(buf, tmp2);
+        break;
+      case T_FLOAT:
+        sprintf(tmp1, "%lg", NUM2DBL(argv[i]));
+        sprintf(tmp2, "$%ld\r\n%s\r\n", strlen(tmp1), (char *)tmp1);
+        write_buffer_append_cstr(buf, tmp2);
+        break;
+      case T_STRING:
+        write_buffer_append_resp_bulk_string(buf, argv[i]);
+        break;
+      case T_SYMBOL:
+        write_buffer_append_resp_bulk_string(buf, rb_sym_to_s(argv[i]));
+        break;
+      default:
+        um_raise_internal_error("Can't encode object");
+    }
+  }
+  return;
+}

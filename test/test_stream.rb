@@ -178,7 +178,23 @@ class StreamRespTest < StreamBaseTest
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
       s.resp_encode(+'', ['foo', 'bar'])
 
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
+      s.resp_encode(+'', ['foo', 'bar'])
+
     assert_equal "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n:42\r\n",
       s.resp_encode(+'', { 'foo' => 'bar', 'baz' => 42 })
+  end
+
+  def test_resp_encode_cmd
+    s = UM::Stream
+
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
+      s.resp_encode_cmd(+'', 'foo', 'bar')
+
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
+      s.resp_encode_cmd(+'', 'foo', :bar)
+
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\n123\r\n",
+      s.resp_encode_cmd(+'', 'foo', 123)
   end
 end

@@ -84,6 +84,18 @@ VALUE Stream_resp_encode(VALUE self, VALUE str, VALUE obj) {
   return str;
 }
 
+VALUE Stream_resp_encode_cmd(int argc, VALUE *argv, VALUE self) {
+  struct um_write_buffer buf;
+  VALUE str;
+  rb_check_arity(argc, 2, UNLIMITED_ARGUMENTS);
+  str = argv[0];
+  write_buffer_init(&buf, str);
+  rb_str_modify(str);
+  resp_encode_cmd(&buf, argc - 1, argv + 1);
+  write_buffer_update_len(&buf);
+  return str;
+}
+
 void Init_Stream(void) {
   VALUE cStream = rb_define_class_under(cUM, "Stream", rb_cObject);
   rb_define_alloc_func(cStream, Stream_allocate);
@@ -94,7 +106,9 @@ void Init_Stream(void) {
   rb_define_method(cStream, "get_string", Stream_get_string, 2);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
+
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
+  rb_define_singleton_method(cStream, "resp_encode_cmd", Stream_resp_encode_cmd, -1);
 
   eStreamRESPError = rb_define_class_under(cStream, "RESPError", rb_eStandardError);
 }

@@ -354,6 +354,7 @@ VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen);
 VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
+void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);
 
 __attribute__((noreturn)) void um_raise_internal_error(const char *msg);
 
