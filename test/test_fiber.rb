@@ -222,6 +222,22 @@ class WaitFibersTest < UMBaseTest
     res = machine.await_fibers(f)
     assert_equal 1, res
   end
+
+  def test_await_fibers_terminate
+    f1 = machine.spin { machine.sleep(1) }
+    f2 = machine.spin { machine.sleep(1) }
+    done = false
+    a = machine.spin do
+      machine.await_fibers([f1, f2])
+    rescue UM::Terminate
+      done = true
+    end
+
+    machine.snooze
+    machine.schedule(a, UM::Terminate.new)
+    machine.join(a)
+    assert_equal true, done
+  end
 end
 
 class ScopeTest < UMBaseTest
