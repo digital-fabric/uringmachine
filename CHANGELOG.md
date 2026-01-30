@@ -1,3 +1,11 @@
+# 0.24.0 2026-01-30
+
+- Add `Stream.resp_encode_cmd`
+- Add sidecar mode
+- Add test mode, remove special handling of OP_SCHEDULE in um_switch, do it only
+  in test mode
+- Improve fiber scheduler error handling, add tests for I/O errors
+
 # 0.23.1 2025-12-16
 
 - Add `MSG_NOSIGNAL` to default flags for `#sendv` and `#send_bundle`
