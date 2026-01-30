@@ -1207,7 +1207,7 @@ class AcceptEachTest < UMBaseTest
   end
 
   def teardown
-    @server&.close
+    @server&.close rescue nil
     super
   end
 
@@ -1255,6 +1255,36 @@ class AcceptEachTest < UMBaseTest
     assert terminated
   ensure
     s.close
+  end
+
+  def test_accept_each_closed
+    count = 0
+    done = nil
+    f = @machine.spin do
+      machine.accept_each(@server.fileno) do |fd|
+        count += 1
+      end
+    ensure
+      done = true
+    end
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    @machine.sleep(0.01)
+
+    assert_equal 1, count
+    refute done
+
+    machine.close(@server.fileno)
+    @machine.sleep(0.01)
+    refute done
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    @machine.sleep(0.01)
+
+    assert_equal 2, count
+    refute done
+  ensure
+    s.close rescue nil
   end
 
   def test_accept_each_bad_fd
