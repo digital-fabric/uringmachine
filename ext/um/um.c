@@ -580,6 +580,22 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
   return ret;
 }
 
+size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t maxlen) {
+  struct um_op op;
+  um_prep_op(machine, &op, OP_WRITE, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  io_uring_prep_write(sqe, fd, buffer, maxlen, 0);
+
+  VALUE ret = um_yield(machine);
+
+  if (um_check_completion(machine, &op))
+    return op.result.res;
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return 0;
+}
+
 VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv) {
   __u64 file_offset = -1;
   if (TYPE(argv[argc - 1]) == T_FIXNUM) {

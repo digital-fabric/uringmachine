@@ -297,6 +297,7 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t b
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
+size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t maxlen);
 VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv);
 VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
 VALUE um_close(struct um *machine, int fd);
@@ -367,5 +368,9 @@ void um_sidecar_setup(struct um *machine);
 void um_sidecar_teardown(struct um *machine);
 void um_sidecar_signal_wait(struct um *machine);
 void um_sidecar_signal_wake(struct um *machine);
+
+void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
+// int um_ssl_read(VALUE ssl, VALUE buf, int maxlen);
+// int um_ssl_write(VALUE ssl, VALUE buf, int len);
 
 #endif // UM_H

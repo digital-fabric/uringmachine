@@ -527,6 +527,12 @@ VALUE UM_prep_timeout(VALUE self, VALUE interval) {
   return um_prep_timeout(machine, NUM2DBL(interval));
 }
 
+VALUE UM_ssl_set_bio(VALUE self, VALUE ssl) {
+  struct um *machine = um_get_machine(self);
+  um_ssl_set_bio(machine, ssl);
+  return self;
+}
+
 VALUE UM_pipe(VALUE self) {
   int fds[2];
   int ret = pipe(fds);
@@ -696,6 +702,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
+
+  rb_define_method(cUM, "ssl_set_bio", UM_ssl_set_bio, 1);
 
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 

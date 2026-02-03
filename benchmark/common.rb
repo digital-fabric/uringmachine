@@ -10,6 +10,8 @@ gemfile do
   gem 'async'
   gem 'pg'
   gem 'gvltools'
+  gem 'openssl'
+  gem 'localhost'
 end
 
 require 'uringmachine/fiber_scheduler'
