@@ -2,17 +2,29 @@
 
 - Fix all futex value (Queue, Mutex) to be aligned
 
-## Sidecar thread
+## OpenSSL
 
-The sidecar thread is an auxiliary thread that is used to wait for CQEs. It
-calls `io_uring_wait_cqe` (or equivalent lower-level interface) in a loop, and
-each time a CQE is available, it signals this to the primary UringMachine
-thread (using a futex).
+Since the custom BIO PR I submitted will probably not be accepted, an
+alternative plan of action is:
 
-The primary UringMachine thread runs fibers from the runqueue. When the runqueue
-is exhausted, it performs a `io_uring_submit` for unsubmitted ops. It then waits
-for the futex to become signalled (non-zero), and then processes all available
-completions.
+- Add UM API for setting up a custom BIO for an SSL connection. Example usage:
+
+  ```ruby
+  ssl = OpenSSL::SSL::SSLSocket.open("127.0.0.1", 1234)
+  @machine.ssl_set_bio(ssl)
+  ```
+
+  In this context, since the SSLSocket object wraps an `SSL` C struct, we can
+  simply use `RTYPEDDATA_GET_DATA` to get at the underlying SSL C struct, and
+  install the custom BIO.
+
+- We can also add APIs for directly invoking `SSL_read` and `SSL_write` with the
+  custom BIO:
+
+  ```ruby
+  len_received = @machine.ssl_read(ssl, (buf = +''), 8192)
+  len_sent = @machine.ssl_write(ssl, buf, buf.bytesize)
+  ```
 
 ## Buffer rings - automatic management
 
