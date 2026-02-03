@@ -2,6 +2,3 @@
 	path = vendor/liburing
 	url = https://github.com/axboe/liburing
 
-[submodule "vendor/libressl"]
-	path = vendor/libressl
-	url = https://github.com/libressl/portable
