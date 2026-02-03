@@ -370,7 +370,7 @@ void um_sidecar_signal_wait(struct um *machine);
 void um_sidecar_signal_wake(struct um *machine);
 
 void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
-// int um_ssl_read(VALUE ssl, VALUE buf, int maxlen);
-// int um_ssl_write(VALUE ssl, VALUE buf, int len);
+int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, int maxlen);
+int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, int len);
 
 #endif // UM_H

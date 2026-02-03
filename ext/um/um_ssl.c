@@ -79,3 +79,31 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj)
   SSL_set0_rbio(ssl, bio);
   SSL_set0_wbio(ssl, bio);
 }
+
+int um_ssl_read(struct um *machine, VALUE ssl_obj, VALUE buf, int maxlen) {
+  SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
+  void *ptr = um_prepare_read_buffer(buf, maxlen, 0);
+  int ret = SSL_read(ssl, ptr, maxlen);
+  if (ret > 0) {
+    um_update_read_buffer(machine, buf, 0, ret, 0);
+  }
+  else {
+    rb_raise(eUMError, "Failed to read");
+  }
+  return ret;
+}
+
+int um_ssl_write(struct um *machine, VALUE ssl_obj, VALUE buf, int len) {
+  SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
+  const void *base;
+  size_t size;
+  um_get_buffer_bytes_for_writing(buf, &base, &size);
+  if ((len == (int)-1) || (len > (int)size)) len = (int)size;
+  if (unlikely(!len)) return INT2NUM(0);
+
+  int ret = SSL_write(ssl, base, len);
+  if (ret <= 0) {
+    rb_raise(eUMError, "Failed to read");
+  }
+  return ret;
+}
