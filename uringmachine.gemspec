@@ -19,10 +19,4 @@ Gem::Specification.new do |s|
   s.extensions = ["ext/um/extconf.rb"]
   s.require_paths = ["lib"]
   s.required_ruby_version = '>= 3.5'
-
-  s.add_development_dependency  'rake-compiler',        '~>1.3.0'
-  s.add_development_dependency  'minitest',             '~>5.26.2'
-  s.add_development_dependency  'benchmark'
-  s.add_development_dependency  'benchmark-ips'
-  s.add_development_dependency  'http_parser.rb',       '~>0.8.0'
 end

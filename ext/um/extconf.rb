@@ -54,6 +54,21 @@ if !find_library('uring', nil, File.join(liburing_path, 'src'))
   raise "Couldn't find liburing.a"
 end
 
+if !have_header("openssl/ssl.h")
+  raise "Couldn't find OpenSSL headers"
+end
+
+if !have_library("ssl", "SSL_new")
+  raise "Couldn't find OpenSSL library"
+end
+
+version_ok = checking_for("OpenSSL version >= 1.1.1") {
+  try_static_assert("OPENSSL_VERSION_NUMBER >= 0x10101000L", "openssl/opensslv.h")
+}
+unless version_ok
+  raise "OpenSSL >= 1.1.1 or LibreSSL >= 3.9.0 is required"
+end
+
 have_func("&rb_process_status_new")
 
 $defs << "-DUM_KERNEL_VERSION=#{config[:kernel_version]}"

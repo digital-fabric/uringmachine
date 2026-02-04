@@ -527,6 +527,24 @@ VALUE UM_prep_timeout(VALUE self, VALUE interval) {
   return um_prep_timeout(machine, NUM2DBL(interval));
 }
 
+VALUE UM_ssl_set_bio(VALUE self, VALUE ssl) {
+  struct um *machine = um_get_machine(self);
+  um_ssl_set_bio(machine, ssl);
+  return self;
+}
+
+VALUE UM_ssl_read(VALUE self, VALUE ssl, VALUE buf, VALUE maxlen) {
+  struct um *machine = um_get_machine(self);
+  int ret = um_ssl_read(machine, ssl, buf, NUM2INT(maxlen));
+  return INT2NUM(ret);
+}
+
+VALUE UM_ssl_write(VALUE self, VALUE ssl, VALUE buf, VALUE len) {
+  struct um *machine = um_get_machine(self);
+  int ret = um_ssl_write(machine, ssl, buf, NUM2INT(len));
+  return INT2NUM(ret);
+}
+
 VALUE UM_pipe(VALUE self) {
   int fds[2];
   int ret = pipe(fds);
@@ -696,6 +714,10 @@ void Init_UM(void) {
   rb_define_method(cUM, "shift", UM_queue_shift, 1);
   rb_define_method(cUM, "synchronize", UM_mutex_synchronize, 1);
   rb_define_method(cUM, "unshift", UM_queue_unshift, 2);
+
+  rb_define_method(cUM, "ssl_set_bio", UM_ssl_set_bio, 1);
+  rb_define_method(cUM, "ssl_read", UM_ssl_read, 3);
+  rb_define_method(cUM, "ssl_write", UM_ssl_write, 3);
 
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 

@@ -113,7 +113,7 @@ VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
       stream->pos += len + 2;
 
       if (NIL_P(out_buffer)) {
-        VALUE str = rb_str_new(start, len + 1);
+        VALUE str = rb_interned_str(start, len + 1);
         rb_str_set_len(str, len);
         RSTRING_PTR(str)[len] = 0;
         RB_GC_GUARD(str);
@@ -170,7 +170,8 @@ VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
   VALUE array = rb_ary_new2(len);
 
   for (ulong i = 0; i < len; i++) {
-    VALUE value = resp_decode(stream, out_buffer);
+    VALUE buf = rb_str_new(NULL, 100);
+    VALUE value = resp_decode(stream, buf);
     rb_ary_push(array, value);
     RB_GC_GUARD(value);
   }
@@ -180,11 +181,11 @@ VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
 }
 
 static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
-  return rb_str_new(ptr + 1, len - 1);
+  return rb_interned_str(ptr + 1, len - 1);
 }
 
-static inline VALUE resp_decode_string(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  return resp_get_string(stream, len, out_buffer);
+static inline VALUE resp_decode_string(struct um_stream *stream, ulong len) {
+  return resp_get_string(stream, len, Qnil);
 }
 
 static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, VALUE out_buffer, ulong len) {
@@ -210,7 +211,7 @@ static inline VALUE resp_decode_simple_error(char *ptr, ulong len) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = rb_str_new(ptr + 1, len - 1);
+  VALUE msg = rb_interned_str(ptr + 1, len - 1);
   VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
@@ -220,7 +221,7 @@ static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = resp_decode_string(stream, out_buffer, len);
+  VALUE msg = resp_decode_string(stream, len);
   VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
@@ -251,7 +252,7 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
       return resp_decode_simple_string(ptr, len);
     case '$': // string
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string(stream, out_buffer, data_len);
+      return resp_decode_string(stream, data_len);
     case '=': // string with encoding
       data_len = resp_parse_length_field(ptr, len);
       return resp_decode_string_with_encoding(stream, out_buffer, data_len);

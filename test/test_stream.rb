@@ -163,6 +163,8 @@ class StreamRespTest < StreamBaseTest
     machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n*3\r\n+foo\r\n+bar\r\n+baz\r\n")
     assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, @stream.resp_decode)
 
+    machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n*3\r\n+foo\r\n+xbar\r\n+yybaz\r\n")
+    assert_equal({ 'a' => 42, 'b' => ['foo', 'xbar', 'yybaz'] }, @stream.resp_decode)
   end
 
   def test_resp_encode
@@ -181,6 +183,9 @@ class StreamRespTest < StreamBaseTest
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
       s.resp_encode(+'', ['foo', 'bar'])
 
+    assert_equal "*2\r\n$3\r\nfoo\r\n$4\r\nxbar\r\n",
+      s.resp_encode(+'', ['foo', 'xbar'])
+
     assert_equal "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n:42\r\n",
       s.resp_encode(+'', { 'foo' => 'bar', 'baz' => 42 })
   end
@@ -191,10 +196,16 @@ class StreamRespTest < StreamBaseTest
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
       s.resp_encode_cmd(+'', 'foo', 'bar')
 
+    assert_equal "*2\r\n$3\r\nfoo\r\n$4\r\nxbar\r\n",
+      s.resp_encode_cmd(+'', 'foo', 'xbar')
+
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
       s.resp_encode_cmd(+'', 'foo', :bar)
 
     assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\n123\r\n",
       s.resp_encode_cmd(+'', 'foo', 123)
+
+    assert_equal "*4\r\n$3\r\nset\r\n$6\r\nfoobar\r\n$2\r\nnx\r\n$2\r\nxx\r\n",
+      s.resp_encode_cmd(+'', :set, 'foobar', :nx, :xx)
   end
 end
