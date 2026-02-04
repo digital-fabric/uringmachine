@@ -85,7 +85,7 @@ int um_ssl_read(struct um *machine, VALUE ssl_obj, VALUE buf, int maxlen) {
   void *ptr = um_prepare_read_buffer(buf, maxlen, 0);
   int ret = SSL_read(ssl, ptr, maxlen);
   if (ret > 0) {
-    um_update_read_buffer(machine, buf, 0, ret, 0);
+    um_update_read_buffer(buf, 0, ret);
   }
   else {
     rb_raise(eUMError, "Failed to read");

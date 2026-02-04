@@ -2,30 +2,6 @@
 
 - Fix all futex value (Queue, Mutex) to be aligned
 
-## OpenSSL
-
-Since the custom BIO PR I submitted will probably not be accepted, an
-alternative plan of action is:
-
-- Add UM API for setting up a custom BIO for an SSL connection. Example usage:
-
-  ```ruby
-  ssl = OpenSSL::SSL::SSLSocket.open("127.0.0.1", 1234)
-  @machine.ssl_set_bio(ssl)
-  ```
-
-  In this context, since the SSLSocket object wraps an `SSL` C struct, we can
-  simply use `RTYPEDDATA_GET_DATA` to get at the underlying SSL C struct, and
-  install the custom BIO.
-
-- We can also add APIs for directly invoking `SSL_read` and `SSL_write` with the
-  custom BIO:
-
-  ```ruby
-  len_received = @machine.ssl_read(ssl, (buf = +''), 8192)
-  len_sent = @machine.ssl_write(ssl, buf, buf.bytesize)
-  ```
-
 ## Buffer rings - automatic management
 
 ```ruby

@@ -134,10 +134,9 @@
   - [v] hook for close
   - [ ] hooks for send/recv/sendmsg/recvmsg
 
-- [ ] SSL
-  - [ ] openssl gem: custom BIO?
-
-    - curl: https://github.com/curl/curl/blob/5f4cd4c689c822ce957bb415076f0c78e5f474b5/lib/vtls/openssl.c#L786-L803
+- [v] SSL
+  - [v] setup custom BIO
+  - [v] SSL read/write methods
 
 - [ ] UringMachine website
   - [ ] domain: uringmachine.dev
