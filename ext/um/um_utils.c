@@ -17,20 +17,19 @@ inline double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec) {
   return (double)tv_sec + ((double)tv_nsec) / 1000000000;
 }
 
-inline double um_get_time_cpu() {
+inline double um_get_time_cpu(void) {
   struct timespec ts;
   if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts)) return -1.0;
 
   return um_timestamp_to_double(ts.tv_sec, ts.tv_nsec);
 }
 
-inline double um_get_time_monotonic() {
+inline double um_get_time_monotonic(void) {
   struct timespec ts;
   if (clock_gettime(CLOCK_MONOTONIC, &ts)) return -1.0;
 
   return um_timestamp_to_double(ts.tv_sec, ts.tv_nsec);
 }
-
 
 #define RAISE_EXCEPTION(e) rb_funcall(e, ID_invoke, 0);
 
@@ -93,7 +92,7 @@ static inline void adjust_read_buffer_len(VALUE buffer, int result, ssize_t ofs)
   }
 }
 
-inline void um_update_read_buffer(struct um *machine, VALUE buffer, ssize_t buffer_offset, __s32 result, __u32 flags) {
+inline void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result) {
   if (!result) return;
 
   adjust_read_buffer_len(buffer, result, buffer_offset);

@@ -530,7 +530,7 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t b
   VALUE ret = um_yield(machine);
 
   if (um_check_completion(machine, &op)) {
-    um_update_read_buffer(machine, buffer, buffer_offset, op.result.res, op.result.flags);
+    um_update_read_buffer(buffer, buffer_offset, op.result.res);
     ret = INT2NUM(op.result.res);
 
   }
@@ -821,7 +821,7 @@ VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags
   VALUE ret = um_yield(machine);
 
   if (um_check_completion(machine, &op)) {
-    um_update_read_buffer(machine, buffer, 0, op.result.res, op.result.flags);
+    um_update_read_buffer(buffer, 0, op.result.res);
     ret = INT2NUM(op.result.res);
   }
 

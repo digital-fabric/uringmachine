@@ -268,7 +268,7 @@ void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kind, unsi
 void um_raise_on_error_result(int result);
 void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size);
 void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs);
-void um_update_read_buffer(struct um *machine, VALUE buffer, ssize_t buffer_offset, __s32 result, __u32 flags);
+void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result);
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
 VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
