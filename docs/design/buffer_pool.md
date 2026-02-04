@@ -37,7 +37,7 @@ buffers, to using managed buffers from the buffer pool.
   is used to interact with the data read/received as it becomes available. The
   stream instance methods may block until enough data is available in the
   relevant buffers.
-  
+
    Example:
 
   ```ruby

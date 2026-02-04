@@ -574,7 +574,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 - Implemented sidecar mode - the basic idea is that UringMachine starts an
   auxiliary thread that loops entering the kernel with a call to
   `io_uring_enter` in order to make CQEs available. On return from the system
-  call, it signals through a futex that ready CQEs can be processed. 
+  call, it signals through a futex that ready CQEs can be processed.
 
   On fiber switch, the next fiber to run is shifted from the runqueue. If the
   runqueue is empty, the UringMachine will wait for the signal, and then process
@@ -590,7 +590,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
 
 # 2026-01-07
 
-- In the last week I've been working on implementing a buffer pool  
+- In the last week I've been working on implementing a buffer pool
   with automatic buffer manangement. I've been contemplating the design for a
   few weeks already, and after the vacation has decided the idea is solid enough
   for me to start writing some code. But let me back up and explain what I'm
@@ -601,7 +601,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   buffers for reading or receiving repeatedly from an fd, letting the
   application know with each CQE which buffer was used and with how much data.
   This is particularly useful when dealing with bursts of incoming data.
-  
+
   The application initiates multishot read/recv operations on each connection,
   and the kernel has at its disposition a pool of application-provided buffers
   it can use whenever a chunk of data is read / received. So the kernel consumes
@@ -631,4 +631,4 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   ID will continue where the previous one left off. So it's great that buffer
   space can be used fully by the kernel, but the application is required to keep
   track of a "cursor" for each buffer.
-  
+

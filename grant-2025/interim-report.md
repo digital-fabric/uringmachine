@@ -1,6 +1,6 @@
 # Interim Report for Ruby Association Grant Program 2025
 
-## Project Summary 
+## Project Summary
 
 Io_uring is a relatively new Linux API, permitting the invocation of Linux
 system calls asynchronously. UringMachine is a gem that brings low-level access
