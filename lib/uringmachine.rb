@@ -85,6 +85,28 @@ class UringMachine
     @resolver.resolve(hostname, type)
   end
 
+  def file_watch(root, mask)
+    fd = UM.inotify_init
+    wd_map = {}
+    recursive_file_watch(fd, root, wd_map, mask)
+    while true
+      events = inotify_get_events(fd)
+      events.each do |event|
+        if event[:mask] | UM::IN_IGNORED == UM::IN_IGNORED
+          wd_map.delete(event[:wd])
+          next
+        end
+        transformed_event = transform_file_watch_event(fd, event, wd_map, mask)
+        if event[:mask] == UM::IN_CREATE | UM::IN_ISDIR
+          recursive_file_watch(fd, transformed_event[:fn], wd_map, mask)
+        end
+        yield transformed_event
+      end
+    end
+  ensure
+    close_async(fd)
+  end
+
   private
 
   def run_block_in_fiber(block, fiber, value)
@@ -107,6 +129,21 @@ class UringMachine
     return if !listeners
 
     listeners.each { self.push(it, fiber) }
+  end
+
+  def recursive_file_watch(fd, dir, wd_map, mask)
+    wd = UM.inotify_add_watch(fd, dir, mask)
+    wd_map[wd] = dir
+    Dir[File.join(dir, '*')].each do
+      recursive_file_watch(fd, it, wd_map, mask) if File.directory?(it)
+    end
+  end
+
+  def transform_file_watch_event(fd, event, wd_map, mask)
+    {
+      mask: event[:mask],
+      fn: File.join(wd_map[event[:wd]], event[:name])
+    }
   end
 
   module FiberExtensions

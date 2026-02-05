@@ -4,6 +4,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/inotify.h>
 
 VALUE cUM;
 VALUE eUMError;
@@ -19,6 +20,10 @@ VALUE SYM_ops_free;
 VALUE SYM_ops_transient;
 VALUE SYM_time_total_cpu;
 VALUE SYM_time_total_wait;
+
+VALUE SYM_wd;
+VALUE SYM_mask;
+VALUE SYM_name;
 
 static ID id_fileno;
 
@@ -626,6 +631,53 @@ VALUE UM_debug(VALUE self, VALUE str) {
   return Qnil;
 }
 
+VALUE UM_inotify_init(VALUE self) {
+  int fd = inotify_init();
+  if (fd == -1) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+  return INT2NUM(fd);
+}
+
+VALUE UM_inotify_add_watch(VALUE self, VALUE fd, VALUE path, VALUE mask) {
+  int ret = inotify_add_watch(NUM2INT(fd), StringValueCStr(path), NUM2UINT(mask));
+  if (ret == -1) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+  return INT2NUM(ret);
+}
+
+static inline VALUE inotify_get_events(char *buf, size_t len) {
+  VALUE array = rb_ary_new();
+  while (len > 0) {
+    struct inotify_event *evt = (struct inotify_event *)buf;
+    size_t evt_len = sizeof(struct inotify_event) + evt->len;
+
+    VALUE hash = rb_hash_new();
+    rb_hash_aset(hash, SYM_wd,    INT2NUM(evt->wd));
+    rb_hash_aset(hash, SYM_mask,  UINT2NUM(evt->mask));
+    rb_hash_aset(hash, SYM_name,  rb_str_new_cstr(evt->name));
+    rb_ary_push(array, hash);
+    RB_GC_GUARD(hash);
+
+    buf += evt_len;
+    len -= evt_len;
+  }
+  RB_GC_GUARD(array);
+  return array;
+}
+
+VALUE UM_inotify_get_events(VALUE self, VALUE fd) {
+  struct um *machine = um_get_machine(self);
+
+  char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
+
+  size_t ret = um_read_raw(machine, NUM2INT(fd), buf, sizeof(buf));
+  return inotify_get_events(buf, ret);
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
@@ -656,6 +708,9 @@ void Init_UM(void) {
   rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
   rb_define_singleton_method(cUM, "debug", UM_debug, 1);
+
+  rb_define_singleton_method(cUM, "inotify_init", UM_inotify_init, 0);
+  rb_define_singleton_method(cUM, "inotify_add_watch", UM_inotify_add_watch, 3);
 
   rb_define_method(cUM, "schedule", UM_schedule, 2);
   rb_define_method(cUM, "snooze", UM_snooze, 0);
@@ -719,6 +774,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "ssl_read", UM_ssl_read, 3);
   rb_define_method(cUM, "ssl_write", UM_ssl_write, 3);
 
+  rb_define_method(cUM, "inotify_get_events", UM_inotify_get_events, 1);
+
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 
   um_define_net_constants(cUM);
@@ -734,6 +791,10 @@ void Init_UM(void) {
   SYM_ops_transient =   ID2SYM(rb_intern("ops_transient"));
   SYM_time_total_cpu =  ID2SYM(rb_intern("time_total_cpu"));
   SYM_time_total_wait = ID2SYM(rb_intern("time_total_wait"));
+
+  SYM_wd              = ID2SYM(rb_intern("wd"));
+  SYM_mask            = ID2SYM(rb_intern("mask"));
+  SYM_name            = ID2SYM(rb_intern("name"));
 
   id_fileno = rb_intern_const("fileno");
 }

@@ -2725,3 +2725,157 @@ class ProfileModeTest < UMBaseTest
     assert_in_range 0.01..0.015, machine.metrics[:time_total_wait]
   end
 end
+
+class FileWatchTest < UMBaseTest
+  def setup
+    super
+    @root = "/tmp/um_#{SecureRandom.hex}"
+    make_tmp_file_tree(@root, {
+      'foo.txt': 'foo',
+      'bar.txt': 'bar',
+      'foo': {
+        'baz.txt': 'baz'
+      }
+    })
+  end
+
+  def test_inotify_get_events
+    fd = UM.inotify_init
+    assert_kind_of Integer, fd
+    assert fd > 0
+
+    mask = UM::IN_CREATE | UM::IN_DELETE | UM::IN_CLOSE_WRITE
+
+    assert_raises(Errno::EBADF)   { UM.inotify_add_watch(-1, @root, mask) }
+    assert_raises(Errno::EINVAL)  { UM.inotify_add_watch(fd, @root, 0) }
+    non_existent = "/tmp/um_#{SecureRandom.hex}"
+    assert_raises(Errno::ENOENT)  { UM.inotify_add_watch(fd, non_existent, mask) }
+
+    wd = UM.inotify_add_watch(fd, @root, mask)
+    assert_equal 1, wd
+
+    fn = File.join(@root, 'foo.txt')
+    IO.write(fn, 'foofoo')
+
+    events = machine.inotify_get_events(fd)
+    assert_equal [
+      {
+        wd: wd,
+        mask: UM::IN_CLOSE_WRITE,
+        name: 'foo.txt'
+      }
+    ], events
+  end
+
+  def write_file(fn, data)
+    File.open(fn, 'w+') { it.sync = true; it.syswrite('foofoo') }
+  end
+
+  def test_file_watch
+    events = []
+    f = machine.spin do
+      mask = UM::IN_CREATE | UM::IN_DELETE | UM::IN_CLOSE_WRITE
+      machine.file_watch(@root, mask) do |evt|
+        events << evt
+      end
+    rescue => e
+      p e
+      p e.backtrace
+      exit!
+    end
+
+    3.times { machine.snooze }
+    assert_equal [], events
+
+    # modify foo.txt
+    fn = File.join(@root, 'foo.txt')
+    write_file(fn, 'foofoo')
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') }
+    ], events
+
+    # modify foo/baz.txt
+    fn = File.join(@root, 'foo/baz.txt')
+    write_file(fn, 'bazbaz')
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') }
+    ], events
+
+    # create bar dir
+    fn = File.join(@root, 'bar')
+    FileUtils.mkdir(fn)
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') }
+    ], events
+
+    # create bar/baz.txt
+    fn = File.join(@root, 'bar/baz.txt')
+    write_file(fn, 'bazbaz')
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+    ], events
+
+    # delete foo/baz.txt
+    fn = File.join(@root, 'foo/baz.txt')
+    FileUtils.rm(fn)
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'foo/baz.txt') }
+    ], events
+
+    # delete bar
+    fn = File.join(@root, 'bar')
+    FileUtils.rm_rf(fn)
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE | UM::IN_ISDIR, fn: File.join(@root, 'bar') }
+    ], events
+
+    # recreate bar, bar/baz.txt
+    fn = File.join(@root, 'bar')
+    FileUtils.mkdir(fn)
+    machine.sleep(0.05)
+    fn = File.join(@root, 'bar/baz.txt')
+    write_file(fn, 'bazbaz')
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+    ], events
+  ensure
+    machine.schedule(f, UM::Terminate.new)
+    machine.join(f)
+  end
+end
