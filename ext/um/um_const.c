@@ -14,6 +14,7 @@
 #include <net/if.h>
 #include <poll.h>
 #include <signal.h>
+#include <sys/inotify.h>
 
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
@@ -437,4 +438,30 @@ void um_define_net_constants(VALUE mod) {
   DEF_CONST_INT(mod, SIGUSR2);
   DEF_CONST_INT(mod, SIGPWR);
   DEF_CONST_INT(mod, SIGPOLL);
+
+  DEF_CONST_INT(mod, IN_ACCESS);
+  DEF_CONST_INT(mod, IN_ATTRIB);
+  DEF_CONST_INT(mod, IN_CLOSE_WRITE);
+  DEF_CONST_INT(mod, IN_CLOSE_NOWRITE);
+  DEF_CONST_INT(mod, IN_CREATE);
+  DEF_CONST_INT(mod, IN_DELETE);
+  DEF_CONST_INT(mod, IN_DELETE_SELF);
+  DEF_CONST_INT(mod, IN_MODIFY);
+  DEF_CONST_INT(mod, IN_MOVE_SELF);
+  DEF_CONST_INT(mod, IN_MOVED_FROM);
+  DEF_CONST_INT(mod, IN_MOVED_TO);
+  DEF_CONST_INT(mod, IN_OPEN);
+  DEF_CONST_INT(mod, IN_ALL_EVENTS);
+  DEF_CONST_INT(mod, IN_MOVE);
+  DEF_CONST_INT(mod, IN_CLOSE);
+  DEF_CONST_INT(mod, IN_DONT_FOLLOW);
+  DEF_CONST_INT(mod, IN_EXCL_UNLINK);
+  DEF_CONST_INT(mod, IN_MASK_ADD);
+  DEF_CONST_INT(mod, IN_ONESHOT);
+  DEF_CONST_INT(mod, IN_ONLYDIR);
+  DEF_CONST_INT(mod, IN_MASK_CREATE);
+  DEF_CONST_INT(mod, IN_IGNORED);
+  DEF_CONST_INT(mod, IN_ISDIR);
+  DEF_CONST_INT(mod, IN_Q_OVERFLOW);
+  DEF_CONST_INT(mod, IN_UNMOUNT);
 }
