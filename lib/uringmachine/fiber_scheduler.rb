@@ -5,6 +5,7 @@ require 'etc'
 require 'uringmachine'
 
 class UringMachine
+  
   # Implements a worker thread pool for running blocking operations. Worker
   # threads are started as needed. Worker thread count is limited to the number
   # of CPU cores available.
@@ -12,6 +13,7 @@ class UringMachine
 
     # Initializes a new worker pool.
     #
+    # @param max_workers [Integer] maximum worker thread count
     # @return [void]
     def initialize(max_workers = Etc.nprocessors)
       @max_workers = max_workers
