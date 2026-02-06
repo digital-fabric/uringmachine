@@ -6,9 +6,12 @@ require 'uringmachine/dns_resolver'
 
 UM = UringMachine
 
+# A UringMachine instance provides an interface for performing I/O operations
+# and automatically switching between fibers. A single UringMachine instance
+# should be used for each thread.
 class UringMachine
-  def fiber_map
-    @fiber_map ||= {}
+  def fiber_set
+    @fiber_set ||= Set.new
   end
 
   class Terminate < Exception
@@ -18,13 +21,15 @@ class UringMachine
     fiber = klass.new { |v| run_block_in_fiber(block, fiber, v) }
     self.schedule(fiber, value)
 
-    fiber_map[fiber] = fiber
+    fiber_set << fiber
+    fiber
   end
 
   def run(fiber, &block)
     run_block_in_fiber(block, fiber, nil)
     self.schedule(fiber, nil)
-    fiber_map[fiber] = fiber
+    fiber_set << fiber
+    fiber
   end
 
   def join(*fibers)
@@ -117,7 +122,7 @@ class UringMachine
   ensure
     fiber.mark_as_done
     # cleanup
-    fiber_map.delete(fiber)
+    fiber_set.delete(fiber)
     self.notify_done_listeners(fiber)
 
     # switch away to a different fiber
