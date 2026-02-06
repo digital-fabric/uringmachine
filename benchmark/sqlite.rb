@@ -36,7 +36,7 @@ class DBActor2
   rescue Exception => e
     # handle unhandled exceptions
   ensure
-    @machine.fiber_map.delete(self)
+    @machine.fiber_set.delete(self)
     @machine.yield
   end
 
