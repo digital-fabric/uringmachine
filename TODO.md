@@ -2,18 +2,6 @@
 
 - Fix all futex value (Queue, Mutex) to be aligned
 
-## inotify
-
-API:
-
-```ruby
-MASK = UM::IN_CREATE | UM::IN_DELETE |
-       UM::IN_MODIFY | UM::IN_MOVED_TO
-@machine.file_watch(path, MASK) do |path, evt|
-  do_something_with_evt(path, evt)
-end
-```
-
 ## Buffer rings - automatic management
 
 ```ruby
@@ -81,10 +69,6 @@ Op lifecycle management can be much much simpler
 
 ## ops
 
-- [ ] multishot timeout
-  - [v] machine.periodically(interval) { ... }
-  - [ ] machine.prep_timeout_multishot(interval)
-
 - splice / - tee
 - sendto
 - recvfrom
@@ -96,7 +80,6 @@ Op lifecycle management can be much much simpler
 - fadvise
 - madvise
 - getxattr / setxattr
-- send_bundle / recv_bundle (kernel >= 6.10)
 
 ## actors
 

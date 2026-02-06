@@ -20,7 +20,7 @@
 
   - [v] Make writev automatically complete partial writes
 
-  - [ ] Add inotify API
+  - [v] Add inotify API
 
     https://www.man7.org/linux/man-pages/man7/inotify.7.html
 
@@ -137,6 +137,8 @@
 - [v] SSL
   - [v] setup custom BIO
   - [v] SSL read/write methods
+
+- [ ] RDoc
 
 - [ ] UringMachine website
   - [ ] domain: uringmachine.dev
