@@ -540,7 +540,7 @@ class ReadTest < UMBaseTest
 
     machine.close(w)
 
-    res = machine.read(r, read_buffer)
+    res = machine.read(r, read_buffer, 6)
     assert_equal 3, res
     assert_equal 'bar', read_buffer.get_string(0, 3)
   end
@@ -570,7 +570,7 @@ class ReadTest < UMBaseTest
   def test_read_invalid_buffer
     r, _w = UM.pipe
     assert_raises(UM::Error) {
-      machine.read(r, [])
+      machine.read(r, [], 3)
     }
   end
 

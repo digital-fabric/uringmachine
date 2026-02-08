@@ -249,7 +249,7 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   VALUE maxlen;
   VALUE buffer_offset;
   VALUE file_offset;
-  rb_scan_args(argc, argv, "23", &fd, &buffer, &maxlen, &buffer_offset, &file_offset);
+  rb_scan_args(argc, argv, "32", &fd, &buffer, &maxlen, &buffer_offset, &file_offset);
 
   ssize_t maxlen_i = NIL_P(maxlen) ? -1 : NUM2INT(maxlen);
   ssize_t buffer_offset_i = NIL_P(buffer_offset) ? 0 : NUM2INT(buffer_offset);
