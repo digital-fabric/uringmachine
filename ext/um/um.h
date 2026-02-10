@@ -170,7 +170,7 @@ struct um {
   struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
 
   struct um_op *transient_head; // list of pending transient ops
-  VALUE pending_fibers; // hash containing pending fibers
+  VALUE pending_fibers; // set containing pending fibers
 
   struct um_op *runqueue_head;
   struct um_op *runqueue_tail;

@@ -29,7 +29,7 @@ class UringMachine
     end
 
     private
-    
+
     # Handles resolve requests as they come.
     def handle_requests_loop
       while true

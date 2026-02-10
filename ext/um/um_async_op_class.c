@@ -1,6 +1,13 @@
 #include "um.h"
 #include <stdlib.h>
 
+/*
+ * Document-class: UringMachine::AsyncOp
+ *
+ * Encapsulates an asynchronous operation. Currently the only asynchronous
+ * operation supported is a timeout operation.
+ */
+
 VALUE cAsyncOp;
 
 VALUE SYM_timeout;
@@ -59,6 +66,10 @@ inline int async_op_is_done(struct um_async_op *async_op) {
   return (async_op->op->flags & OP_F_COMPLETED);
 }
 
+/* Returns the kind of asynchronous operation.
+ *
+ * @return [Symbol] operation kind
+ */
 VALUE AsyncOp_kind(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);
@@ -71,6 +82,10 @@ VALUE AsyncOp_kind(VALUE self) {
   }
 }
 
+/* Returns true if the operation has completed.
+ *
+ * @return [bool] is the operation done
+ */
 VALUE AsyncOp_done_p(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);
@@ -78,6 +93,10 @@ VALUE AsyncOp_done_p(VALUE self) {
   return async_op_is_done(async_op) ? Qtrue : Qfalse;
 }
 
+/* Returns the operation result. If the operation is not completed, returns nil.
+ *
+ * @return [Integer, nil] operation result
+ */
 VALUE AsyncOp_result(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);
@@ -85,6 +104,10 @@ VALUE AsyncOp_result(VALUE self) {
   return async_op_is_done(async_op) ? INT2NUM(async_op->op->result.res) : Qnil;
 }
 
+/* Returns true if the operation has been cancelled.
+ *
+ * @return [bool] is the operation cancelled
+ */
 VALUE AsyncOp_cancelled_p(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);
@@ -94,6 +117,10 @@ VALUE AsyncOp_cancelled_p(VALUE self) {
   return (async_op->op->result.res == -ECANCELED) ? Qtrue : Qfalse;
 }
 
+/* Waits for the operation to complete.
+ *
+ * @return [Integer] operation result
+ */
 VALUE AsyncOp_await(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);
@@ -104,6 +131,10 @@ VALUE AsyncOp_await(VALUE self) {
   return um_async_op_await(async_op);
 }
 
+/* Cancels the operation.
+ *
+ * @return [UringMachine::AsyncOp] self
+ */
 VALUE AsyncOp_cancel(VALUE self) {
   struct um_async_op *async_op = AsyncOp_data(self);
   raise_on_missing_op(async_op);

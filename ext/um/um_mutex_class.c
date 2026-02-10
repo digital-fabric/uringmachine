@@ -1,6 +1,13 @@
 #include "um.h"
 #include <stdlib.h>
 
+/*
+ * Document-class: UringMachine::Mutex
+ *
+ * A futex-based Mutex implementation for controlling access to a shared
+ * resource. The mutex can be used by calling `UringMachine#synchronize`.
+ */
+
 VALUE cMutex;
 
 static const rb_data_type_t Mutex_type = {
@@ -25,6 +32,11 @@ inline struct um_mutex *Mutex_data(VALUE self) {
   return mutex;
 }
 
+/* Initializes a new mutex instance. The mutex can be used by calling
+`UringMachine#synchronize`.
+ *
+ * @return [void]
+ */
 VALUE Mutex_initialize(VALUE self) {
   struct um_mutex *mutex = Mutex_data(self);
   um_mutex_init(mutex);

@@ -91,6 +91,14 @@ static inline uint get_sqpoll_timeout_msec(VALUE sqpoll_timeout) {
   }
 }
 
+/* Initializes a new UringMachine instance with the given options.
+ *
+ * @overload initialize(size: 4096, sqpoll: false, sidecar: false)
+ *   @param size [Integer] SQ size (default: 4096)
+ *   @param sqpoll [bool, Number] Set SQPOLL mode, SQPOLL timeout
+ *   @param sidecar [bool] Set sidecar mode
+ *   @return [void]
+ */
 VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   static ID kwargs_ids[3];
   struct um *machine = RTYPEDDATA_DATA(self);
@@ -113,38 +121,68 @@ VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
+/* Creates a buffer group (buffer ring) with the given buffer size and buffer count.
+ *
+ * @param size [Integer] buffer size in bytes
+ * @param count [Integer] number of buffers in group
+ * @return [Integer] buffer group id
+ */
 VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
   struct um *machine = um_get_machine(self);
   int bgid = um_setup_buffer_ring(machine, NUM2UINT(size), NUM2UINT(count));
   return INT2NUM(bgid);
 }
 
+/* Returns the SQ (submission queue) size.
+ *
+ * @return [Integer] SQ size
+ */
 VALUE UM_size(VALUE self) {
   struct um *machine = um_get_machine(self);
   return UINT2NUM(machine->size);
 }
 
+/* :nodoc:
+ */
 VALUE UM_mark_m(VALUE self, VALUE mark) {
   struct um *machine = um_get_machine(self);
   machine->mark = NUM2UINT(mark);
   return self;
 }
 
+/* Returns a hash with different metrics about the functioning of the
+ * UringMachine instance.
+ *
+ * @return [Hash] metrics hash
+ */
 VALUE UM_metrics(VALUE self) {
   struct um *machine = um_get_machine(self);
   return um_metrics(machine, &machine->metrics);
 }
 
+/* Returns the profile mode state.
+ *
+ * @return [bool] profile mode on/off
+ */
 VALUE UM_profile_mode_p(VALUE self) {
   struct um *machine = um_get_machine(self);
   return machine->profile_mode ? Qtrue : Qfalse;
 }
 
+/* Returns the SQPOLL mode state.
+ *
+ * @return [bool] SQPOLL mode on/off
+ */
 VALUE UM_sqpoll_mode_p(VALUE self) {
   struct um *machine = um_get_machine(self);
   return machine->sqpoll_mode ? Qtrue : Qfalse;
 }
 
+/* Sets/resets profile mode.
+ *
+ * @param value [bool] profile mode on/off
+ * @return [bool] profile mode on/off
+ */
 VALUE UM_profile_mode_set(VALUE self, VALUE value) {
   struct um *machine = um_get_machine(self);
   machine->profile_mode = RTEST(value);
@@ -155,29 +193,52 @@ VALUE UM_profile_mode_set(VALUE self, VALUE value) {
   return value;
 }
 
+/* Sets/resets test mode.
+ *
+ * @param value [bool] test mode on/off
+ * @return [bool] test mode on/off
+ */
 VALUE UM_test_mode_set(VALUE self, VALUE value) {
   struct um *machine = um_get_machine(self);
   machine->test_mode = RTEST(value);
   return value;
 }
 
+/* Returns the sidecar mode state.
+ *
+ * @return [bool] sidecar mode on/off
+ */
 VALUE UM_sidecar_mode_p(VALUE self) {
   struct um *machine = um_get_machine(self);
   return machine->sidecar_mode ? Qtrue : Qfalse;
 }
 
+/* Starts sidecar mode.
+ *
+ * @return [UringMachine] self
+ */
 VALUE UM_sidecar_start(VALUE self) {
   struct um *machine = um_get_machine(self);
   um_sidecar_setup(machine);
   return self;
 }
 
+/* Stops sidecar mode.
+ *
+ * @return [UringMachine] self
+ */
 VALUE UM_sidecar_stop(VALUE self) {
   struct um *machine = um_get_machine(self);
   um_sidecar_teardown(machine);
   return self;
 }
 
+/* Adds the current fiber to the end of the runqueue and yields control to the
+ * next fiber in the runqueue. This method is usually used to yield control
+ * while performing CPU-intensive work in order not starve other fibers.
+ *
+ * @return [UringMachine] self
+ */
 VALUE UM_snooze(VALUE self) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, rb_fiber_current(), Qnil);
@@ -189,6 +250,13 @@ VALUE UM_snooze(VALUE self) {
   return ret;
 }
 
+/* Yields control to the next fiber in the runqueue. The current fiber will not
+ * be resumed unless it is scheduled again by some other fiber. The call to
+ * `#yield` will return the value with which the current fiber will be
+ * eventually scheduled.
+ *
+ * @return [any] resume value
+ */
 VALUE UM_yield(VALUE self) {
   struct um *machine = um_get_machine(self);
 
@@ -197,6 +265,14 @@ VALUE UM_yield(VALUE self) {
   return ret;
 }
 
+/* Yields control to the next fiber in the runqueue. The current fiber will not
+ * be resumed unless it is scheduled again by some other fiber. The call to
+ * `#yield` will return the value with which the current fiber will be
+ * eventually scheduled. If resumed with an exception, that exception will be
+ * raised when the fiber is resumed.
+ *
+ * @return [any] resume value
+ */
 VALUE UM_switch(VALUE self) {
   struct um *machine = um_get_machine(self);
 
@@ -205,43 +281,100 @@ VALUE UM_switch(VALUE self) {
   return ret;
 }
 
+/* Wakes up the machine in order to start processing its runqueue again. This
+ * method is normally called from another thread in order to resume processing
+ * of the runqueue when a machine is waiting for I/O completions.
+ *
+ * @return [void]
+ */
 VALUE UM_wakeup(VALUE self) {
   struct um *machine = um_get_machine(self);
   return um_wakeup(machine);
 }
 
+/* Submits any pending I/O operations that are not yet submitted.
+ *
+ * @return [Integer] number of I/O operations submitted
+ */
 VALUE UM_submit(VALUE self) {
   struct um *machine = um_get_machine(self);
   uint ret = um_submit(machine);
   return UINT2NUM(ret);
 }
 
+/* Returns a set containing all fibers in pending state (i.e. waiting for an
+ * operation to complete.)
+ *
+ * @return [Set] set of pending fibers
+ */
 VALUE UM_pending_fibers(VALUE self) {
   struct um *machine = um_get_machine(self);
   return machine->pending_fibers;
 }
 
+/* Schedules the given fiber by adding it to the runqueue. The fiber will be
+ * resumed with the given value.
+ *
+ * @param fiber [Fiber] fiber to schedule
+ * @param value [any] resume value
+ * @return [UringMachine] self
+ */
 VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
   struct um *machine = um_get_machine(self);
   um_schedule(machine, fiber, value);
   return self;
 }
 
-VALUE UM_timeout(VALUE self, VALUE interval, VALUE class) {
+/* Runs the given block, interrupting its execution if its runtime exceeds the
+ * given timeout interval (in seconds).
+ *
+ * @param interval [Number] timeout interval in seconds
+ * @param exception_class [any] timeout exception class
+ * @return [any] block's return value
+ */
+VALUE UM_timeout(VALUE self, VALUE interval, VALUE exception_class) {
   struct um *machine = um_get_machine(self);
-  return um_timeout(machine, interval, class);
+  return um_timeout(machine, interval, exception_class);
 }
 
+/* Puts the current fiber to sleep for the given time duration (in seconds),
+ * yielding control to the next fiber in the runqueue.
+ *
+ * @param duration [Number] sleep duration in seconds
+ * @return [void]
+ */
 VALUE UM_sleep(VALUE self, VALUE duration) {
   struct um *machine = um_get_machine(self);
   return um_sleep(machine, NUM2DBL(duration));
 }
 
+/* Runs the given block at regular time intervals in an infinite loop.
+ *
+ * @param interval [Number] time interval (in seconds) between consecutive invocations
+ * @return [void]
+ */
 VALUE UM_periodically(VALUE self, VALUE interval) {
   struct um *machine = um_get_machine(self);
   return um_periodically(machine, NUM2DBL(interval));
 }
 
+/* call-seq:
+ *   machine.read(fd, buffer, maxlen[, buffer_offset[, file_offset]]) -> bytes_read
+ *
+ * Reads up to `maxlen` bytes from the given `fd` into the given buffer. The
+ * optional `buffer_offset` parameter determines the position in the buffer into
+ * which the data will be read. A negative `buffer_offset` denotes a position
+ * relative to the end of the buffer, e.g. a value of `-1` means the data will
+ * be appended to the buffer.
+ *
+ * @overload read(fd, buffer, maxlen, buffer_offset: nil, file_offset: nil)
+ *   @param fd [Integer] file descriptor
+ *   @param buffer [String, IO::Buffer] buffer
+ *   @param maxlen [Integer] maximum number of bytes to read
+ *   @param buffer_offset [Integer] optional buffer offset to read into
+ *   @param file_offset [Integer] optional file offset to read from
+ *   @return [Integer] number of bytes read
+ */
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   VALUE fd;
@@ -258,11 +391,35 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   return um_read(machine, NUM2INT(fd), buffer, maxlen_i, buffer_offset_i, file_offset_i);
 }
 
+/* call-seq:
+ *   machine.read_each(fd, bgid) { |data| }
+ *
+ * Reads repeatedly from the given `fd` using the given buffer group id. The
+ * buffer group should have been previously setup using `#setup_buffer_ring`.
+ * Read data is yielded in an infinite loop to the given block.
+ *
+ * @param fd [Integer] file descriptor
+ * @param bgid [Integer] buffer group id
+ * @return [void]
+ */
 VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
   struct um *machine = um_get_machine(self);
   return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
 }
 
+/* call-seq:
+ *   machine.write(fd, buffer[, len[, file_offset]]) -> bytes_written
+ *
+ * Writes up to `len` bytes from the given buffer to the given `fd`. If `len`,
+ * is not given, the entire buffer length is used.
+ *
+ * @overload write(fd, buffer, len: nil, file_offset: nil)
+ *   @param fd [Integer] file descriptor
+ *   @param buffer [String, IO::Buffer] buffer
+ *   @param len [Integer] maximum number of bytes to write
+ *   @param file_offset [Integer] optional file offset to write to
+ *   @return [Integer] number of bytes written
+ */
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   VALUE fd;
@@ -277,6 +434,21 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   return um_write(machine, NUM2INT(fd), buffer, len_i, file_offset_i);
 }
 
+/* call-seq:
+ *   machine.writev(fd, *buffers[, file_offset]) -> bytes_written
+ *
+ * Writes from the given buffers into the given fd. This method does not
+ * guarantee that all data will be written. The application code should check
+ * the return value which indicates the number of bytes written and potentially
+ * repeat the operation after adjusting the buffers accordingly. See also
+ * `#sendv`.
+ *
+ * @overload writev(fd, *buffers, file_offset: nil)
+ *   @param fd [Integer] file descriptor
+ *   @param *buffers [Array<String, IO::Buffer>] data buffers
+ *   @param file_offset [Integer] optional file offset to write to
+ *   @return [Integer] number of bytes written
+ */
 VALUE UM_writev(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   if (argc < 1)
@@ -287,6 +459,22 @@ VALUE UM_writev(int argc, VALUE *argv, VALUE self) {
   return um_writev(machine, fd, argc - 1, argv + 1);
 }
 
+/* call-seq:
+ *   machine.write_async(fd, buffer[, len[, file_offset]]) -> buffer
+ *
+ * Writes up to `len` bytes from the given buffer to the given `fd`. If `len`,
+ * is not given, the entire buffer length is used. This method submits the
+ * operation but does not wait for it to complete. This method may be used to
+ * improve performance in situations where the application does not care about
+ * whether the I/O operation succeeds or not.
+ *
+ * @overload write_async(fd, buffer, len: nil, file_offset: nil)
+ *   @param fd [Integer] file descriptor
+ *   @param buffer [String, IO::Buffer] buffer
+ *   @param len [Integer] maximum number of bytes to write
+ *   @param file_offset [Integer] optional file offset to write to
+ *   @return [String, IO::Buffer] buffer
+ */
 VALUE UM_write_async(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   VALUE fd;
@@ -301,51 +489,150 @@ VALUE UM_write_async(int argc, VALUE *argv, VALUE self) {
   return um_write_async(machine, NUM2INT(fd), buffer, len_i, file_offset_i);
 }
 
+/* call-seq:
+ *   machine.statx(fd, nil, flags, mask) -> hash
+ *   machine.statx(dirfd, path, flags, mask) -> hash
+ *   machine.statx(UM::AT_FDCWD, path, flags, mask) -> hash
+ *
+ * Returns information about a file.
+ *
+ * @param dirfd [Integer] file or directory descriptor
+ * @param path [String, nil] file path
+ * @param flags [Integer] flags
+ * @param mask [Integer] mask of information to return
+ * @return [hash] hash containing file information
+ */
 VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {
   struct um *machine = um_get_machine(self);
   return um_statx(machine, NUM2INT(dirfd), path, NUM2INT(flags), NUM2UINT(mask));
 }
 
+/* call-seq:
+ *   machine.close(fd) -> 0
+ *
+ * Closes the given file descriptor.
+ *
+ * @param fd [Integer] file descriptor
+ * @return [0] success
+ */
 VALUE UM_close(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
   return um_close(machine, NUM2INT(fd));
 }
 
+/* call-seq:
+ *   machine.close_async(fd) -> hash
+ *
+ * Closes the given file descriptor. This method submits the operation but does
+ * not wait for it to complete. This method may be used to improve performance
+ * in cases where the application des not care whether it succeeds or not.
+ *
+ * @param fd [Integer] file descriptor
+ * @return [Integer] file descriptor
+ */
 VALUE UM_close_async(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
   return um_close_async(machine, NUM2INT(fd));
 }
 
-VALUE UM_accept(VALUE self, VALUE fd) {
+/* call-seq:
+ *   machine.accept(server_fd) -> connection_fd
+ *
+ * Accepts an incoming TCP connection.
+ *
+ * @param server_fd [Integer] listening socket file descriptor
+ * @return [Integer] connection file descriptor
+ */
+VALUE UM_accept(VALUE self, VALUE server_fd) {
   struct um *machine = um_get_machine(self);
-  return um_accept(machine, NUM2INT(fd));
+  return um_accept(machine, NUM2INT(server_fd));
 }
 
-VALUE UM_accept_each(VALUE self, VALUE fd) {
+/* call-seq:
+ *   machine.accept_each(server_fd) { |connection_fd| ... }
+ *
+ * Repeatedly accepts incoming TCP connections in a loop, yielding the
+ * connection file descriptors to the given block.
+ *
+ * @param server_fd [Integer] listening socket file descriptor
+ * @return [void]
+ */
+VALUE UM_accept_each(VALUE self, VALUE server_fd) {
   struct um *machine = um_get_machine(self);
-  return um_accept_each(machine, NUM2INT(fd));
+  return um_accept_each(machine, NUM2INT(server_fd));
 }
 
-VALUE UM_accept_into_queue(VALUE self, VALUE fd, VALUE queue) {
+/* call-seq:
+ *   machine.accept_each(server_fd, queue)
+ *
+ * Repeatedly accepts incoming TCP connections in a loop, pushing the connection
+ * file descriptors into the given queue.
+ *
+ * @param server_fd [Integer] listening socket file descriptor
+ * @param queue [UM::Queue] connection queue
+ * @return [void]
+ */
+VALUE UM_accept_into_queue(VALUE self, VALUE server_fd, VALUE queue) {
   struct um *machine = um_get_machine(self);
-  return um_accept_into_queue(machine, NUM2INT(fd), queue);
+  return um_accept_into_queue(machine, NUM2INT(server_fd), queue);
 }
 
+/* call-seq:
+ *   machine.socket(domain, type, protocol, flags) -> fd
+ *
+ * Creates a socket.
+ *
+ * @param domain [Integer] socket domain
+ * @param type [Integer] socket type
+ * @param protocol [Integer] socket protocol
+ * @param flags [Integer] flags
+ * @return [Integer] file descriptor
+ */
 VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_socket(machine, NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), NUM2UINT(flags));
 }
 
+/* call-seq:
+ *   machine.shutdown(fd, how) -> 0
+ *
+ * Shuts down a socket for sending and/or receiving.
+ *
+ * @param fd [Integer] file descriptor
+ * @param how [Integer] how the socket should be shutdown
+ * @return [0] success
+ */
 VALUE UM_shutdown(VALUE self, VALUE fd, VALUE how) {
   struct um *machine = um_get_machine(self);
   return um_shutdown(machine, NUM2INT(fd), NUM2INT(how));
 }
 
+/* call-seq:
+ *   machine.shutdown_async(fd, how) -> 0
+ *
+ * Shuts down a socket for sending and/or receiving. This method may be used to
+ * improve performance in situations where the application does not care about
+ * whether the operation succeeds or not.
+ *
+ * @param fd [Integer] file descriptor
+ * @param how [Integer] how the socket should be shutdown
+ * @return [0] success
+ */
 VALUE UM_shutdown_async(VALUE self, VALUE fd, VALUE how) {
   struct um *machine = um_get_machine(self);
   return um_shutdown_async(machine, NUM2INT(fd), NUM2INT(how));
 }
 
+/* call-seq:
+ *   machine.connect(fd, host, port) -> 0
+ *
+ * Connects the given socket to the given host and port.
+ *
+ * @param fd [Integer] file descriptor
+ * @param host [String] hostname or IP address
+ * @param port [Integer] port number
+ * @return [0] success
+ */
 VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
   struct um *machine = um_get_machine(self);
 
@@ -358,12 +645,37 @@ VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
   return um_connect(machine, NUM2INT(fd), (struct sockaddr *)&addr, sizeof(addr));
 }
 
+/* call-seq:
+ *   machine.send(fd, buffer, len, flags) -> bytes_sent
+ *
+ * Sends data on the given socket. This method is not guaranteed to send all of
+ * the data in the buffer, unless `UM::MSG_WAITALL` is specified in the flags
+ * mask.
+ *
+ * @param fd [Integer] file descriptor
+ * @param buffer [String, IO::Buffer] buffer
+ * @param len [Integer] number of bytes to send
+ * @param flags [Integer] flags mask
+ * @return [Integer] number of bytes sent
+ */
 VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_send(machine, NUM2INT(fd), buffer, NUM2INT(len), NUM2INT(flags));
 }
 
 #ifdef HAVE_IO_URING_SEND_VECTORIZED
+
+/* call-seq:
+ *   machine.sendv(fd, *buffers) -> bytes_sent
+ *
+ * Sends data on the given socket from the given buffers. This method is only
+ * available on Linux kernel >= 6.17. This method is guaranteed to send
+ *
+ * @overload sendv(fd, *buffers)
+ *   @param fd [Integer] file descriptor
+ *   @param *buffers [Array<String, IO::Buffer>] buffers
+ *   @return [Integer] number of bytes sent
+ */
 VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   if (argc < 1)
@@ -373,8 +685,22 @@ VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
 
   return um_sendv(machine, fd, argc - 1, argv + 1);
 }
+
 #endif
 
+/* call-seq:
+ *   machine.send_bundle(fd, bgid, *buffers) -> bytes_sent
+ *
+ * Sends data on the given socket from the given buffers using a registered
+ * buffer group. The buffer group should have been previously registered using
+ * `#setup_buffer_ring`.
+ *
+ * @overload send_bundle(fd, bgid, *buffers)
+ *   @param fd [Integer] file descriptor
+ *   @param bgid [Integer] buffer group id
+ *   @param *buffers [Array<String, IO::Buffer>] buffers
+ *   @return [Integer] number of bytes sent
+ */
 VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
   VALUE fd;
@@ -391,16 +717,49 @@ VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
   return um_send_bundle(machine, NUM2INT(fd), NUM2INT(bgid), strings);
 }
 
+/* call-seq:
+ *   machine.recv(fd, buffer, maxlen, flags) -> bytes_received
+ *
+ * Receives data from the given socket.
+ *
+ * @param fd [Integer] file descriptor
+ * @param buffer [String, IO::Buffer] buffer
+ * @param maxlen [Integer] maximum number of bytes to receive
+ * @param flags [Integer] flags mask
+ * @return [Integer] number of bytes received
+ */
 VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_recv(machine, NUM2INT(fd), buffer, NUM2INT(maxlen), NUM2INT(flags));
 }
 
+/* call-seq:
+ *   machine.recv_each(fd, bgid, flags) { |data| ... }
+ *
+ * Repeatedlty receives data from the given socket in an infinite loop using the
+ * given buffer group id. The buffer group should have been previously setup
+ * using `#setup_buffer_ring`.
+ *
+ * @param fd [Integer] file descriptor
+ * @param bgid [Integer] buffer group id
+ * @param flags [Integer] flags mask
+ * @return [void]
+ */
 VALUE UM_recv_each(VALUE self, VALUE fd, VALUE bgid, VALUE flags) {
   struct um *machine = um_get_machine(self);
   return um_recv_each(machine, NUM2INT(fd), NUM2INT(bgid), NUM2INT(flags));
 }
 
+/* call-seq:
+ *   machine.bind(fd, host, port) -> 0
+ *
+ * Binds the given socket to the given host and port.
+ *
+ * @param fd [Integer] file descriptor
+ * @param host [String] hostname or IP address
+ * @param port [Integer] port number
+ * @return [0] success
+ */
 VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
@@ -419,6 +778,15 @@ VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
 #endif
 }
 
+/* call-seq:
+ *   machine.listen(fd, backlog) -> 0
+ *
+ * Starts listening for incoming connections on the given socket.
+ *
+ * @param fd [Integer] file descriptor
+ * @param backlog [String] pending connection queue length
+ * @return [0] success
+ */
 VALUE UM_listen(VALUE self, VALUE fd, VALUE backlog) {
 #ifdef HAVE_IO_URING_PREP_LISTEN
   struct um *machine = um_get_machine(self);
@@ -442,40 +810,104 @@ static inline int numeric_value(VALUE value) {
   }
 }
 
+/* call-seq:
+ *   machine.getsockopt(fd, level, opt) -> value
+ *
+ * Returns the value of a socket option.
+ *
+ * @param fd [Integer] file descriptor
+ * @param level [Integer] level
+ * @param opt [Integer] level
+ * @return [Integer] option value
+ */
 VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
   struct um *machine = um_get_machine(self);
   return um_getsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt));
 }
 
+/* call-seq:
+ *   machine.getsockopt(fd, level, opt, value) -> 0
+ *
+ * Sets the value of a socket option.
+ *
+ * @param fd [Integer] file descriptor
+ * @param level [Integer] level
+ * @param opt [Integer] level
+ * @param value [Integer] option value
+ * @return [0] success
+ */
 VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
   struct um *machine = um_get_machine(self);
   return um_setsockopt(machine, NUM2INT(fd), NUM2INT(level), NUM2INT(opt), numeric_value(value));
 }
 
+/* call-seq:
+ *   machine.synchronize(mutex) { }
+ *
+ * Synchronizes access to the given mutex. The mutex is locked, the given block
+ * is executed and finally the mutex is unlocked.
+ *
+ * @param mutex [UM::Mutex] mutex
+ * @return [any] block return value
+ */
 VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
   struct um *machine = um_get_machine(self);
   struct um_mutex *mutex_data = Mutex_data(mutex);
   return um_mutex_synchronize(machine, mutex_data);
 }
 
+/* call-seq:
+ *   machine.push(queue, value) -> queue
+ *
+ * Pushes a value to the tail of the given queue.
+ *
+ * @param queue [UM::Queue] queue
+ * @param value [any] value
+ * @return [UM::Queue] queue
+ */
 VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {
   struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_push(machine, que, value);
 }
 
+/* call-seq:
+ *   machine.pop(queue) -> value
+ *
+ * removes a value from the tail of the given queue.
+ *
+ * @param queue [UM::Queue] queue
+ * @return [any] value
+ */
 VALUE UM_queue_pop(VALUE self, VALUE queue) {
   struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_pop(machine, que);
 }
 
+/* call-seq:
+ *   machine.unshift(queue, value) -> queue
+ *
+ * Pushes a value to the head of the given queue.
+ *
+ * @param queue [UM::Queue] queue
+ * @param value [any] value
+ * @return [UM::Queue] queue
+ */
 VALUE UM_queue_unshift(VALUE self, VALUE queue, VALUE value) {
   struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
   return um_queue_unshift(machine, que, value);
 }
 
+/* call-seq:
+ *   machine.pop(queue) -> value
+ *
+ * removes a value from the head of the given queue.
+ *
+ * @param queue [UM::Queue] queue
+ * @return [any] value
+ */
 VALUE UM_queue_shift(VALUE self, VALUE queue) {
   struct um *machine = um_get_machine(self);
   struct um_queue *que = Queue_data(queue);
@@ -493,6 +925,18 @@ VALUE UM_open_complete(VALUE arg) {
   return ctx->self;
 }
 
+/* call-seq:
+ *   machine.open(pathname, flags) -> fd
+ *   machine.open(pathname, flags) { |fd| ... }
+ *
+ * Opens a file using the given pathname and flags. If a block is given, the
+ * file descriptor is passed to the block, and the file is automatically closed
+ * when the block returns.
+ *
+ * @param pathname [String] file path
+ * @param flags [Integer] flags mask
+ * @return [Integer] fd
+ */
 VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
   struct um *machine = um_get_machine(self);
   // TODO: take optional perm (mode) arg
@@ -505,51 +949,136 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
     return fd;
 }
 
+/* call-seq:
+ *   machine.poll(fd, mask) -> fd
+ *
+ * Waits for readiness of the given file descriptor according to the given event
+ * mask.
+ *
+ * @param fd [Integer] file descriptor
+ * @param mask [Integer] events mask
+ * @return [Integer] fd
+ */
 VALUE UM_poll(VALUE self, VALUE fd, VALUE mask) {
   struct um *machine = um_get_machine(self);
   return um_poll(machine, NUM2INT(fd), NUM2UINT(mask));
 }
 
-VALUE UM_select(VALUE self, VALUE rfds, VALUE wfds, VALUE efds) {
+/* call-seq:
+ *   machine.select(read_fds, write_fds, except_fds) -> [read_ready_fds, write_read_fds, except_ready_fds]
+ *
+ * Waits for readyness of at least one fd for read, write or exception condition
+ * from the given fds. This method provides a similar interface to `IO#select`.
+ *
+ * @param read_fds [Array<Integer>] file descriptors for reading
+ * @param write_fds [Array<Integer>] file descriptors for writing
+ * @param except_fds [Array<Integer>] file descriptors for exception
+ * @return [Array<Array<Integer>>] read-ready, write-ready, and exception-ready fds
+ */
+VALUE UM_select(VALUE self, VALUE read_fds, VALUE write_fds, VALUE except_fds) {
   struct um *machine = um_get_machine(self);
-  return um_select(machine, rfds, wfds, efds);
+  return um_select(machine, read_fds, write_fds, except_fds);
 }
 
+/* call-seq:
+ *   machine.waitid(idtype, id, options) -> [pid, status, code)]
+ *
+ * Waits for a process to change state. The process to wait for can be specified
+ * as a pid or as a pidfd, according to the given `idtype` and `id`.
+ *
+ * @param idtype [Integer] id type
+ * @param id [Integer] id
+ * @param options [Integer] options
+ * @return [Array<Integer>] pid status
+ */
 VALUE UM_waitid(VALUE self, VALUE idtype, VALUE id, VALUE options) {
   struct um *machine = um_get_machine(self);
   return um_waitid(machine, NUM2INT(idtype), NUM2INT(id), NUM2INT(options));
 }
 
 #ifdef HAVE_RB_PROCESS_STATUS_NEW
+
+/* :nodoc:
+ *
+ * This method depends on the availability of `rb_process_status_new`. See:
+ * https://github.com/ruby/ruby/pull/15213
+ *
+ */
 VALUE UM_waitid_status(VALUE self, VALUE idtype, VALUE id, VALUE options) {
   struct um *machine = um_get_machine(self);
   return um_waitid_status(machine, NUM2INT(idtype), NUM2INT(id), NUM2INT(options));
 }
+
 #endif
 
+/* call-seq:
+ *   machine.prep_timeout(interval) -> timeout
+ *
+ * Prepares an asynchronous timeout instance.
+ *
+ * @param interval [Integer] timeout interval in seconds
+ * @return [UM::AsyncOp] async operation instance
+ */
 VALUE UM_prep_timeout(VALUE self, VALUE interval) {
   struct um *machine = um_get_machine(self);
   return um_prep_timeout(machine, NUM2DBL(interval));
 }
 
+/* call-seq:
+ *   machine.ssl_set_bio(ssl) -> machine
+ *
+ * Sets up the given ssl socket to use the machine for sending and receiving.
+ *
+ * @param ssl [OpenSSL::SSL::SSLSocket] ssl socket
+ * @return [UringMachine] machine
+ */
 VALUE UM_ssl_set_bio(VALUE self, VALUE ssl) {
   struct um *machine = um_get_machine(self);
   um_ssl_set_bio(machine, ssl);
   return self;
 }
 
+/* call-seq:
+ *   machine.ssl_read(ssl, buf, maxlen) -> bytes_read
+ *
+ * Reads from the given SSL socket. This method should be used after first
+ * having called `#ssl_set_bio`.
+ *
+ * @param ssl [OpenSSL::SSL::SSLSocket] ssl socket
+ * @param buf [String, IO::Buffer] buffer
+ * @param maxlen [Integer] maximum number of bytes to read
+ * @return [Integer] number of bytes read
+ */
 VALUE UM_ssl_read(VALUE self, VALUE ssl, VALUE buf, VALUE maxlen) {
   struct um *machine = um_get_machine(self);
   int ret = um_ssl_read(machine, ssl, buf, NUM2INT(maxlen));
   return INT2NUM(ret);
 }
 
+/* call-seq:
+ *   machine.ssl_write(ssl, buf, len) -> bytes_written
+ *
+ * Writes to the given SSL socket. This method should be used after first
+ * having called `#ssl_set_bio`.
+ *
+ * @param ssl [OpenSSL::SSL::SSLSocket] ssl socket
+ * @param buf [String, IO::Buffer] buffer
+ * @param len [Integer] number of bytes to write
+ * @return [Integer] number of bytes written
+ */
 VALUE UM_ssl_write(VALUE self, VALUE ssl, VALUE buf, VALUE len) {
   struct um *machine = um_get_machine(self);
   int ret = um_ssl_write(machine, ssl, buf, NUM2INT(len));
   return INT2NUM(ret);
 }
 
+/* call-seq:
+ *   UringMachine.pipe -> [read_fd, write_fd]
+ *
+ * Creates a pipe, returning the file descriptors for the read and write ends.
+ *
+ * @return [Array<Integer>] array containing the read and write file descriptors
+ */
 VALUE UM_pipe(VALUE self) {
   int fds[2];
   int ret = pipe(fds);
@@ -561,6 +1090,16 @@ VALUE UM_pipe(VALUE self) {
   return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
 }
 
+/* call-seq:
+ *   UringMachine.socketpair(domain, type, protocol) -> [s1_fd, s2_fd]
+ *
+ * Creates a pair of connected sockets, returning the two file descriptors.
+ *
+ * @param domain [Integer] domain
+ * @param type [Integer] type
+ * @param protocol [Integer] protocol
+ * @return [Array<Integer>] array containing the two file descriptors
+ */
 VALUE UM_socketpair(VALUE self, VALUE domain, VALUE type, VALUE protocol) {
   int fds[2];
   int ret = socketpair(NUM2INT(domain), NUM2INT(type), NUM2INT(protocol), fds);
@@ -572,6 +1111,15 @@ VALUE UM_socketpair(VALUE self, VALUE domain, VALUE type, VALUE protocol) {
   return rb_ary_new_from_args(2, INT2NUM(fds[0]), INT2NUM(fds[1]));
 }
 
+/* call-seq:
+ *   UringMachine.pidfd_open(pid) -> fd
+ *
+ * Creates a file descriptor representing the given process pid. The file
+ * descriptor can then be used with methods such as `#waitid` or `.pidfd_open`.
+ *
+ * @param pid [Integer] process pid
+ * @return [Integer] file descriptor
+ */
 VALUE UM_pidfd_open(VALUE self, VALUE pid) {
   int fd = syscall(SYS_pidfd_open, NUM2INT(pid), 0);
   if (fd == -1) {
@@ -582,6 +1130,15 @@ VALUE UM_pidfd_open(VALUE self, VALUE pid) {
   return INT2NUM(fd);
 }
 
+/* call-seq:
+ *   UringMachine.pidfd_send_signal(fd, sig) -> fd
+ *
+ * Sends a signal to a pidfd.
+ *
+ * @param fd [Integer] pidfd
+ * @param sig [Integer] signal
+ * @return [Integer] pidfd
+ */
 VALUE UM_pidfd_send_signal(VALUE self, VALUE fd, VALUE sig) {
   int ret = syscall(
     SYS_pidfd_send_signal, NUM2INT(fd), NUM2INT(sig), NULL, 0
@@ -594,6 +1151,8 @@ VALUE UM_pidfd_send_signal(VALUE self, VALUE fd, VALUE sig) {
   return fd;
 }
 
+/* :nodoc:
+ */
 VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
   int fd = rb_io_descriptor(io);
   int oflags = fcntl(fd, F_GETFL);
@@ -602,6 +1161,8 @@ VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
   return (oflags & O_NONBLOCK) ? Qtrue : Qfalse;
 }
 
+/* :nodoc:
+ */
 VALUE UM_io_set_nonblock(VALUE self, VALUE io, VALUE nonblock) {
   int fd = rb_io_descriptor(io);
   int oflags = fcntl(fd, F_GETFL);
@@ -622,15 +1183,37 @@ VALUE UM_io_set_nonblock(VALUE self, VALUE io, VALUE nonblock) {
   return nonblock;
 }
 
+/* call-seq:
+ *   UringMachine.kernel_version -> version
+ *
+ * Returns the kernel version.
+ *
+ * @return [Integer] kernel version
+ */
 VALUE UM_kernel_version(VALUE self) {
   return INT2NUM(UM_KERNEL_VERSION);
 }
 
+/* call-seq:
+ *   UringMachine.debug(str)
+ *
+ * Prints the given string to STDERR.
+ *
+ * @param str [String] debug message
+ * @return [void]
+ */
 VALUE UM_debug(VALUE self, VALUE str) {
   fprintf(stderr, "%s\n", StringValueCStr(str));
   return Qnil;
 }
 
+/* call-seq:
+ *   UringMachine.inotify_init -> fd
+ *
+ * Creates an inotify file descriptor.
+ *
+ * @return [Integer] file descriptor
+ */
 VALUE UM_inotify_init(VALUE self) {
   int fd = inotify_init();
   if (fd == -1) {
@@ -640,6 +1223,16 @@ VALUE UM_inotify_init(VALUE self) {
   return INT2NUM(fd);
 }
 
+/* call-seq:
+ *   UringMachine.inotify_add_watch(fd, path, mask) -> wd
+ *
+ * Adds a watch on the given inotify file descriptor.
+ *
+ * @param fd [Integer] inotify file descriptor
+ * @param path [String] file/directory path
+ * @param mask [Integer] inotify event mask
+ * @return [Integer] watch descriptor
+ */
 VALUE UM_inotify_add_watch(VALUE self, VALUE fd, VALUE path, VALUE mask) {
   int ret = inotify_add_watch(NUM2INT(fd), StringValueCStr(path), NUM2UINT(mask));
   if (ret == -1) {
@@ -669,6 +1262,16 @@ static inline VALUE inotify_get_events(char *buf, size_t len) {
   return array;
 }
 
+/* call-seq:
+ *   machine.inotify_get_events(fd) -> events
+ *
+ * Waits for and returns one or more events on the given inotify file
+ * descriptor. Each event is returned as a hash containing the watch descriptor,
+ * the file name, and the event mask.
+ *
+ * @param fd [Integer] inotify file descriptor
+ * @return [Array<Hash>] array of one or more events
+ */
 VALUE UM_inotify_get_events(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
 

@@ -1,6 +1,14 @@
 #include "um.h"
 #include <stdlib.h>
 
+/*
+ * Document-class: UringMachine::Queue
+ *
+ * A futex-based Queue implementation. The queue can be manipulated by calling
+ * `UringMachine#push`, `UringMachine#unshift`, `UringMachine#pop` and
+ * `UringMachine#shift`.
+ */
+
 VALUE cQueue;
 
 static void Queue_mark(void *ptr) {
@@ -40,6 +48,10 @@ inline struct um_queue *Queue_data(VALUE self) {
   return queue;
 }
 
+/* Initializes a new queue instance.
+ *
+ * @return [void]
+ */
 VALUE Queue_initialize(VALUE self) {
   struct um_queue *queue = Queue_data(self);
   RB_OBJ_WRITE(self, &queue->self, self);
@@ -47,6 +59,10 @@ VALUE Queue_initialize(VALUE self) {
   return self;
 }
 
+/* Returns the number of items in the queue.
+ *
+ * @return [Integer] number of items in the queue
+ */
 VALUE Queue_count(VALUE self) {
   struct um_queue *queue = Queue_data(self);
   return UINT2NUM(queue->count);

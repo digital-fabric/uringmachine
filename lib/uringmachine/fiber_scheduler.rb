@@ -5,7 +5,7 @@ require 'etc'
 require 'uringmachine'
 
 class UringMachine
-  
+
   # Implements a worker thread pool for running blocking operations. Worker
   # threads are started as needed. Worker thread count is limited to the number
   # of CPU cores available.
@@ -73,9 +73,9 @@ class UringMachine
     end
   end
 
-  # UringMachine::FiberScheduler implements the Fiber::Scheduler interface for
-  # creating fiber-based concurrent applications in Ruby, in tight integration
-  # with the standard Ruby I/O and locking APIs.
+  # Implements the `Fiber::Scheduler` interface for creating fiber-based
+  # concurrent applications in Ruby, in tight integration with the standard Ruby
+  # I/O and locking APIs.
   class FiberScheduler
 
     # The blocking operation thread pool is shared by all fiber schedulers.
@@ -200,7 +200,7 @@ class UringMachine
     # @param io [IO] IO object
     # @param events [Number] readiness bitmask
     # @param timeout [Number, nil] optional timeout
-    # @param return
+    # @return [void]
     def io_wait(io, events, timeout = nil)
       timeout ||= io.timeout
       if timeout
@@ -316,7 +316,7 @@ class UringMachine
     #
     # @param io [IO] IO object
     # @param buffer [IO::Buffer] write buffer
-    # @param length [Integer] file offset
+    # @param from [Integer] file offset
     # @param length [Integer] write length
     # @param offset [Integer] buffer offset
     # @return [Integer] bytes written

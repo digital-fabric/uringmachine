@@ -9,4 +9,6 @@ group :development do
   gem 'benchmark'
   gem 'benchmark-ips'
   gem 'http_parser.rb', '~>0.8.0'
+  gem 'yard'
+  gem 'irb'
 end

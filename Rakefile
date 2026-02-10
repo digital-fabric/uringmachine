@@ -37,3 +37,11 @@ task :release do
   puts "Cleaning up..."
   `rm *.gem`
 end
+
+require 'yard'
+YARD_FILES = FileList['ext/um/*.c', 'lib/uringmachine.rb', 'lib/uringmachine/**/*.rb']
+
+YARD::Rake::YardocTask.new do |t|
+  t.files   = YARD_FILES
+  t.options = %w( --verbose -o yard --readme README.md)
+end

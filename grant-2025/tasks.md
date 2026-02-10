@@ -138,7 +138,8 @@
   - [v] setup custom BIO
   - [v] SSL read/write methods
 
-- [ ] RDoc
+- [v] RDoc
+  - [v] Rewrite README to show some examples
 
 - [ ] UringMachine website
   - [ ] domain: uringmachine.dev
