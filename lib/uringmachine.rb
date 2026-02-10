@@ -29,7 +29,7 @@ class UringMachine
   # @param block [Proc] block to run in fiber
   # @return [Fiber] new fiber
   def spin(value = nil, klass = Fiber, &block)
-    fiber = klass.new { |v| run_block_in_fiber(block, fiber, v) }
+    fiber = klass.new(blocking: false) { |v| run_block_in_fiber(block, fiber, v) }
     self.schedule(fiber, value)
 
     fiber_set << fiber

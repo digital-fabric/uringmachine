@@ -112,6 +112,43 @@ class FiberSchedulerTest < UMBaseTest
     o.close rescue nil
   end
 
+  def test_fiber_scheduler_io_with_machine_spin
+    i, o = IO.pipe
+    buffer = []
+
+    f1 = machine.spin do
+      sleep 0.01
+      o.write 'foo'
+      buffer << :f1
+    end
+
+    f2 = machine.spin do
+      sleep 0.02
+      o.write 'bar'
+      buffer << :f2
+      o.close
+    end
+
+    f3 = machine.spin do
+      str = i.read
+      buffer << str
+    end
+
+    machine.join(f1, f2, f3)
+    assert_equal [true] * 3, [f1, f2, f3].map(&:done?)
+    assert_equal [:f1, :f2, 'foobar'], buffer
+
+    assert_equal({
+      kernel_sleep: 2,
+      io_write: 2,
+      io_read: 3,
+      io_close: 1
+    }, scheduler_calls_tally)
+  ensure
+    i.close rescue nil
+    o.close rescue nil
+  end
+
   def test_io_read_with_timeout
     i, o = IO.pipe
     i.timeout = 0.01
