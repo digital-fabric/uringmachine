@@ -1,3 +1,12 @@
+# 0.25.0 2026-02-10
+
+- Add Yard docs
+- Add `UM::STDIN_FILENO`, `UM::STDOUT_FILENO`, `UM::STDERR_FILENO` constants
+- Mark fibers as non-blocking in `#spin`
+- Use `Set` instead of `Hash` for holding machine's fiber list
+- Add inotify API, `#file_watch` convenience method
+- Add SSL functionality: `#ssl_set_bio`, `#ssl_read`, `#ssl_write`
+
 # 0.24.0 2026-01-30
 
 - Add `Stream.resp_encode_cmd`
