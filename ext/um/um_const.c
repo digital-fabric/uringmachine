@@ -19,6 +19,10 @@
 #define DEF_CONST_INT(mod, v) rb_define_const(mod, #v, INT2NUM(v))
 
 void um_define_net_constants(VALUE mod) {
+  DEF_CONST_INT(mod, STDIN_FILENO);
+  DEF_CONST_INT(mod, STDOUT_FILENO);
+  DEF_CONST_INT(mod, STDERR_FILENO);
+
   DEF_CONST_INT(mod, AT_FDCWD);
   DEF_CONST_INT(mod, AT_EMPTY_PATH);
   DEF_CONST_INT(mod, AT_NO_AUTOMOUNT);
