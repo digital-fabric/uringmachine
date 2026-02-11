@@ -100,6 +100,7 @@ struct um_op {
 
   enum um_op_kind kind;
   uint flags;
+  uint ref_count;
 
   VALUE fiber;
   VALUE value;
@@ -237,6 +238,10 @@ void um_teardown(struct um *machine);
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics);
 
 const char * um_op_kind_name(enum um_op_kind kind);
+
+struct um_op *um_op_acquire(struct um *machine, uint ref_count);
+void um_op_release(struct um *machine, struct um_op *op);
+
 struct um_op *um_op_alloc(struct um *machine);
 void um_op_free(struct um *machine, struct um_op *op);
 void um_op_clear(struct um *machine, struct um_op *op);

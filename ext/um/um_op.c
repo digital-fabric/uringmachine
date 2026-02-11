@@ -185,3 +185,15 @@ inline void um_op_free(struct um *machine, struct um_op *op) {
   machine->op_freelist = op;
   machine->metrics.ops_free++;
 }
+
+inline struct um_op *um_op_acquire(struct um *machine, uint ref_count) {
+  struct um_op *op = um_op_alloc(machine);
+  op->ref_count = ref_count;
+  return op;
+}
+
+inline void um_op_release(struct um *machine, struct um_op *op) {
+  op->ref_count--;
+  if (!op->ref_count)
+    um_op_free(machine, op);
+}
