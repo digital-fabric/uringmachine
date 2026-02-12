@@ -37,7 +37,6 @@ const char * um_op_kind_name(enum um_op_kind kind) {
     case OP_READ_MULTISHOT:     return "OP_READ_MULTISHOT";
     case OP_RECV_MULTISHOT:     return "OP_RECV_MULTISHOT";
     case OP_TIMEOUT_MULTISHOT:  return "OP_TIMEOUT_MULTISHOT";
-    case OP_SLEEP_MULTISHOT:    return "OP_SLEEP_MULTISHOT";
     default:                    return "UNKNOWN_OP_KIND";
   }
 }
@@ -59,6 +58,7 @@ inline void um_op_transient_add(struct um *machine, struct um_op *op) {
 }
 
 inline void um_op_transient_remove(struct um *machine, struct um_op *op) {
+  op->flags &= ~OP_F_TRANSIENT;
   if (op->prev)
     op->prev->next = op->next;
   if (op->next)
@@ -186,14 +186,16 @@ inline void um_op_free(struct um *machine, struct um_op *op) {
   machine->metrics.ops_free++;
 }
 
-inline struct um_op *um_op_acquire(struct um *machine, uint ref_count) {
-  struct um_op *op = um_op_alloc(machine);
-  op->ref_count = ref_count;
-  return op;
+inline struct um_op *um_op_acquire(struct um *machine) {
+  return um_op_alloc(machine);
 }
 
 inline void um_op_release(struct um *machine, struct um_op *op) {
   op->ref_count--;
-  if (!op->ref_count)
-    um_op_free(machine, op);
+  if (op->ref_count) return;
+
+  if (op->flags & OP_F_FREE_IOVECS) free(op->iovecs);
+  if (op->flags & OP_F_MULTISHOT)
+    um_op_multishot_results_clear(machine, op);
+  um_op_free(machine, op);
 }

@@ -98,15 +98,21 @@ inline void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 res
   adjust_read_buffer_len(buffer, result, buffer_offset);
 }
 
-inline void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size) {
+// returns false if buffer is invalid and raise_on_bad_buffer is false
+inline int um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size, int raise_on_bad_buffer) {
   if (TYPE(buffer) == T_STRING) {
     *base = RSTRING_PTR(buffer);
     *size = RSTRING_LEN(buffer);
   }
   else if (IO_BUFFER_P(buffer))
     rb_io_buffer_get_bytes_for_reading(buffer, base, size); // reading *from* buffer
-  else
-    um_raise_internal_error("Invalid buffer provided");
+  else {
+    if (raise_on_bad_buffer)
+      um_raise_internal_error("Invalid buffer provided");
+    else
+      return false;
+  }
+  return true;
 }
 
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
@@ -204,7 +210,11 @@ inline struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *
   size_t len = 0;
 
   for (int i = 0; i < argc; i++) {
-    um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len);
+    int ok = um_get_buffer_bytes_for_writing(argv[i], (const void **)&iovecs[i].iov_base, &iovecs[i].iov_len, false);
+    if (unlikely(!ok)) {
+      free(iovecs);
+      um_raise_internal_error("Invalid buffer provided");
+    }
     len += iovecs[i].iov_len;
   }
   if (total_len) *total_len = len;

@@ -97,7 +97,7 @@ int um_ssl_write(struct um *machine, VALUE ssl_obj, VALUE buf, int len) {
   SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
   const void *base;
   size_t size;
-  um_get_buffer_bytes_for_writing(buf, &base, &size);
+  um_get_buffer_bytes_for_writing(buf, &base, &size, true);
   if ((len == (int)-1) || (len > (int)size)) len = (int)size;
   if (unlikely(!len)) return INT2NUM(0);
 

@@ -393,9 +393,12 @@ class FiberSchedulerTest < UMBaseTest
       sleep 0.001
       buf = IO.read(fn)
     end
-    assert_equal 2, machine.metrics[:total_ops]
 
     @scheduler.join
+    metrics = machine.metrics
+    assert_equal 10, metrics[:total_ops]
+    assert_equal 0, metrics[:ops_pending]
+    assert_equal 256, metrics[:ops_free]
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,

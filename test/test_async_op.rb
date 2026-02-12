@@ -51,11 +51,12 @@ class AsyncOpTest < UMBaseTest
       @op.cancel
     end
 
-    res = @op.await
+    assert_raises(Errno::ECANCELED) {
+      @op.await
+    }
 
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal true, @op.done?
-    assert_equal (-ECANCELED), res
     assert_equal true, @op.cancelled?
   end
 

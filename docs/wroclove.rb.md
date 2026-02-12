@@ -28,6 +28,10 @@ https://www.papercall.io/talks/413880/children/413881
   - The challenges of cancellation
     - double life cycle
     - holding on to buffers
+    - ensuring the lifetime of relevant objects when doing an async operation.
+      - the TRANSIENT list of ops, for async operations (e.g. `#write_async` -
+        how to do we hold on to the write buffer.)
+      - how in general we mark the objects involved in async 
 - Integration with the Ruby ecosystem (6)
   - The Fiber::Scheduler interface: the good, the bad and the ugly
   - Dealing with CPU-bound workloads

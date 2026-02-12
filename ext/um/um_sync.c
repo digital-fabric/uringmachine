@@ -6,35 +6,42 @@
 
 // The value argument is the current (known) futex value.
 void um_futex_wait(struct um *machine, uint32_t *futex, uint32_t value) {
-  struct um_op op;
-  um_prep_op(machine, &op, OP_FUTEX_WAIT, 0);
-  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_FUTEX_WAIT, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_futex_wait(
     sqe, (uint32_t *)futex, value, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
   VALUE ret = um_yield(machine);
-  if (!um_op_completed_p(&op))
-    um_cancel_and_wait(machine, &op);
+
+  if (unlikely(!OP_CQE_DONE_P(op)))
+    um_cancel_op_and_await_cqe(machine, op);
   else {
-    if (op.result.res != -EAGAIN)
-      um_raise_on_error_result(op.result.res);
+    int res = op->result.res;
+    if (res != -EAGAIN) {
+      um_op_release(machine, op);
+      um_raise_on_error_result(res);
+    }
   }
+  um_op_release(machine, op);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
 }
 
 void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
-  struct um_op op;
-  um_prep_op(machine, &op, OP_FUTEX_WAKE, 0);
-  struct io_uring_sqe *sqe = um_get_sqe(machine, &op);
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_FUTEX_WAKE, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_futex_wake(
     sqe, (uint32_t *)futex, num_waiters, FUTEX_BITSET_MATCH_ANY, FUTEX2_SIZE_U32, 0
   );
 
   VALUE ret = um_yield(machine);
-  um_check_completion(machine, &op);
+  
+  um_verify_op_completion(machine, op, true);
+  um_op_release(machine, op);
 
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
