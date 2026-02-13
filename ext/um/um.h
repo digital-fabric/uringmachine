@@ -303,6 +303,7 @@ uint um_submit(struct um *machine);
 VALUE um_yield(struct um *machine);
 VALUE um_switch(struct um *machine);
 VALUE um_wakeup(struct um *machine);
+void um_cancel_op(struct um *machine, struct um_op *op);
 void um_cancel_op_and_discard_cqe(struct um *machine, struct um_op *op);
 void um_cancel_op_and_await_cqe(struct um *machine, struct um_op *op);
 int um_verify_op_completion(struct um *machine, struct um_op *op, int await_cancelled);

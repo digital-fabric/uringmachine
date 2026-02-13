@@ -60,7 +60,7 @@ inline void um_teardown(struct um *machine) {
 }
 
 inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
-  DEBUG_PRINTF("> um_get_sqe: op %p kind=%s ref_count=%d flags=%x unsubmitted=%d pending=%d total=%lu\n",
+  DEBUG_PRINTF("* um_get_sqe: op %p kind=%s ref_count=%d flags=%x unsubmitted=%d pending=%d total=%lu\n",
     op, um_op_kind_name(op ? op->kind : OP_UNDEFINED), op ? op->ref_count : 0, op ? op->flags : 0,
     machine->metrics.ops_unsubmitted, machine->metrics.ops_pending, machine->metrics.total_ops
   );
@@ -145,13 +145,13 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
   struct um_op *op = (struct um_op *)cqe->user_data;
   if (DEBUG) {
     if (op) {
-      DEBUG_PRINTF("< um_process_cqe: op=%p kind=%s ref_count=%d flags=%d cqe_res=%d cqe_flags=%d pending=%d\n",
+      DEBUG_PRINTF("* um_process_cqe: op=%p kind=%s ref_count=%d flags=%x cqe_res=%d cqe_flags=%x pending=%d\n",
         op, um_op_kind_name(op->kind), op->ref_count, op->flags,
         cqe->res, cqe->flags, machine->metrics.ops_pending
       );
     }
     else {
-      DEBUG_PRINTF("< um_process_cqe: op NULL cqe_res=%d cqe_flags=%d pending=%d\n",
+      DEBUG_PRINTF("* um_process_cqe: op=NULL cqe_res=%d cqe_flags=%x pending=%d\n",
         cqe->res, cqe->flags, machine->metrics.ops_pending
       );
     }
@@ -312,7 +312,7 @@ inline void *um_wait_for_sidecar_signal(void *ptr) {
 // either 1 - where we wait for at least one CQE to be ready, or 0, where we
 // don't wait, and just process any CQEs that already ready.
 static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wait_nr) {
-  DEBUG_PRINTF("> um_wait_for_and_process_ready_cqes wait_nr=%d\n", wait_nr);
+  DEBUG_PRINTF("* um_wait_for_and_process_ready_cqes wait_nr=%d\n", wait_nr);
   struct wait_for_cqe_ctx ctx = { .machine = machine, .cqe = NULL, .wait_nr = wait_nr };
   machine->metrics.total_waits++;
 
@@ -370,8 +370,8 @@ inline void um_profile_switch(struct um *machine, VALUE next_fiber) {
 }
 
 inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
-  DEBUG_PRINTF("> process_runqueue_op: op=%p ref_count=%d flags=%x\n",
-    op, op->ref_count, op->flags
+  DEBUG_PRINTF("* process_runqueue_op: op=%p kind=%s ref_count=%d flags=%x\n",
+    op, um_op_kind_name(op->kind), op->ref_count, op->flags
   );
 
   machine->metrics.total_switches++;
@@ -389,7 +389,7 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
 }
 
 inline VALUE um_switch(struct um *machine) {
-  DEBUG_PRINTF("> um_switch: unsubmitted=%d pending=%d total=%lu\n",
+  DEBUG_PRINTF("* um_switch: unsubmitted=%d pending=%d total=%lu\n",
     machine->metrics.ops_unsubmitted, machine->metrics.ops_pending,
     machine->metrics.total_ops
   );
@@ -422,22 +422,41 @@ inline VALUE um_yield(struct um *machine) {
   return ret;
 }
 
-void um_cancel_op_and_discard_cqe(struct um *machine, struct um_op *op) {
-  op->flags |= OP_F_CANCELED;
+inline void um_cancel_op(struct um *machine, struct um_op *op) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
-  io_uring_prep_cancel64(sqe, (long long)op, 0);
+  io_uring_prep_cancel(sqe, op, IORING_ASYNC_CANCEL_USERDATA);
   sqe->flags = IOSQE_CQE_SKIP_SUCCESS;
 }
 
-void um_cancel_op_and_await_cqe(struct um *machine, struct um_op *op) {
-  // since we need to wait for the CQE, we don't set the F_CANCELED flag.
-  struct io_uring_sqe *sqe = um_get_sqe(machine, NULL);
-  io_uring_prep_cancel64(sqe, (long long)op, 0);
-  sqe->flags = IOSQE_CQE_SKIP_SUCCESS;
+inline void um_cancel_op_and_discard_cqe(struct um *machine, struct um_op *op) {
+  DEBUG_PRINTF("* um_cancel_op_and_discard_cqe op=%p kind=%s ref_count=%d flags=%x\n",
+    op, um_op_kind_name(op->kind), op->ref_count, op->flags
+  );
+  um_cancel_op(machine, op);
+  op->flags |= OP_F_CANCELED;
+}
+
+inline void um_cancel_op_and_await_cqe(struct um *machine, struct um_op *op) {
+  DEBUG_PRINTF("* um_cancel_op_and_await_cqe op=%p kind=%s ref_count=%d flags=%x\n",
+    op, um_op_kind_name(op->kind), op->ref_count, op->flags
+  );
+  um_cancel_op(machine, op);
 
   VALUE fiber = rb_fiber_current();
   rb_set_add(machine->pending_fibers, fiber);
+  int multishot_wait_count = 0;
   while (!OP_CQE_DONE_P(op)) {
+    if (OP_MULTISHOT_P(op)) {
+      // I noticed that with multishot timeout ops, there seems to be once in a
+      // while a race condition where the cancel would not register, causing
+      // this function to block forever, waiting for the operation to be done.
+      // The following mechanism reissues a cancel every 4 iterations, which
+      // seems to fix the problem. Not clear if this is a bug in io_uring.
+      multishot_wait_count++;
+      if (!(multishot_wait_count % 4)) um_cancel_op(machine, op);
+      um_op_multishot_results_clear(machine, op);
+      op->flags &= ~OP_F_CQE_SEEN;
+    }
     um_switch(machine);
   }
   rb_set_delete(machine->pending_fibers, fiber);
@@ -1398,13 +1417,8 @@ VALUE periodically_start(VALUE arg) {
   while (true) {
     VALUE ret = um_switch(ctx->machine);
 
-    DEBUG_PRINTF("periodically resume op %p ref_count %d flags %x\n",
-      ctx->op, ctx->op->ref_count, ctx->op->flags
-    );
-    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) {
-      RAISE_IF_EXCEPTION(ret);
-      return ret;
-    }
+    RAISE_IF_EXCEPTION(ret);
+    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) return ret;
     RB_GC_GUARD(ret);
 
     struct um_op_result *result = &ctx->op->result;

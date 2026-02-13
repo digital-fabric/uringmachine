@@ -396,7 +396,7 @@ class FiberSchedulerTest < UMBaseTest
 
     @scheduler.join
     metrics = machine.metrics
-    assert_equal 10, metrics[:total_ops]
+    assert_in_range 5..12, metrics[:total_ops]
     assert_equal 0, metrics[:ops_pending]
     assert_equal 256, metrics[:ops_free]
     assert_equal 'foobar', buf

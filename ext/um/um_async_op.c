@@ -37,8 +37,5 @@ VALUE um_async_op_await(struct um_async_op *async_op) {
 }
 
 void um_async_op_cancel(struct um_async_op *async_op) {
-  // we don't set OP_F_CANCELED because we want the CQE to be processed
-  struct io_uring_sqe *sqe = um_get_sqe(async_op->machine, NULL);
-  io_uring_prep_cancel64(sqe, (long long)async_op->op, 0);
-  io_uring_sqe_set_flags(sqe, IOSQE_CQE_SKIP_SUCCESS);
+  um_cancel_op(async_op->machine, async_op->op);
 }

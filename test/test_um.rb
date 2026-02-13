@@ -418,7 +418,6 @@ class PeriodicallyTest < UMBaseTest
       machine.timeout(0.05, Cancel) do
         machine.periodically(0.01) do
           count += 1
-          raise Cancel if count >= 5
         end
       end
     rescue Cancel
