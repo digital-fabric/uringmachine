@@ -730,6 +730,33 @@ class ReadEachTest < UMBaseTest
     t&.kill
   end
 
+  class TOError < StandardError; end
+
+  def test_read_each_timeout
+    r, w = IO.pipe
+    bgid = machine.setup_buffer_ring(4096, 1024)
+
+    bufs = []
+    e = nil
+    begin
+      machine.timeout(0.01, TOError) do
+        machine.read_each(r.fileno, bgid) do |b|
+          bufs << b
+        end
+      end
+    rescue => e
+    end
+
+    assert_kind_of TOError, e
+    assert_equal [], bufs
+    machine.snooze # in case the final CQE has not yet arrived
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 256, machine.metrics[:ops_free]
+  end
+
+  def test_read_each_close
+  end
+
   def test_read_each_bad_file
     _r, w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
@@ -1779,6 +1806,74 @@ class RecvEachTest < UMBaseTest
       bufs << buf
     end
     assert_equal ['abc', 'def', 'ghi'], bufs
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 256, machine.metrics[:ops_free]
+  ensure
+    t&.kill
+  end
+
+  class TOError < StandardError; end
+
+  def test_recv_each_timeout
+    t = Thread.new do
+      conn = @server.accept
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    bufs = []
+    e = nil
+    begin
+      machine.timeout(0.01, TOError) do
+        machine.recv_each(fd, bgid, 0) do |buf|
+          bufs << buf
+        end
+      end
+    rescue => e
+    end
+    assert_kind_of TOError, e
+    assert_equal [], bufs
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 256, machine.metrics[:ops_free]
+  ensure
+    t&.kill
+  end
+
+  def test_recv_each_shutdown
+    t = Thread.new do
+      conn = @server.accept
+      sleep
+    end
+
+    fd = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    res = machine.connect(fd, '127.0.0.1', @port)
+    assert_equal 0, res
+
+    bgid = machine.setup_buffer_ring(4096, 1024)
+    assert_equal 0, bgid
+
+    bufs = []
+    e = nil
+
+    f = machine.spin {
+      machine.sleep(0.01)
+      machine.shutdown(fd, UM::SHUT_RDWR)
+    }
+
+    begin
+      machine.recv_each(fd, bgid, 0) do |buf|
+        bufs << buf
+      end
+    rescue => e
+    end
+    assert_nil e
+    assert_equal [], bufs
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:ops_free]
   ensure

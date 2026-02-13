@@ -1208,10 +1208,9 @@ VALUE accept_each_start(VALUE arg) {
 
   while (true) {
     VALUE ret = um_yield(ctx->machine);
-    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) {
-      RAISE_IF_EXCEPTION(ret);
-      return ret;
-    }
+
+    RAISE_IF_EXCEPTION(ret);
+    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) return ret;
     RB_GC_GUARD(ret);
 
     struct um_op_result *result = &ctx->op->result;
@@ -1240,10 +1239,8 @@ VALUE accept_into_queue_start(VALUE arg) {
   while (true) {
     VALUE ret = um_yield(ctx->machine);
     
-    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) {
-      RAISE_IF_EXCEPTION(ret);
-      return ret;
-    }
+    RAISE_IF_EXCEPTION(ret);
+    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) return ret;
     RB_GC_GUARD(ret);
 
     struct um_op_result *result = &ctx->op->result;
@@ -1367,10 +1364,8 @@ VALUE read_recv_each_start(VALUE arg) {
   while (true) {
     VALUE ret = um_yield(ctx->machine);
 
-    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) {
-      RAISE_IF_EXCEPTION(ret);
-      return ret;
-    }
+    RAISE_IF_EXCEPTION(ret);
+    if (unlikely(!OP_CQE_SEEN_P(ctx->op))) return ret;
     RB_GC_GUARD(ret);
 
     struct um_op_result *result = &ctx->op->result;
