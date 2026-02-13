@@ -733,7 +733,7 @@ class ReadEachTest < UMBaseTest
   class TOError < StandardError; end
 
   def test_read_each_timeout
-    r, w = IO.pipe
+    r, _w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
     bufs = []
@@ -1344,7 +1344,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each_closed
     count = 0
     done = nil
-    f = @machine.spin do
+    @machine.spin do
       machine.accept_each(@server.fileno) do |fd|
         count += 1
       end
@@ -1816,7 +1816,7 @@ class RecvEachTest < UMBaseTest
 
   def test_recv_each_timeout
     t = Thread.new do
-      conn = @server.accept
+      @server.accept
       sleep
     end
 
@@ -1847,7 +1847,7 @@ class RecvEachTest < UMBaseTest
 
   def test_recv_each_shutdown
     t = Thread.new do
-      conn = @server.accept
+      @server.accept
       sleep
     end
 
@@ -1861,7 +1861,7 @@ class RecvEachTest < UMBaseTest
     bufs = []
     e = nil
 
-    f = machine.spin {
+    machine.spin {
       machine.sleep(0.01)
       machine.shutdown(fd, UM::SHUT_RDWR)
     }
@@ -2833,23 +2833,6 @@ class SendBundleTest < UMBaseTest
     ret = machine.recv(@server_fd, buf, 8192, 0)
     assert_equal len, ret
     assert_equal strs.map(&:to_s).join, buf
-  end
-end
-
-class NonBlockTest < UMBaseTest
-  def test_io_nonblock?
-    assert_equal false, UM.io_nonblock?(STDIN)
-  end
-
-  def test_io_set_nonblock
-    r, _w = IO.pipe
-    assert_equal true, UM.io_nonblock?(r)
-
-    UM.io_set_nonblock(r, false)
-    assert_equal false, UM.io_nonblock?(r)
-
-    UM.io_set_nonblock(r, true)
-    assert_equal true, UM.io_nonblock?(r)
   end
 end
 

@@ -1259,38 +1259,6 @@ VALUE UM_pidfd_send_signal(VALUE self, VALUE fd, VALUE sig) {
   return fd;
 }
 
-/* :nodoc:
- */
-VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
-  int fd = rb_io_descriptor(io);
-  int oflags = fcntl(fd, F_GETFL);
-  if (oflags == -1) return Qnil;
-
-  return (oflags & O_NONBLOCK) ? Qtrue : Qfalse;
-}
-
-/* :nodoc:
- */
-VALUE UM_io_set_nonblock(VALUE self, VALUE io, VALUE nonblock) {
-  int fd = rb_io_descriptor(io);
-  int oflags = fcntl(fd, F_GETFL);
-  if (oflags == -1) return Qnil;
-
-  if (RTEST(nonblock)) {
-    if (!(oflags & O_NONBLOCK)) {
-      oflags |= O_NONBLOCK;
-      fcntl(fd, F_SETFL, oflags);
-    }
-  }
-  else {
-    if (oflags & O_NONBLOCK) {
-      oflags &= ~O_NONBLOCK;
-      fcntl(fd, F_SETFL, oflags);
-    }
-  }
-  return nonblock;
-}
-
 /* call-seq:
  *   UringMachine.kernel_version -> version
  *
@@ -1421,8 +1389,6 @@ void Init_UM(void) {
   rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
   rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
 
-  rb_define_singleton_method(cUM, "io_nonblock?", UM_io_nonblock_p, 1);
-  rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
   rb_define_singleton_method(cUM, "debug", UM_debug, 1);
 
