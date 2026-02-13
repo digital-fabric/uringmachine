@@ -1,3 +1,7 @@
+# 0.26.0 2026-02-13
+
+- Reimplement um_op lifecycle tracking
+
 # 0.25.0 2026-02-10
 
 - Add Yard docs
