@@ -2502,7 +2502,7 @@ class SelectTest < UMBaseTest
 
   def test_select_bad_fd
     assert_raises(Errno::EBADF) { machine.select([9876, 9877], [], []) }
-    
+
     # we get one CQE with EBADF, the other one is cancelled and discarded
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 255, machine.metrics[:ops_free]

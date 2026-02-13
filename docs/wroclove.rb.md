@@ -31,7 +31,7 @@ https://www.papercall.io/talks/413880/children/413881
     - ensuring the lifetime of relevant objects when doing an async operation.
       - the TRANSIENT list of ops, for async operations (e.g. `#write_async` -
         how to do we hold on to the write buffer.)
-      - how in general we mark the objects involved in async 
+      - how in general we mark the objects involved in async
 - Integration with the Ruby ecosystem (6)
   - The Fiber::Scheduler interface: the good, the bad and the ugly
   - Dealing with CPU-bound workloads
@@ -46,7 +46,7 @@ https://www.papercall.io/talks/413880/children/413881
 - Future directions (3)
   - Further contributions to Ruby:
     - Support for Socket I/O in Fiber::Scheduler
-  - More stress testing, prove stability 
+  - More stress testing, prove stability
   - More performance research
   - Make Uma into a first-class app server for Ruby
-  - Introduce higher-level 
+  - Introduce higher-level

@@ -39,7 +39,7 @@ void um_futex_wake(struct um *machine, uint32_t *futex, uint32_t num_waiters) {
   );
 
   VALUE ret = um_yield(machine);
-  
+
   um_verify_op_completion(machine, op, true);
   um_op_release(machine, op);
 

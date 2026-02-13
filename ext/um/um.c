@@ -160,7 +160,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
 
   // A multishot operation is still in progress if CQE has the F_MORE flag set
   int done = OP_MULTISHOT_P(op) ? !(cqe->flags & IORING_CQE_F_MORE) : true;
-  
+
   // F_TRANSIENT means the operation was put on the transient list. Transient
   // ops are usually async ops where the app doesn't care when they are done or
   // how. We hold on to those ops on the transient list, where we can mark the
@@ -194,7 +194,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
 
   if (OP_MULTISHOT_P(op)) {
     um_op_multishot_results_push(machine, op, cqe->res, cqe->flags);
-    
+
     op->flags |= done ? (OP_F_CQE_SEEN | OP_F_CQE_DONE) : OP_F_CQE_SEEN;
     if (!OP_SCHEDULED_P(op)) um_schedule_op(machine, op);
   }
@@ -472,7 +472,7 @@ int um_verify_op_completion(struct um *machine, struct um_op *op, int await_canc
   }
 
   int res = op->result.res;
-  
+
   // on error we release the op and immediately raise an exception
   if (unlikely(res < 0 && res != -ETIME)) {
     um_op_release(machine, op);
@@ -496,7 +496,7 @@ inline void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kin
 
   VALUE fiber = OP_ASYNC_P(op) ? Qnil : rb_fiber_current();
   if (OP_TRANSIENT_P(op)) um_op_transient_add(machine, op);
-  
+
   RB_OBJ_WRITE(machine->self, &op->fiber, fiber);
   RB_OBJ_WRITE(machine->self, &op->value, Qnil);
   RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
@@ -572,7 +572,7 @@ VALUE um_sleep(struct um *machine, double duration) {
 
   VALUE ret = um_yield(machine);
 
-  DEBUG_PRINTF("sleep resume op %p ref_count %d flags: %x\n", 
+  DEBUG_PRINTF("sleep resume op %p ref_count %d flags: %x\n",
     op, op->ref_count, op->flags
   );
 
@@ -706,7 +706,7 @@ cancelled:
   um_cancel_op_and_await_cqe(machine, op);
 done:
   um_op_release(machine, op);
-  
+
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   um_raise_on_error_result(writev_res);
@@ -1238,7 +1238,7 @@ VALUE accept_into_queue_start(VALUE arg) {
 
   while (true) {
     VALUE ret = um_yield(ctx->machine);
-    
+
     RAISE_IF_EXCEPTION(ret);
     if (unlikely(!OP_CQE_SEEN_P(ctx->op))) return ret;
     RB_GC_GUARD(ret);
@@ -1251,7 +1251,7 @@ VALUE accept_into_queue_start(VALUE arg) {
       um_queue_push(ctx->machine, ctx->queue, INT2NUM(result->res));
       result = result->next;
     }
-    
+
     if (OP_CQE_DONE_P(ctx->op)) break;
 
     um_op_multishot_results_clear(ctx->machine, ctx->op);
@@ -1303,7 +1303,7 @@ int um_read_each_singleshot_loop(struct op_ctx *ctx) {
     io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
 
     VALUE ret = um_yield(ctx->machine);
-    
+
     if (likely(um_verify_op_completion(ctx->machine, ctx->op, true))) {
       VALUE buf = rb_str_new(ctx->read_buf, ctx->op->result.res);
       total += ctx->op->result.res;
