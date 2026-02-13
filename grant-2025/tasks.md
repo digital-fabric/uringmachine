@@ -129,10 +129,10 @@
 
     - [v] Postgres test
 
-- [ ] Ruby Fiber::Scheduler interface
+- [v] Ruby Fiber::Scheduler interface
   - [v] Make a PR for resetting the scheduler and resetting the fiber non-blocking flag.
   - [v] hook for close
-  - [ ] hooks for send/recv/sendmsg/recvmsg
+  - [x] hooks for send/recv/sendmsg/recvmsg (Ruby core PR pending for send/recv)
 
 - [v] SSL
   - [v] setup custom BIO

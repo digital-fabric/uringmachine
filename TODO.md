@@ -64,19 +64,6 @@ stream = UM::Stream.new(conn) # io mode
 - select on multiple queues (ala Go)
 - select on mixture of queues and fds
 
-(see also simplified op management below)
-
-## simplified op management
-
-Op lifecycle management can be much much simpler
-
-- make all ops heap-allocated
-- clear up state transitions:
-
-  - kernel-side state: unsubmitted, submitted, completed, done (for multishot ops)
-  - app-side state: unsubmitted, submitted, ...
-
-
 ## ops
 
 - splice / - tee
@@ -104,7 +91,8 @@ We're still missing:
 - ability to supply buffer to `get_line` and `get_string`
 - allow read to eof, maybe with `read_to_eof`
 
-For the sake of performance, simplicity and explicitness, we change the API as follows:
+For the sake of performance, simplicity and explicitness, we change the API as
+follows:
 
 ```ruby
 stream.get_line(buf, limit)
