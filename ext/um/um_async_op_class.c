@@ -19,8 +19,8 @@ static void AsyncOp_mark(void *ptr) {
 
 static void AsyncOp_free(void *ptr) {
   struct um_async_op *async_op = ptr;
-  if (async_op->op)
-    um_op_free(async_op->machine, async_op->op);
+  if (likely(async_op->op))
+    um_op_release(async_op->machine, async_op->op);
 }
 
 static const rb_data_type_t AsyncOp_type = {
@@ -63,7 +63,7 @@ inline void raise_on_missing_op(struct um_async_op *async_op) {
 }
 
 inline int async_op_is_done(struct um_async_op *async_op) {
-  return (async_op->op->flags & OP_F_COMPLETED);
+  return OP_CQE_DONE_P(async_op->op);
 }
 
 /* Returns the kind of asynchronous operation.

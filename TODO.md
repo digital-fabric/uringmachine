@@ -1,15 +1,25 @@
 ## immediate
 
-- Fix all futex value (Queue, Mutex) to be aligned
+- Fix all futex value (Queue, Mutex) to be properly aligned
 
 ## Buffer rings - automatic management
 
-```ruby
-# completely hands off
-machine.read_each(fd) { |str| ... }
+- Take the buffer_pool branch, rewrite it
+- Allow multiple stream modes:
+  - :buffer_pool - uses buffer rings
+  - :ssl - read from an SSL connection (`SSLSocket`)
+  - :io - read from an `IO`
 
-# what if we want to get IO::Buffer?
-machine.read_each(fd, io_buffer: true) { |iobuff, len| ... }
+The API will look something like:
+
+```ruby
+# The mode is selected automatically according to the given target
+
+stream = UM::Stream.new(fd) # buffer_pool mode
+
+stream = UM::Stream.new(ssl_sock) # ssl mode
+
+stream = UM::Stream.new(conn) # io mode
 ```
 
 ## Balancing I/O with the runqueue

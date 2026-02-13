@@ -73,20 +73,31 @@ enum um_op_kind {
   OP_READ_MULTISHOT,
   OP_RECV_MULTISHOT,
   OP_TIMEOUT_MULTISHOT,
-  OP_SLEEP_MULTISHOT
 };
 
-#define OP_F_COMPLETED        (1U <<  0) // op is completed (set on each CQE for multishot ops)
-#define OP_F_TRANSIENT        (1U <<  1) // op is heap allocated
-#define OP_F_ASYNC            (1U <<  2) // op belongs to an AsyncOp
-#define OP_F_CANCELED         (1U <<  3) // op is cancelled
-#define OP_F_IGNORE_CANCELED  (1U <<  4) // CQE with -ECANCEL should be ignored
-#define OP_F_MULTISHOT        (1U <<  5) // op is multishot
-#define OP_F_FREE_ON_COMPLETE (1U <<  6) // op should be freed on receiving CQE
-#define OP_F_RUNQUEUE_SKIP    (1U <<  7) // runqueue entry should be skipped
-#define OP_F_SELECT_POLLIN    (1U <<  8) // select POLLIN
-#define OP_F_SELECT_POLLOUT   (1U <<  9) // select POLLOUT
-#define OP_F_SELECT_POLLPRI   (1U << 10) // select POLLPRI
+
+#define OP_F_CQE_SEEN       (1U << 0) // CQE has been seen
+#define OP_F_CQE_DONE       (1U << 1) // CQE has been seen and operation is done
+#define OP_F_SCHEDULED      (1U << 2) // op is on runqueue
+#define OP_F_CANCELED       (1U << 3) // op is cancelled (disregard CQE results)
+#define OP_F_MULTISHOT      (1U << 4) // op is multishot
+#define OP_F_ASYNC          (1U << 5) // op is async (no fiber is scheduled to be resumed on completion)
+#define OP_F_TRANSIENT      (1U << 6) // op is on transient list (for GC purposes)
+#define OP_F_FREE_IOVECS    (1U << 7) // op->iovecs should be freed on release
+#define OP_F_SKIP           (1U << 8) // op should be skipped when pulled from runqueue
+
+#define OP_F_SELECT_POLLIN  (1U << 13) // select POLLIN
+#define OP_F_SELECT_POLLOUT (1U << 14) // select POLLOUT
+#define OP_F_SELECT_POLLPRI (1U << 15) // select POLLPRI
+
+#define OP_CQE_SEEN_P(op)   ((op)->flags & OP_F_CQE_SEEN)
+#define OP_CQE_DONE_P(op)   ((op)->flags & OP_F_CQE_DONE)
+#define OP_SCHEDULED_P(op)  ((op)->flags & OP_F_SCHEDULED)
+#define OP_CANCELED_P(op)   ((op)->flags & OP_F_CANCELED)
+#define OP_MULTISHOT_P(op)  ((op)->flags & OP_F_MULTISHOT)
+#define OP_ASYNC_P(op)      ((op)->flags & OP_F_ASYNC)
+#define OP_TRANSIENT_P(op)  ((op)->flags & OP_F_TRANSIENT)
+#define OP_SKIP_P(op)       ((op)->flags & OP_F_SKIP)
 
 struct um_op_result {
   __s32 res;
@@ -100,6 +111,7 @@ struct um_op {
 
   enum um_op_kind kind;
   uint flags;
+  uint ref_count;
 
   VALUE fiber;
   VALUE value;
@@ -109,7 +121,12 @@ struct um_op {
   struct um_op_result *multishot_result_tail;
   uint multishot_result_count;
 
-  struct __kernel_timespec ts; // used for timeout operation
+	union {
+    struct __kernel_timespec ts; // used for timeout operation
+    struct iovec *iovecs; // used for vectorized write/send
+    siginfo_t siginfo; // used for waitid
+    int int_value; // used for getsockopt
+  };
 };
 
 struct um_buffer {
@@ -237,8 +254,12 @@ void um_teardown(struct um *machine);
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics);
 
 const char * um_op_kind_name(enum um_op_kind kind);
-struct um_op *um_op_alloc(struct um *machine);
-void um_op_free(struct um *machine, struct um_op *op);
+
+struct um_op *um_op_acquire(struct um *machine);
+void um_op_release(struct um *machine, struct um_op *op);
+
+// struct um_op *um_op_alloc(struct um *machine);
+// void um_op_free(struct um *machine, struct um_op *op);
 void um_op_clear(struct um *machine, struct um_op *op);
 void um_op_transient_add(struct um *machine, struct um_op *op);
 void um_op_transient_remove(struct um *machine, struct um_op *op);
@@ -264,9 +285,9 @@ VALUE um_raise_exception(VALUE v);
 
 #define RAISE_IF_EXCEPTION(v) if (unlikely(um_value_is_exception_p(v))) { um_raise_exception(v); }
 
-void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kind, unsigned flags);
+void um_prep_op(struct um *machine, struct um_op *op, enum um_op_kind kind, uint ref_count, unsigned flags);
 void um_raise_on_error_result(int result);
-void um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size);
+int um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size, int raise_on_bad_buffer);
 void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs);
 void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result);
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
@@ -283,10 +304,9 @@ VALUE um_yield(struct um *machine);
 VALUE um_switch(struct um *machine);
 VALUE um_wakeup(struct um *machine);
 void um_cancel_op(struct um *machine, struct um_op *op);
-void um_cancel_and_wait(struct um *machine, struct um_op *op);
-int um_check_completion(struct um *machine, struct um_op *op);
-
-#define um_op_completed_p(op) ((op)->flags & OP_F_COMPLETED)
+void um_cancel_op_and_discard_cqe(struct um *machine, struct um_op *op);
+void um_cancel_op_and_await_cqe(struct um *machine, struct um_op *op);
+int um_verify_op_completion(struct um *machine, struct um_op *op, int await_cancelled);
 
 void um_schedule(struct um *machine, VALUE fiber, VALUE value);
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class);
