@@ -733,7 +733,7 @@ class ReadEachTest < UMBaseTest
   class TOError < StandardError; end
 
   def test_read_each_timeout
-    r, w = IO.pipe
+    r, _w = IO.pipe
     bgid = machine.setup_buffer_ring(4096, 1024)
 
     bufs = []
@@ -1344,7 +1344,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each_closed
     count = 0
     done = nil
-    f = @machine.spin do
+    @machine.spin do
       machine.accept_each(@server.fileno) do |fd|
         count += 1
       end
@@ -1816,7 +1816,7 @@ class RecvEachTest < UMBaseTest
 
   def test_recv_each_timeout
     t = Thread.new do
-      conn = @server.accept
+      @server.accept
       sleep
     end
 
@@ -1847,7 +1847,7 @@ class RecvEachTest < UMBaseTest
 
   def test_recv_each_shutdown
     t = Thread.new do
-      conn = @server.accept
+      @server.accept
       sleep
     end
 
@@ -1861,7 +1861,7 @@ class RecvEachTest < UMBaseTest
     bufs = []
     e = nil
 
-    f = machine.spin {
+    machine.spin {
       machine.sleep(0.01)
       machine.shutdown(fd, UM::SHUT_RDWR)
     }
@@ -1878,6 +1878,90 @@ class RecvEachTest < UMBaseTest
     assert_equal 256, machine.metrics[:ops_free]
   ensure
     t&.kill
+  end
+end
+
+class SendRecvFdTest < UMBaseTest
+  def setup
+    @s1_fd, @s2_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    super
+  end
+
+  def teardown
+    [@s1_fd, @s2_fd].each { machine.close(it) rescue nil }
+    super
+  end
+
+  class TOError < StandardError; end
+
+  def test_send_recv_fd
+    r_fd, w_fd = UM.pipe
+
+    res = machine.send_fd(@s1_fd, w_fd)
+    assert_equal w_fd, res
+
+    fd = machine.recv_fd(@s2_fd)
+    assert_kind_of Integer, fd
+    refute_equal w_fd, fd
+
+    machine.close(w_fd)
+    machine.write(fd, 'foobar')
+    machine.close(fd)
+
+    buf = +''
+    res = machine.read(r_fd, buf, 12)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  end
+
+  def test_send_recv_fd_fork
+    pid = fork do
+      m = UM.new
+      fd = m.recv_fd(@s2_fd)
+      m.write(fd, 'Hello!')
+    ensure
+      m.close(fd) rescue nil
+    end
+
+    r_fd, w_fd = UM.pipe
+
+    res = machine.send_fd(@s1_fd, w_fd)
+    assert_equal w_fd, res
+    Process.wait(pid)
+    pid = nil
+    machine.close(w_fd)
+
+    buf = +''
+    len = machine.timeout(1, TOError) { machine.read(r_fd, buf, 12) }
+    assert_equal 6, len
+    assert_equal 'Hello!', buf
+  ensure
+    if pid
+      Process.kill('KILL', pid) rescue nil
+      Process.wait(pid) rescue nil
+    end
+    machine.close(r_fd) rescue nil
+    machine.close(w_fd) rescue nil
+  end
+
+  def test_send_fd_bad_sock_fd
+    _r_fd, w_fd = UM.pipe
+    assert_raises(Errno::ENOTSOCK) { machine.send_fd(0, w_fd) }
+  end
+
+  def test_send_fd_bad_fd
+    assert_raises(TypeError) { machine.send_fd(@s1_fd, nil) }
+    assert_raises(Errno::EBADF) { machine.send_fd(@s1_fd, 1111) }
+  end
+
+  def test_recv_fd_bad_msg
+    buf = "\0" * 1000
+    machine.write(@s1_fd, buf)
+    
+    assert_raises(Errno::EINVAL) {
+      res = machine.recv_fd(@s2_fd)
+      p res: res
+    }
   end
 end
 
@@ -2833,23 +2917,6 @@ class SendBundleTest < UMBaseTest
     ret = machine.recv(@server_fd, buf, 8192, 0)
     assert_equal len, ret
     assert_equal strs.map(&:to_s).join, buf
-  end
-end
-
-class NonBlockTest < UMBaseTest
-  def test_io_nonblock?
-    assert_equal false, UM.io_nonblock?(STDIN)
-  end
-
-  def test_io_set_nonblock
-    r, _w = IO.pipe
-    assert_equal true, UM.io_nonblock?(r)
-
-    UM.io_set_nonblock(r, false)
-    assert_equal false, UM.io_nonblock?(r)
-
-    UM.io_set_nonblock(r, true)
-    assert_equal true, UM.io_nonblock?(r)
   end
 end
 

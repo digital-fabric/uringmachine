@@ -328,6 +328,8 @@ VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
 /* Runs the given block, interrupting its execution if its runtime exceeds the
  * given timeout interval (in seconds).
  *
+ * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_timeoute.3.html
+ *
  * @param interval [Number] timeout interval in seconds
  * @param exception_class [any] timeout exception class
  * @return [any] block's return value
@@ -340,6 +342,8 @@ VALUE UM_timeout(VALUE self, VALUE interval, VALUE exception_class) {
 /* Puts the current fiber to sleep for the given time duration (in seconds),
  * yielding control to the next fiber in the runqueue.
  *
+ * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_timeoute.3.html
+ *
  * @param duration [Number] sleep duration in seconds
  * @return [void]
  */
@@ -350,6 +354,8 @@ VALUE UM_sleep(VALUE self, VALUE duration) {
 
 /* Runs the given block at regular time intervals in an infinite loop.
  *
+ * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_timeoute.3.html
+ *
  * @param interval [Number] time interval (in seconds) between consecutive invocations
  * @return [void]
  */
@@ -359,21 +365,23 @@ VALUE UM_periodically(VALUE self, VALUE interval) {
 }
 
 /* call-seq:
- *   machine.read(fd, buffer, maxlen[, buffer_offset[, file_offset]]) -> bytes_read
+ *   machine.read(fd, buffer, maxlen, buffer_offset = nil, file_offset = nil) -> bytes_read
  *
  * Reads up to `maxlen` bytes from the given `fd` into the given buffer. The
  * optional `buffer_offset` parameter determines the position in the buffer into
  * which the data will be read. A negative `buffer_offset` denotes a position
  * relative to the end of the buffer, e.g. a value of `-1` means the data will
  * be appended to the buffer.
+ * 
+ * - https://www.man7.org/linux/man-pages/man2/read.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_read.3.html
  *
- * @overload read(fd, buffer, maxlen, buffer_offset: nil, file_offset: nil)
- *   @param fd [Integer] file descriptor
- *   @param buffer [String, IO::Buffer] buffer
- *   @param maxlen [Integer] maximum number of bytes to read
- *   @param buffer_offset [Integer] optional buffer offset to read into
- *   @param file_offset [Integer] optional file offset to read from
- *   @return [Integer] number of bytes read
+ * @param fd [Integer] file descriptor
+ * @param buffer [String, IO::Buffer] buffer
+ * @param maxlen [Integer] maximum number of bytes to read
+ * @param buffer_offset [Integer] optional buffer offset to read into
+ * @param file_offset [Integer] optional file offset to read from
+ * @return [Integer] number of bytes read
  */
 VALUE UM_read(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
@@ -398,6 +406,8 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
  * buffer group should have been previously setup using `#setup_buffer_ring`.
  * Read data is yielded in an infinite loop to the given block.
  *
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_read_multishot.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param bgid [Integer] buffer group id
  * @return [void]
@@ -408,17 +418,19 @@ VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
 }
 
 /* call-seq:
- *   machine.write(fd, buffer[, len[, file_offset]]) -> bytes_written
+ *   machine.write(fd, buffer, len = nil, file_offset = nil) -> bytes_written
  *
  * Writes up to `len` bytes from the given buffer to the given `fd`. If `len`,
  * is not given, the entire buffer length is used.
  *
- * @overload write(fd, buffer, len: nil, file_offset: nil)
- *   @param fd [Integer] file descriptor
- *   @param buffer [String, IO::Buffer] buffer
- *   @param len [Integer] maximum number of bytes to write
- *   @param file_offset [Integer] optional file offset to write to
- *   @return [Integer] number of bytes written
+ * - https://man7.org/linux/man-pages/man2/write.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_write.3.html
+ *
+ * @param fd [Integer] file descriptor
+ * @param buffer [String, IO::Buffer] buffer
+ * @param len [Integer] maximum number of bytes to write
+ * @param file_offset [Integer] optional file offset to write to
+ * @return [Integer] number of bytes written
  */
 VALUE UM_write(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
@@ -435,7 +447,7 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
- *   machine.writev(fd, *buffers[, file_offset]) -> bytes_written
+ *   machine.writev(fd, *buffers, file_offset = nil) -> bytes_written
  *
  * Writes from the given buffers into the given fd. This method does not
  * guarantee that all data will be written. The application code should check
@@ -443,11 +455,13 @@ VALUE UM_write(int argc, VALUE *argv, VALUE self) {
  * repeat the operation after adjusting the buffers accordingly. See also
  * `#sendv`.
  *
- * @overload writev(fd, *buffers, file_offset: nil)
- *   @param fd [Integer] file descriptor
- *   @param *buffers [Array<String, IO::Buffer>] data buffers
- *   @param file_offset [Integer] optional file offset to write to
- *   @return [Integer] number of bytes written
+ * - https://man7.org/linux/man-pages/man2/writev.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_writev.3.html
+ *
+ * @param fd [Integer] file descriptor
+ * @param *buffers [Array<String, IO::Buffer>] data buffers
+ * @param file_offset [Integer] optional file offset to write to
+ * @return [Integer] number of bytes written
  */
 VALUE UM_writev(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
@@ -460,7 +474,7 @@ VALUE UM_writev(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
- *   machine.write_async(fd, buffer[, len[, file_offset]]) -> buffer
+ *   machine.write_async(fd, buffer, len = nil, file_offset = nil) -> buffer
  *
  * Writes up to `len` bytes from the given buffer to the given `fd`. If `len`,
  * is not given, the entire buffer length is used. This method submits the
@@ -468,12 +482,14 @@ VALUE UM_writev(int argc, VALUE *argv, VALUE self) {
  * improve performance in situations where the application does not care about
  * whether the I/O operation succeeds or not.
  *
- * @overload write_async(fd, buffer, len: nil, file_offset: nil)
- *   @param fd [Integer] file descriptor
- *   @param buffer [String, IO::Buffer] buffer
- *   @param len [Integer] maximum number of bytes to write
- *   @param file_offset [Integer] optional file offset to write to
- *   @return [String, IO::Buffer] buffer
+ * - https://man7.org/linux/man-pages/man2/write.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_write.3.html
+ *
+ * @param fd [Integer] file descriptor
+ * @param buffer [String, IO::Buffer] buffer
+ * @param len [Integer] maximum number of bytes to write
+ * @param file_offset [Integer] optional file offset to write to
+ * @return [String, IO::Buffer] buffer
  */
 VALUE UM_write_async(int argc, VALUE *argv, VALUE self) {
   struct um *machine = um_get_machine(self);
@@ -496,6 +512,9 @@ VALUE UM_write_async(int argc, VALUE *argv, VALUE self) {
  *
  * Returns information about a file.
  *
+ * - https://www.man7.org/linux/man-pages/man2/statx.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_statx.3.html
+ *
  * @param dirfd [Integer] file or directory descriptor
  * @param path [String, nil] file path
  * @param flags [Integer] flags
@@ -512,6 +531,9 @@ VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {
  *
  * Closes the given file descriptor.
  *
+ * - https://www.man7.org/linux/man-pages/man2/close.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_close.3.html
+ *
  * @param fd [Integer] file descriptor
  * @return [0] success
  */
@@ -527,6 +549,9 @@ VALUE UM_close(VALUE self, VALUE fd) {
  * not wait for it to complete. This method may be used to improve performance
  * in cases where the application des not care whether it succeeds or not.
  *
+ * - https://www.man7.org/linux/man-pages/man2/close.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_close.3.html
+ *
  * @param fd [Integer] file descriptor
  * @return [Integer] file descriptor
  */
@@ -539,6 +564,9 @@ VALUE UM_close_async(VALUE self, VALUE fd) {
  *   machine.accept(server_fd) -> connection_fd
  *
  * Accepts an incoming TCP connection.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/accept4.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_accept.3.html
  *
  * @param server_fd [Integer] listening socket file descriptor
  * @return [Integer] connection file descriptor
@@ -554,6 +582,9 @@ VALUE UM_accept(VALUE self, VALUE server_fd) {
  * Repeatedly accepts incoming TCP connections in a loop, yielding the
  * connection file descriptors to the given block.
  *
+ * - https://www.man7.org/linux/man-pages/man2/accept4.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_accept.3.html
+ *
  * @param server_fd [Integer] listening socket file descriptor
  * @return [void]
  */
@@ -563,10 +594,13 @@ VALUE UM_accept_each(VALUE self, VALUE server_fd) {
 }
 
 /* call-seq:
- *   machine.accept_each(server_fd, queue)
+ *   machine.accept_into_queue(server_fd, queue)
  *
  * Repeatedly accepts incoming TCP connections in a loop, pushing the connection
  * file descriptors into the given queue.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/accept4.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_accept.3.html
  *
  * @param server_fd [Integer] listening socket file descriptor
  * @param queue [UM::Queue] connection queue
@@ -581,6 +615,9 @@ VALUE UM_accept_into_queue(VALUE self, VALUE server_fd, VALUE queue) {
  *   machine.socket(domain, type, protocol, flags) -> fd
  *
  * Creates a socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/socket.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_socket.3.html
  *
  * @param domain [Integer] socket domain
  * @param type [Integer] socket type
@@ -598,6 +635,9 @@ VALUE UM_socket(VALUE self, VALUE domain, VALUE type, VALUE protocol, VALUE flag
  *
  * Shuts down a socket for sending and/or receiving.
  *
+ * - https://man7.org/linux/man-pages/man2/shutdown.2.html
+ * - https://man7.org/linux/man-pages/man3/io_uring_prep_shutdown.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param how [Integer] how the socket should be shutdown
  * @return [0] success
@@ -614,6 +654,9 @@ VALUE UM_shutdown(VALUE self, VALUE fd, VALUE how) {
  * improve performance in situations where the application does not care about
  * whether the operation succeeds or not.
  *
+ * - https://man7.org/linux/man-pages/man2/shutdown.2.html
+ * - https://man7.org/linux/man-pages/man3/io_uring_prep_shutdown.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param how [Integer] how the socket should be shutdown
  * @return [0] success
@@ -624,9 +667,45 @@ VALUE UM_shutdown_async(VALUE self, VALUE fd, VALUE how) {
 }
 
 /* call-seq:
+ *   machine.send_fd(sock_fd, fd) -> fd
+ *
+ * Sends the given file descriptor over the given socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man3/sendmsg.3p.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_sendmsg.3.html
+ *
+ * @param sock_fd [Integer] socket file descriptor
+ * @param fd [Integer] file descriptor to send
+ * @return [Integer] file descriptor to send
+ */
+VALUE UM_send_fd(VALUE self, VALUE sock_fd, VALUE fd) {
+  struct um *machine = um_get_machine(self);
+  return um_send_fd(machine, NUM2INT(sock_fd), NUM2INT(fd));
+}
+
+/* call-seq:
+ *   machine.recv_fd(sock_fd) -> fd
+ *
+ * Receives a file descriptor over the given socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man3/recvmsg.3p.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_recvmsg.3.html
+ *
+ * @param sock_fd [Integer] socket file descriptor
+ * @return [Integer] rececived file descriptor
+ */
+VALUE UM_recv_fd(VALUE self, VALUE sock_fd) {
+  struct um *machine = um_get_machine(self);
+  return um_recv_fd(machine, NUM2INT(sock_fd));
+}
+
+/* call-seq:
  *   machine.connect(fd, host, port) -> 0
  *
  * Connects the given socket to the given host and port.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/connect.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_connect.3.html
  *
  * @param fd [Integer] file descriptor
  * @param host [String] hostname or IP address
@@ -652,6 +731,9 @@ VALUE UM_connect(VALUE self, VALUE fd, VALUE host, VALUE port) {
  * the data in the buffer, unless `UM::MSG_WAITALL` is specified in the flags
  * mask.
  *
+ * - https://www.man7.org/linux/man-pages/man2/send.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_send.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param buffer [String, IO::Buffer] buffer
  * @param len [Integer] number of bytes to send
@@ -670,6 +752,9 @@ VALUE UM_send(VALUE self, VALUE fd, VALUE buffer, VALUE len, VALUE flags) {
  *
  * Sends data on the given socket from the given buffers. This method is only
  * available on Linux kernel >= 6.17. This method is guaranteed to send
+ *
+ * - https://www.man7.org/linux/man-pages/man2/send.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_send.3.html
  *
  * @overload sendv(fd, *buffers)
  *   @param fd [Integer] file descriptor
@@ -694,6 +779,9 @@ VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
  * Sends data on the given socket from the given buffers using a registered
  * buffer group. The buffer group should have been previously registered using
  * `#setup_buffer_ring`.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/send.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_send.3.html
  *
  * @overload send_bundle(fd, bgid, *buffers)
  *   @param fd [Integer] file descriptor
@@ -722,6 +810,9 @@ VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
  *
  * Receives data from the given socket.
  *
+ * - https://www.man7.org/linux/man-pages/man2/recv.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_recv.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param buffer [String, IO::Buffer] buffer
  * @param maxlen [Integer] maximum number of bytes to receive
@@ -740,6 +831,9 @@ VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
  * given buffer group id. The buffer group should have been previously setup
  * using `#setup_buffer_ring`.
  *
+ * - https://www.man7.org/linux/man-pages/man2/recv.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_recv.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param bgid [Integer] buffer group id
  * @param flags [Integer] flags mask
@@ -754,6 +848,9 @@ VALUE UM_recv_each(VALUE self, VALUE fd, VALUE bgid, VALUE flags) {
  *   machine.bind(fd, host, port) -> 0
  *
  * Binds the given socket to the given host and port.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/bind.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_bind.3.html
  *
  * @param fd [Integer] file descriptor
  * @param host [String] hostname or IP address
@@ -782,6 +879,9 @@ VALUE UM_bind(VALUE self, VALUE fd, VALUE host, VALUE port) {
  *   machine.listen(fd, backlog) -> 0
  *
  * Starts listening for incoming connections on the given socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/listen.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_listen.3.html
  *
  * @param fd [Integer] file descriptor
  * @param backlog [String] pending connection queue length
@@ -815,6 +915,9 @@ static inline int numeric_value(VALUE value) {
  *
  * Returns the value of a socket option.
  *
+ * - https://www.man7.org/linux/man-pages//man2/getsockopt.2.html
+ * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_cmd.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param level [Integer] level
  * @param opt [Integer] level
@@ -826,9 +929,12 @@ VALUE UM_getsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt) {
 }
 
 /* call-seq:
- *   machine.getsockopt(fd, level, opt, value) -> 0
+ *   machine.setsockopt(fd, level, opt, value) -> 0
  *
  * Sets the value of a socket option.
+ *
+ * - https://www.man7.org/linux/man-pages//man2/setsockopt.2.html
+ * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_cmd.3.html
  *
  * @param fd [Integer] file descriptor
  * @param level [Integer] level
@@ -847,6 +953,9 @@ VALUE UM_setsockopt(VALUE self, VALUE fd, VALUE level, VALUE opt, VALUE value) {
  * Synchronizes access to the given mutex. The mutex is locked, the given block
  * is executed and finally the mutex is unlocked.
  *
+ * - https://www.man7.org/linux/man-pages/man2/futex.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_futex_wait.3.html
+ *
  * @param mutex [UM::Mutex] mutex
  * @return [any] block return value
  */
@@ -860,6 +969,9 @@ VALUE UM_mutex_synchronize(VALUE self, VALUE mutex) {
  *   machine.push(queue, value) -> queue
  *
  * Pushes a value to the tail of the given queue.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/futex.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_futex_wait.3.html
  *
  * @param queue [UM::Queue] queue
  * @param value [any] value
@@ -876,6 +988,9 @@ VALUE UM_queue_push(VALUE self, VALUE queue, VALUE value) {
  *
  * removes a value from the tail of the given queue.
  *
+ * - https://www.man7.org/linux/man-pages/man2/futex.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_futex_wait.3.html
+ *
  * @param queue [UM::Queue] queue
  * @return [any] value
  */
@@ -889,6 +1004,9 @@ VALUE UM_queue_pop(VALUE self, VALUE queue) {
  *   machine.unshift(queue, value) -> queue
  *
  * Pushes a value to the head of the given queue.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/futex.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_futex_wait.3.html
  *
  * @param queue [UM::Queue] queue
  * @param value [any] value
@@ -904,6 +1022,9 @@ VALUE UM_queue_unshift(VALUE self, VALUE queue, VALUE value) {
  *   machine.pop(queue) -> value
  *
  * removes a value from the head of the given queue.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/futex.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_futex_wait.3.html
  *
  * @param queue [UM::Queue] queue
  * @return [any] value
@@ -933,6 +1054,9 @@ VALUE UM_open_complete(VALUE arg) {
  * file descriptor is passed to the block, and the file is automatically closed
  * when the block returns.
  *
+ * - https://www.man7.org/linux/man-pages/man2/open.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_openat.3.html
+ *
  * @param pathname [String] file path
  * @param flags [Integer] flags mask
  * @return [Integer] fd
@@ -955,6 +1079,9 @@ VALUE UM_open(VALUE self, VALUE pathname, VALUE flags) {
  * Waits for readiness of the given file descriptor according to the given event
  * mask.
  *
+ * - https://www.man7.org/linux/man-pages/man2/poll.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_poll_add.3.html
+ *
  * @param fd [Integer] file descriptor
  * @param mask [Integer] events mask
  * @return [Integer] fd
@@ -969,6 +1096,9 @@ VALUE UM_poll(VALUE self, VALUE fd, VALUE mask) {
  *
  * Waits for readyness of at least one fd for read, write or exception condition
  * from the given fds. This method provides a similar interface to `IO#select`.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/select.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_poll_add.3.html
  *
  * @param read_fds [Array<Integer>] file descriptors for reading
  * @param write_fds [Array<Integer>] file descriptors for writing
@@ -985,6 +1115,9 @@ VALUE UM_select(VALUE self, VALUE read_fds, VALUE write_fds, VALUE except_fds) {
  *
  * Waits for a process to change state. The process to wait for can be specified
  * as a pid or as a pidfd, according to the given `idtype` and `id`.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/waitid.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_waitid.3.html
  *
  * @param idtype [Integer] id type
  * @param id [Integer] id
@@ -1077,6 +1210,8 @@ VALUE UM_ssl_write(VALUE self, VALUE ssl, VALUE buf, VALUE len) {
  *
  * Creates a pipe, returning the file descriptors for the read and write ends.
  *
+ * - https://www.man7.org/linux/man-pages/man2/pipe.2.html
+ *
  * @return [Array<Integer>] array containing the read and write file descriptors
  */
 VALUE UM_pipe(VALUE self) {
@@ -1094,6 +1229,8 @@ VALUE UM_pipe(VALUE self) {
  *   UringMachine.socketpair(domain, type, protocol) -> [s1_fd, s2_fd]
  *
  * Creates a pair of connected sockets, returning the two file descriptors.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/socketpair.2.html
  *
  * @param domain [Integer] domain
  * @param type [Integer] type
@@ -1117,6 +1254,8 @@ VALUE UM_socketpair(VALUE self, VALUE domain, VALUE type, VALUE protocol) {
  * Creates a file descriptor representing the given process pid. The file
  * descriptor can then be used with methods such as `#waitid` or `.pidfd_open`.
  *
+ * - https://www.man7.org/linux/man-pages/man2/pidfd_open.2.html
+ *
  * @param pid [Integer] process pid
  * @return [Integer] file descriptor
  */
@@ -1135,6 +1274,8 @@ VALUE UM_pidfd_open(VALUE self, VALUE pid) {
  *
  * Sends a signal to a pidfd.
  *
+ * - https://www.man7.org/linux/man-pages/man2/pidfd_send_signal.2.html
+ *
  * @param fd [Integer] pidfd
  * @param sig [Integer] signal
  * @return [Integer] pidfd
@@ -1149,38 +1290,6 @@ VALUE UM_pidfd_send_signal(VALUE self, VALUE fd, VALUE sig) {
   }
 
   return fd;
-}
-
-/* :nodoc:
- */
-VALUE UM_io_nonblock_p(VALUE self, VALUE io) {
-  int fd = rb_io_descriptor(io);
-  int oflags = fcntl(fd, F_GETFL);
-  if (oflags == -1) return Qnil;
-
-  return (oflags & O_NONBLOCK) ? Qtrue : Qfalse;
-}
-
-/* :nodoc:
- */
-VALUE UM_io_set_nonblock(VALUE self, VALUE io, VALUE nonblock) {
-  int fd = rb_io_descriptor(io);
-  int oflags = fcntl(fd, F_GETFL);
-  if (oflags == -1) return Qnil;
-
-  if (RTEST(nonblock)) {
-    if (!(oflags & O_NONBLOCK)) {
-      oflags |= O_NONBLOCK;
-      fcntl(fd, F_SETFL, oflags);
-    }
-  }
-  else {
-    if (oflags & O_NONBLOCK) {
-      oflags &= ~O_NONBLOCK;
-      fcntl(fd, F_SETFL, oflags);
-    }
-  }
-  return nonblock;
 }
 
 /* call-seq:
@@ -1212,6 +1321,8 @@ VALUE UM_debug(VALUE self, VALUE str) {
  *
  * Creates an inotify file descriptor.
  *
+ * - https://www.man7.org/linux/man-pages/man2/inotify_init.2.html
+ *
  * @return [Integer] file descriptor
  */
 VALUE UM_inotify_init(VALUE self) {
@@ -1227,6 +1338,8 @@ VALUE UM_inotify_init(VALUE self) {
  *   UringMachine.inotify_add_watch(fd, path, mask) -> wd
  *
  * Adds a watch on the given inotify file descriptor.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/inotify_add_watch.2.html
  *
  * @param fd [Integer] inotify file descriptor
  * @param path [String] file/directory path
@@ -1269,6 +1382,8 @@ static inline VALUE inotify_get_events(char *buf, size_t len) {
  * descriptor. Each event is returned as a hash containing the watch descriptor,
  * the file name, and the event mask.
  *
+ * - https://www.man7.org/linux/man-pages/man7/inotify.7.html
+ *
  * @param fd [Integer] inotify file descriptor
  * @return [Array<Hash>] array of one or more events
  */
@@ -1307,8 +1422,6 @@ void Init_UM(void) {
   rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
   rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
 
-  rb_define_singleton_method(cUM, "io_nonblock?", UM_io_nonblock_p, 1);
-  rb_define_singleton_method(cUM, "io_set_nonblock", UM_io_set_nonblock, 2);
   rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
   rb_define_singleton_method(cUM, "debug", UM_debug, 1);
 
@@ -1364,6 +1477,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "socket", UM_socket, 4);
   rb_define_method(cUM, "shutdown", UM_shutdown, 2);
   rb_define_method(cUM, "shutdown_async", UM_shutdown_async, 2);
+  rb_define_method(cUM, "send_fd", UM_send_fd, 2);
+  rb_define_method(cUM, "recv_fd", UM_recv_fd, 1);
 
   rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 
