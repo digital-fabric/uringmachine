@@ -667,6 +667,39 @@ VALUE UM_shutdown_async(VALUE self, VALUE fd, VALUE how) {
 }
 
 /* call-seq:
+ *   machine.send_fd(sock_fd, fd) -> fd
+ *
+ * Sends the given file descriptor over the given socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man3/sendmsg.3p.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_sendmsg.3.html
+ *
+ * @param sock_fd [Integer] socket file descriptor
+ * @param fd [Integer] file descriptor to send
+ * @return [Integer] file descriptor to send
+ */
+VALUE UM_send_fd(VALUE self, VALUE sock_fd, VALUE fd) {
+  struct um *machine = um_get_machine(self);
+  return um_send_fd(machine, NUM2INT(sock_fd), NUM2INT(fd));
+}
+
+/* call-seq:
+ *   machine.recv_fd(sock_fd) -> fd
+ *
+ * Receives a file descriptor over the given socket.
+ *
+ * - https://www.man7.org/linux/man-pages/man3/recvmsg.3p.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_recvmsg.3.html
+ *
+ * @param sock_fd [Integer] socket file descriptor
+ * @return [Integer] rececived file descriptor
+ */
+VALUE UM_recv_fd(VALUE self, VALUE sock_fd) {
+  struct um *machine = um_get_machine(self);
+  return um_recv_fd(machine, NUM2INT(sock_fd));
+}
+
+/* call-seq:
  *   machine.connect(fd, host, port) -> 0
  *
  * Connects the given socket to the given host and port.
@@ -1444,6 +1477,8 @@ void Init_UM(void) {
   rb_define_method(cUM, "socket", UM_socket, 4);
   rb_define_method(cUM, "shutdown", UM_shutdown, 2);
   rb_define_method(cUM, "shutdown_async", UM_shutdown_async, 2);
+  rb_define_method(cUM, "send_fd", UM_send_fd, 2);
+  rb_define_method(cUM, "recv_fd", UM_recv_fd, 1);
 
   rb_define_method(cUM, "prep_timeout", UM_prep_timeout, 1);
 

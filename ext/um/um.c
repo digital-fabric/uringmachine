@@ -977,6 +977,93 @@ VALUE um_shutdown_async(struct um *machine, int fd, int how) {
   return INT2NUM(fd);
 }
 
+struct send_recv_fd_data {
+  struct msghdr msgh;
+  char iobuf[1];
+  struct iovec iov;
+  union { // Ancillary data buffer, wrapped in a union for alignment 
+    char buf[CMSG_SPACE(sizeof(int))];
+    struct cmsghdr align;
+  } u;
+};
+
+inline void recv_fd_prepare(struct send_recv_fd_data *data) {
+  memset(&data->msgh, 0, sizeof(data->msgh));
+  data->iov.iov_base = data->iobuf;
+  data->iov.iov_len = sizeof(data->iobuf);
+  data->msgh.msg_iov = &data->iov;
+  data->msgh.msg_iovlen = 1;
+  data->msgh.msg_control = data->u.buf;
+  data->msgh.msg_controllen = sizeof(data->u.buf);
+}
+
+inline void send_fd_prepare(struct send_recv_fd_data *data, int fd) {
+  memset(&data->msgh, 0, sizeof(data->msgh));
+  data->iov.iov_base = data->iobuf;
+  data->iov.iov_len = sizeof(data->iobuf);
+  data->msgh.msg_iov = &data->iov;
+  data->msgh.msg_iovlen = 1;
+  data->msgh.msg_control = data->u.buf;
+  data->msgh.msg_controllen = sizeof(data->u.buf);
+
+  struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&data->msgh);
+  cmsgp->cmsg_level = SOL_SOCKET;
+  cmsgp->cmsg_type = SCM_RIGHTS;
+  cmsgp->cmsg_len = CMSG_LEN(sizeof(fd));
+  memcpy(CMSG_DATA(cmsgp), &fd, sizeof(fd));
+}
+
+VALUE um_send_fd(struct um *machine, int sock_fd, int fd) {
+  struct send_recv_fd_data data;
+  send_fd_prepare(&data, fd);
+
+  VALUE ret = Qnil;
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_SENDMSG, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_sendmsg(sqe, sock_fd, &data.msgh, 0);
+
+  ret = um_yield(machine);
+
+  if (likely(um_verify_op_completion(machine, op, true))) ret = INT2NUM(fd);
+  um_op_release(machine, op);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return ret;
+}
+
+inline int recv_fd_get_fd(struct send_recv_fd_data *data) {
+  int fd;
+  struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&data->msgh);
+
+  if (cmsgp == NULL || cmsgp->cmsg_len != CMSG_LEN(sizeof(int)) ||
+      cmsgp->cmsg_level != SOL_SOCKET || cmsgp->cmsg_type != SCM_RIGHTS
+  ) um_raise_on_error_result(-EINVAL);
+
+  memcpy(&fd, CMSG_DATA(cmsgp), sizeof(int));
+  return fd;
+}
+
+VALUE um_recv_fd(struct um *machine, int sock_fd) {
+  struct send_recv_fd_data data;
+  recv_fd_prepare(&data);
+
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_RECVMSG, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_recvmsg(sqe, sock_fd, &data.msgh, 0);
+
+  VALUE ret = um_yield(machine);
+
+  if (likely(um_verify_op_completion(machine, op, true))) ret = INT2NUM(recv_fd_get_fd(&data));
+  um_op_release(machine, op);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return ret;
+}
+
 VALUE um_open(struct um *machine, VALUE pathname, int flags, int mode) {
   struct um_op *op = um_op_acquire(machine);
   um_prep_op(machine, op, OP_OPEN, 2, 0);

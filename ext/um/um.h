@@ -51,9 +51,11 @@ enum um_op_kind {
 
   OP_ACCEPT,
   OP_RECV,
+  OP_RECVMSG,
   OP_SEND,
-  OP_SENDV,
   OP_SEND_BUNDLE,
+  OP_SENDMSG,
+  OP_SENDV,
   OP_SOCKET,
   OP_CONNECT,
   OP_BIND,
@@ -349,6 +351,8 @@ VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
 VALUE um_setsockopt(struct um *machine, int fd, int level, int opt, int value);
 VALUE um_shutdown(struct um *machine, int fd, int how);
 VALUE um_shutdown_async(struct um *machine, int fd, int how);
+VALUE um_send_fd(struct um *machine, int sock_fd, int fd);
+VALUE um_recv_fd(struct um *machine, int sock_fd);
 
 void um_async_op_set(VALUE self, struct um *machine, struct um_op *op);
 VALUE um_async_op_await(struct um_async_op *async_op);
