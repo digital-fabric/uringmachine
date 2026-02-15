@@ -60,7 +60,7 @@ class AsyncOpTest < UMBaseTest
     assert_equal true, @op.cancelled?
   end
 
-  class TOError < RuntimeError; end
+  class TOError < StandardError; end
 
   def test_async_op_await_with_timeout
     e = nil

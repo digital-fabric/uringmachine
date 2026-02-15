@@ -238,7 +238,7 @@ class ScheduleTest < UMBaseTest
     assert_in_range 0..0.1, t1 - t0
   end
 
-  class TOError < RuntimeError; end
+  class TOError < StandardError; end
 
   def test_timeout
     buf = []
@@ -299,8 +299,8 @@ class ScheduleTest < UMBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
   end
 
-  class TO2Error < RuntimeError; end
-  class TO3Error < RuntimeError; end
+  class TO2Error < StandardError; end
+  class TO3Error < StandardError; end
 
   def test_timeout_nested
     e = nil
@@ -351,7 +351,7 @@ class SleepTest < UMBaseTest
     assert_kind_of C, ret
   end
 
-  class D < RuntimeError; end
+  class D < StandardError; end
 
   def test_sleep_with_timeout
     t0 = monotonic_clock
@@ -955,7 +955,7 @@ class WritevTest < UMBaseTest
     machine.join(f)
   end
 
-  class TOError < RuntimeError; end
+  class TOError < StandardError; end
 
   def test_writev_timeout
     r, w = UM.pipe
