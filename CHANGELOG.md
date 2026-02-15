@@ -1,3 +1,8 @@
+# 0.27.0 2026-02-15
+
+- Add `.pr_set_child_subreaper` method
+- Add `#send_fd`, `#recv_fd` methods
+
 # 0.26.0 2026-02-13
 
 - Reimplement um_op lifecycle tracking
