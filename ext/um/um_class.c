@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/inotify.h>
+#include <linux/prctl.h>
+#include <sys/prctl.h>
 
 VALUE cUM;
 VALUE eUMError;
@@ -1396,11 +1398,45 @@ VALUE UM_inotify_get_events(VALUE self, VALUE fd) {
   return inotify_get_events(buf, ret);
 }
 
+/* call-seq:
+ *   UringMachine.pr_set_child_subreaper(vaule) -> value
+ *
+ * Sets/unsets the "child subreaper" attribute of the calling process.
+ *
+ * - https://man7.org/linux/man-pages/man2/PR_SET_CHILD_SUBREAPER.2const.html
+ *
+ * @param value [bool] set/unset value
+ * @return [bool] set/unset value
+ */
+VALUE UM_pr_set_child_subreaper(VALUE self, VALUE set) {
+  int ret = prctl(PR_SET_CHILD_SUBREAPER, RTEST(set) ? 1 : 0);
+  if (ret) {
+    int e = errno;
+    rb_syserr_fail(e, strerror(e));
+  }
+
+  return set;
+}
+
 void Init_UM(void) {
   rb_ext_ractor_safe(true);
 
   cUM = rb_define_class("UringMachine", rb_cObject);
   rb_define_alloc_func(cUM, UM_allocate);
+
+  rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
+  rb_define_singleton_method(cUM, "socketpair", UM_socketpair, 3);
+  rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
+  rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
+
+  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
+  rb_define_singleton_method(cUM, "debug", UM_debug, 1);
+
+  rb_define_singleton_method(cUM, "inotify_init", UM_inotify_init, 0);
+  rb_define_singleton_method(cUM, "inotify_add_watch", UM_inotify_add_watch, 3);
+
+  rb_define_singleton_method(cUM, "pr_set_child_subreaper", UM_pr_set_child_subreaper, 1);
+
 
   rb_define_method(cUM, "initialize", UM_initialize, -1);
   rb_define_method(cUM, "size", UM_size, 0);
@@ -1416,17 +1452,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "sidecar_stop", UM_sidecar_stop, 0);
 
   rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
-
-  rb_define_singleton_method(cUM, "pipe", UM_pipe, 0);
-  rb_define_singleton_method(cUM, "socketpair", UM_socketpair, 3);
-  rb_define_singleton_method(cUM, "pidfd_open", UM_pidfd_open, 1);
-  rb_define_singleton_method(cUM, "pidfd_send_signal", UM_pidfd_send_signal, 2);
-
-  rb_define_singleton_method(cUM, "kernel_version", UM_kernel_version, 0);
-  rb_define_singleton_method(cUM, "debug", UM_debug, 1);
-
-  rb_define_singleton_method(cUM, "inotify_init", UM_inotify_init, 0);
-  rb_define_singleton_method(cUM, "inotify_add_watch", UM_inotify_add_watch, 3);
 
   rb_define_method(cUM, "schedule", UM_schedule, 2);
   rb_define_method(cUM, "snooze", UM_snooze, 0);

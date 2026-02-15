@@ -3226,3 +3226,39 @@ class FileWatchTest < UMBaseTest
     machine.join(f)
   end
 end
+
+class SetChildSubreaperTest < Minitest::Test
+  def test_pr_set_child_subreaper
+    r, w = IO.pipe
+    UM.pr_set_child_subreaper(true)
+    
+    child_pid = fork {
+      r2, w2 = IO.pipe
+      pid = fork {
+        r.close
+        w.close
+        w2.close
+        r2.read
+        r2.close
+        sleep(0.01)
+      }
+      w << pid
+      w.close
+      r2.close
+      w2 << 'done'
+      w2.close
+    }
+    Process.wait(child_pid)
+
+    w.close
+    msg = r.read
+    r.close
+
+    refute msg.empty?
+    grand_child_pid = msg.to_i
+    refute_equal 0, grand_child_pid
+
+    res = Process.wait(grand_child_pid)
+    assert_equal grand_child_pid, res
+  end
+end
