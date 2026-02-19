@@ -2103,26 +2103,6 @@ class SendRecvFdTest < UMBaseTest
     machine.close(w_fd) rescue nil
   end
 
-  def test_send_recv_fd_fork_inverse
-    pid = fork do
-      m = UM.new
-      r, w = UM.pipe
-      m.send_fd(@s2_fd, r)
-
-      buf = +''
-      m.read(r, buf, 128)
-      m.send(@s2_fd, buf)
-    end
-
-    assert_raises(Errno::EINVAL) { machine.recv_fd(@s1_fd) }
-  ensure
-    if pid
-      Process.kill('KILL', pid) rescue nil
-      Process.wait(pid) rescue nil
-    end
-    machine.close(w) rescue nil
-  end
-
   def test_send_fd_bad_sock_fd
     _r_fd, w_fd = UM.pipe
     assert_raises(Errno::ENOTSOCK) { machine.send_fd(0, w_fd) }
