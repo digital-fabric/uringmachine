@@ -36,6 +36,11 @@ class UringMachine
     fiber
   end
 
+  def terminate(*fibers)
+    exception = UM::Terminate.new
+    fibers.each { schedule(it, exception) }
+  end
+
   # Runs the given block in the given fiber. This method is used to run fibers
   # indirectly.
   #

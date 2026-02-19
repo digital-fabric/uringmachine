@@ -238,6 +238,37 @@ class ScheduleTest < UMBaseTest
     assert_in_range 0..0.1, t1 - t0
   end
 
+  def test_terminate
+    e = nil
+    f = machine.spin do
+      machine.sleep(1)
+    rescue UM::Terminate => e
+    end
+
+    machine.snooze
+    machine.terminate(f)
+    machine.snooze
+    assert_kind_of UM::Terminate, e
+    assert_equal true, f.done?
+  end
+
+  def test_terminate_multi
+    f1 = machine.spin { machine.sleep(1) }
+    f2 = machine.spin { machine.sleep(1) }
+    f3 = machine.spin { machine.sleep(1) }
+
+    machine.snooze
+    machine.terminate(f1, f2)
+    machine.snooze
+    assert_equal true, f1.done?
+    assert_equal true, f2.done?
+    assert_nil f3.done?
+
+    machine.terminate(f3)
+    machine.snooze
+    assert_equal true, f3.done?
+  end
+
   class TOError < StandardError; end
 
   def test_timeout

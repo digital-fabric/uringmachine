@@ -1,9 +1,12 @@
 ## immediate
 
-- Fix all futex value (Queue, Mutex) to be properly aligned
+- Add `machine#terminate(*fibers)` method
+- Add tests for support for Set in `machine#await_fibers`
+- Add tests for support for Set, Array in `machine#join`
+
+- (?) Fix all futex value (Queue, Mutex) to be properly aligned
 
 ## Buffer rings - automatic management
-
 - Take the buffer_pool branch, rewrite it
 - Allow multiple stream modes:
   - :buffer_pool - uses buffer rings
