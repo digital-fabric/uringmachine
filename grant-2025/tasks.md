@@ -147,22 +147,9 @@
   - [ ] docs (similar to papercraft docs)
 
 - [ ] Uma - web server
-  - [ ] child process workers
-  - [ ] reforking (following https://github.com/Shopify/pitchfork)
-        see also: https://byroot.github.io/ruby/performance/2025/03/04/the-pitchfork-story.html
-        - Monitor worker memory usage - how much is shared
-        - Choose worker with most served request count as "mold" for next generation
-        - Perform GC out of band, preferably when there are no active requests
-          https://railsatscale.com/2024-10-23-next-generation-oob-gc/
-        - When a worker is promoted to "mold", it:
-          - Stops `accept`ing requests
-          - When finally idle, calls `Process.warmup`
-          - Starts replacing sibling workers with forked workers
-        see also: https://www.youtube.com/watch?v=kAW5O2dkSU8
-  - [ ] Each worker is single-threaded (except for worker threads)
   - [ ] Rack 3.0-compatible
         see: https://github.com/socketry/protocol-rack
   - [ ] Rails integration (Railtie)
         see: https://github.com/socketry/falcon
   - [ ] Benchmarks
-  - [ ] Add to the TechEmpower bencchmarks
+  - [ ] Add to the TechEmpower benchmarks

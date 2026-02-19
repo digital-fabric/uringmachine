@@ -988,9 +988,10 @@ struct send_recv_fd_ctx {
 };
 
 inline void send_recv_fd_setup_ctx(struct send_recv_fd_ctx *ctx, int fd) {
-  memset(&ctx->msgh, 0, sizeof(ctx->msgh));
   ctx->iov.iov_base = ctx->iobuf;
   ctx->iov.iov_len = sizeof(ctx->iobuf);
+
+  memset(&ctx->msgh, 0, sizeof(ctx->msgh));
   ctx->msgh.msg_iov = &ctx->iov;
   ctx->msgh.msg_iovlen = 1;
   ctx->msgh.msg_control = ctx->u.buf;

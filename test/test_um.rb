@@ -1914,6 +1914,98 @@ class SendRecvFdTest < UMBaseTest
     assert_equal 'foobar', buf
   end
 
+  def test_send_recv_fd_multi
+    r_fd, w_fd = UM.pipe
+
+    res = machine.send_fd(@s1_fd, w_fd)
+    assert_equal w_fd, res
+
+    w_fd2 = machine.recv_fd(@s2_fd)
+    assert_kind_of Integer, w_fd2
+    refute_equal w_fd, w_fd2
+
+    res = machine.send_fd(@s1_fd, r_fd)
+    assert_equal r_fd, res
+
+    r_fd2 = machine.recv_fd(@s2_fd)
+    assert_kind_of Integer, r_fd2
+    refute_equal r_fd, r_fd2
+
+    machine.close(w_fd)
+    machine.write(w_fd2, 'foobar')
+    machine.close(w_fd2)
+
+    buf = +''
+    res = machine.read(r_fd, buf, 12)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  ensure
+    machine.close(r_fd) if r_fd rescue nil
+    machine.close(w_fd) if w_fd rescue nil
+    machine.close(r_fd2) if r_fd2 rescue nil
+    machine.close(w_fd2) if w_fd2 rescue nil
+
+  end
+
+  def test_send_recv_fd_mixed_multi
+    r_fd, w_fd = UM.pipe
+
+    machine.send(@s1_fd, 'hi', 2, 0)
+    buf = +''
+    ret = machine.recv(@s2_fd, buf, 2, 0)
+    assert_equal 2, ret
+    assert_equal 'hi', buf
+
+    res = machine.send_fd(@s1_fd, w_fd)
+    assert_equal w_fd, res
+
+    w_fd2 = machine.recv_fd(@s2_fd)
+    assert_kind_of Integer, w_fd2
+    refute_equal w_fd, w_fd2
+
+    res = machine.send_fd(@s1_fd, r_fd)
+    assert_equal r_fd, res
+
+    r_fd2 = machine.recv_fd(@s2_fd)
+    assert_kind_of Integer, r_fd2
+    refute_equal r_fd, r_fd2
+
+    machine.close(w_fd)
+    machine.write(w_fd2, 'foobar')
+    machine.close(w_fd2)
+
+    buf = +''
+    res = machine.read(r_fd, buf, 12)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  ensure
+    machine.close(r_fd) if r_fd rescue nil
+    machine.close(w_fd) if w_fd rescue nil
+    machine.close(r_fd2) if r_fd2 rescue nil
+    machine.close(w_fd2) if w_fd2 rescue nil
+
+  end
+
+  def test_send_recv_fd_inverse
+    r_fd, w_fd = UM.pipe
+
+    res = machine.send_fd(@s2_fd, w_fd)
+    assert_equal w_fd, res
+
+    fd = machine.recv_fd(@s1_fd)
+    assert_kind_of Integer, fd
+    refute_equal w_fd, fd
+
+    machine.close(w_fd)
+    machine.write(fd, 'foobar')
+    machine.close(fd)
+
+    buf = +''
+    res = machine.read(r_fd, buf, 12)
+    assert_equal 6, res
+    assert_equal 'foobar', buf
+  end
+
   def test_send_recv_fd_fork
     pid = fork do
       m = UM.new
@@ -1942,6 +2034,68 @@ class SendRecvFdTest < UMBaseTest
     end
     machine.close(r_fd) rescue nil
     machine.close(w_fd) rescue nil
+  end
+
+  def test_send_recv_fd_fork_mixed_msgs
+    skip
+
+    pid = fork do
+      m = UM.new
+      buf = +''
+      ret = m.recv(@s2_fd, buf, 128, 0)
+      p forked_recv: buf, ret: ret
+      ret = m.send(@s2_fd, buf, buf.bytesize, 0)
+      p forked_send: buf, ret: ret
+      fd = m.recv_fd(@s2_fd)
+      p forked_recv_fd: fd
+      ret = m.send(@s2_fd, buf, buf.bytesize, 0)
+      p forked_send: buf, ret: ret
+
+      m.write(fd, 'foo')
+    ensure
+      m.close(fd) if fd rescue nil
+    end
+
+    buf = +''
+    
+    machine.send(@s1_fd, 'coocoo', 6, 0)
+    machine.recv(@s1_fd, buf, 128, 0)
+    assert_equal 'coocoo', buf
+
+    r_fd, w_fd = UM.pipe
+    machine.send_fd(@s1_fd, w_fd)
+    machine.recv(@s1_fd, buf, 128, 0)
+    assert_equal 'coocoo', buf
+
+    machine.read(r_fd, buf, 128)
+    assert_equal 'foo', buf
+  ensure
+    if pid
+      Process.kill('KILL', pid) rescue nil
+      Process.wait(pid) rescue nil
+    end
+    machine.close(r_fd) rescue nil
+    machine.close(w_fd) rescue nil
+  end
+
+  def test_send_recv_fd_fork_inverse
+    pid = fork do
+      m = UM.new
+      r, w = UM.pipe
+      m.send_fd(@s2_fd, r)
+
+      buf = +''
+      m.read(r, buf, 128)
+      m.send(@s2_fd, buf)
+    end
+
+    assert_raises(Errno::EINVAL) { machine.recv_fd(@s1_fd) }
+  ensure
+    if pid
+      Process.kill('KILL', pid) rescue nil
+      Process.wait(pid) rescue nil
+    end
+    machine.close(w) rescue nil
   end
 
   def test_send_fd_bad_sock_fd

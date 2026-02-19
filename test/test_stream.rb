@@ -98,6 +98,23 @@ class StreamTest < StreamBaseTest
     ret = @stream.get_string(nil, -4)
     assert_nil ret
   end
+
+  def test_skip
+    machine.write(@wfd, "foobar")
+    machine.close(@wfd)
+
+    ret = @stream.get_string(nil, 2)
+    assert_equal 'fo', ret
+
+    ret = @stream.skip(2)
+    assert_equal 2, ret
+
+    ret = @stream.get_string(nil, 2)
+    assert_equal 'ar', ret
+
+    ret = @stream.skip(2)
+    assert_nil ret
+  end
 end
 
 class StreamRespTest < StreamBaseTest

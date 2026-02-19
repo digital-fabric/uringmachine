@@ -65,6 +65,14 @@ VALUE Stream_get_string(VALUE self, VALUE buf, VALUE len) {
   return stream_get_string(stream, buf, NUM2LONG(len));
 }
 
+// skips `len` bytes in the stream. This function returns nil if eof is
+// encountered.
+VALUE Stream_skip(VALUE self, VALUE len) {
+  struct um_stream *stream = Stream_data(self);
+
+  return stream_skip(stream, NUM2LONG(len));
+}
+
 VALUE Stream_resp_decode(VALUE self) {
   struct um_stream *stream = Stream_data(self);
   if (unlikely(stream->eof)) return Qnil;
@@ -104,6 +112,7 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "get_line", Stream_get_line, 2);
   rb_define_method(cStream, "get_string", Stream_get_string, 2);
+  rb_define_method(cStream, "skip", Stream_skip, 1);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
 

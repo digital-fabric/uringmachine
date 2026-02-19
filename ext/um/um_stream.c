@@ -19,6 +19,7 @@ static inline void stream_check_truncate_buffer(struct um_stream *stream) {
   }
 }
 
+// returns true if eof
 int stream_read_more(struct um_stream *stream) {
   stream_check_truncate_buffer(stream);
 
@@ -102,6 +103,16 @@ VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len) {
 
   str_copy_bytes(buf, start, len);
   return buf;
+}
+
+VALUE stream_skip(struct um_stream *stream, size_t len) {
+  while (stream->len - stream->pos < len)
+    if (!stream_read_more(stream)) {
+      return Qnil;
+    }
+
+  stream->pos += len;
+  return NUM2INT(len);
 }
 
 VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
