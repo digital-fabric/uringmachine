@@ -1,6 +1,5 @@
 ## immediate
 
-- Add `machine#terminate(*fibers)` method
 - Add tests for support for Set in `machine#await_fibers`
 - Add tests for support for Set, Array in `machine#join`
 

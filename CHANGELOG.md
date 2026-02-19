@@ -1,3 +1,10 @@
+# 0.28.0 2026-02-19
+
+- Add `#terminate`
+- Make `#sendv` available also for older kernels (using `#writev`)
+- Implement `Stream#skip`
+- Inherit exceptions from `StandardError` instead of `RuntimeError`
+
 # 0.27.0 2026-02-15
 
 - Add `.pr_set_child_subreaper` method
