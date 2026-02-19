@@ -1639,8 +1639,6 @@ class SendvTest < UMBaseTest
   end
 
   def test_sendv
-    skip "Unavailable on kernel version < 6.17" if UM.kernel_version < 617
-
     ret = machine.sendv(@s1, 'foo', 'bar', 'baz')
     assert_equal 9, ret
 
@@ -1653,8 +1651,6 @@ class SendvTest < UMBaseTest
   end
 
   def test_sendv_io_buffer
-    skip "Unavailable on kernel version < 6.17" if UM.kernel_version < 617
-
     buf1 = IO::Buffer.new(6)
     buf1.set_string('foobar')
 
@@ -1673,8 +1669,6 @@ class SendvTest < UMBaseTest
   end
 
   def test_sendv_invalid_buffer
-    skip "Unavailable on kernel version < 6.17" if UM.kernel_version < 617
-
     assert_raises(UM::Error) { machine.sendv(@s1, [], 'abc') }
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 0, machine.metrics[:ops_free]
