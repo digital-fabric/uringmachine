@@ -1,3 +1,7 @@
+# 0.28.1 2026-02-20
+
+- Add `Stream#machine`, `Stream#fd`
+
 # 0.28.0 2026-02-19
 
 - Add `#terminate`
