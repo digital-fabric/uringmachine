@@ -11,6 +11,14 @@ class StreamBaseTest < UMBaseTest
 end
 
 class StreamTest < StreamBaseTest
+  def test_stream_machine
+    assert_equal @machine, @stream.machine
+  end
+
+  def test_stream_fd
+    assert_equal @rfd, @stream.fd
+  end
+
   def test_get_line
     machine.write(@wfd, "foo\nbar\r\nbaz")
     machine.close(@wfd)

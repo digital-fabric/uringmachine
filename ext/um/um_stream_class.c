@@ -51,6 +51,16 @@ VALUE Stream_initialize(VALUE self, VALUE machine, VALUE fd) {
   return self;
 }
 
+VALUE Stream_machine(VALUE self) {
+  struct um_stream *stream = Stream_data(self);
+  return stream->machine->self;
+}
+
+VALUE Stream_fd(VALUE self) {
+  struct um_stream *stream = Stream_data(self);
+  return ULONG2NUM(stream->fd);
+}
+
 VALUE Stream_get_line(VALUE self, VALUE buf, VALUE limit) {
   struct um_stream *stream = Stream_data(self);
   if (unlikely(stream->eof)) return Qnil;
@@ -109,6 +119,8 @@ void Init_Stream(void) {
   rb_define_alloc_func(cStream, Stream_allocate);
 
   rb_define_method(cStream, "initialize", Stream_initialize, 2);
+  rb_define_method(cStream, "machine", Stream_machine, 0);
+  rb_define_method(cStream, "fd", Stream_fd, 0);
 
   rb_define_method(cStream, "get_line", Stream_get_line, 2);
   rb_define_method(cStream, "get_string", Stream_get_string, 2);

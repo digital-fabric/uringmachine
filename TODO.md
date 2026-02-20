@@ -2,6 +2,8 @@
 
 - Add tests for support for Set in `machine#await_fibers`
 - Add tests for support for Set, Array in `machine#join`
+- Add `#read_file` for reading entire file
+- Add `#write_file` for writing entire file
 
 - (?) Fix all futex value (Queue, Mutex) to be properly aligned
 
@@ -109,4 +111,37 @@ stream.get_string(len, nil)
 stream.read_to_eof(buf)
 # defaults:
 stream.read_to_eof(nil)
+```
+
+## Syntax / pattern for launching multiple operations
+
+```ruby
+results = machine.concurrently(
+  -> { machine.read(fd1, ...) },
+  -> { machine.read(fd2, ...) }
+  -> { ... }
+)
+
+# or maybe:
+jobs = (1..100).map { |i| -> { machine.read_file("/file_#{i}.csv") } }
+machine.join(jobs)
+
+# or maybe:
+jobs = (1..100).map { |i|
+  -> {
+    pipe  { machine.read_file("/file_#{i}.csv") }
+      >   { csv_to_pdf(it) }
+      >   { machine.write_file("/file_#{i}.pdf", it) }
+  }
+}
+
+# or otherwise
+jobs = (1..100).map { |i|
+  -> {
+    csv = machine.read_file("/file_#{i}.csv")
+    pdf = csv_to_pdf(csv)
+    machine.write_file("/file_#{i}.pdf", pdf)
+  }
+}
+machine.join(jobs)
 ```
