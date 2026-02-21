@@ -1,3 +1,7 @@
+# 0.28.2 2026-02-20
+
+- Fix `Stream#get_string`
+
 # 0.28.1 2026-02-20
 
 - Add `Stream#machine`, `Stream#fd`
