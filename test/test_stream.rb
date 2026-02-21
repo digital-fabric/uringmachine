@@ -234,3 +234,20 @@ class StreamRespTest < StreamBaseTest
       s.resp_encode_cmd(+'', :set, 'foobar', :nx, :xx)
   end
 end
+
+class StreamHTTPTest < StreamBaseTest
+  def test_stream_http_etc
+    machine.write(@wfd, "GET / HTTP/1.1\r\n\r\nblahblah")
+    machine.close(@wfd)
+
+    l = @stream.get_line(nil, 0)
+    assert_equal "GET / HTTP/1.1", l
+
+    l = @stream.get_line(nil, 0)
+    assert_equal '', l
+
+    l = @stream.get_string(nil, -50)
+    assert_equal 'blahblah', l
+  end
+end
+

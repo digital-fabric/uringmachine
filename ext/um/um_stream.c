@@ -56,8 +56,8 @@ static inline void str_copy_bytes(VALUE dest, const char *src, ssize_t len) {
 }
 
 VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen) {
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
   while (true) {
+    char *start = RSTRING_PTR(stream->buffer) + stream->pos;
     ssize_t pending_len = stream->len - stream->pos;
     ssize_t search_len = pending_len;
     ssize_t absmax_len = labs(maxlen);
@@ -76,32 +76,31 @@ VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen) {
       return buf;
     }
     else if (should_limit_len && pending_len > search_len)
-      // maxlen
+      // hit maxlen
       return Qnil;
 
     if (!stream_read_more(stream))
       return Qnil;
-    else
-      // update start ptr (it might have changed after reading)
-      start = RSTRING_PTR(stream->buffer) + stream->pos;
   }
 }
 
 VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len) {
   size_t abslen = labs(len);
-  while (stream->len - stream->pos < abslen)
+  while (stream->len - stream->pos < abslen) {
     if (!stream_read_more(stream)) {
-      if (len > 0) return Qnil;
+      if (len > 0)
+        return Qnil;
 
       abslen = stream->len - stream->pos;
     }
+  }
 
   char *start = RSTRING_PTR(stream->buffer) + stream->pos;
   stream->pos += abslen;
 
   if (NIL_P(buf)) return rb_utf8_str_new(start, abslen);
 
-  str_copy_bytes(buf, start, len);
+  str_copy_bytes(buf, start, abslen);
   return buf;
 }
 
