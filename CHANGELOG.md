@@ -1,3 +1,7 @@
+# 0.28.3 2026-02-22
+
+- Accept array in `#terminate` and `#join`
+
 # 0.28.2 2026-02-20
 
 - Fix `Stream#get_string`
