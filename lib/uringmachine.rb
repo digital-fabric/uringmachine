@@ -36,9 +36,17 @@ class UringMachine
     fiber
   end
 
+  TERMINATE_EXCEPTION = UM::Terminate.new
+
+  # Terminates the given fibers by scheduling them with a `UM::Terminate`
+  # exception. This method does not wait for the fibers to be done.
+  #
+  # @param *fibers [Array<Fiber>] fibers to terminate
+  # @return [void]
   def terminate(*fibers)
-    exception = UM::Terminate.new
-    fibers.each { schedule(it, exception) }
+    fibers = fibers.first if fibers.size == 1 && fibers.first.is_a?(Enumerable)
+
+    fibers.each { schedule(it, TERMINATE_EXCEPTION) }
   end
 
   # Runs the given block in the given fiber. This method is used to run fibers
@@ -58,6 +66,8 @@ class UringMachine
   #
   # @return [Array<any>] return values of the given fibers
   def join(*fibers)
+    fibers = fibers.first if fibers.size == 1 && fibers.first.is_a?(Enumerable)
+
     results = fibers.inject({}) { |h, f| h[f] = nil; h }
     queue = nil
     pending = nil

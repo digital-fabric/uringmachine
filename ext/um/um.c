@@ -539,7 +539,7 @@ VALUE um_timeout_complete(VALUE arg) {
 
 VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
   static ID ID_new = 0;
-  if (!ID_new) ID_new = rb_intern("new");
+  if (unlikely(!ID_new)) ID_new = rb_intern("new");
 
   struct um_op *op = um_op_acquire(machine);
   um_prep_op(machine, op, OP_TIMEOUT, 2, 0);

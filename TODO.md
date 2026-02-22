@@ -1,5 +1,25 @@
 ## immediate
 
+- Add support for exception instances in `#timeout`.
+- Add support for returning a value on timeout:
+
+  Since to do this safely we need to actually raise an exception that wraps the
+  value, rescue it and return the value, we might want a separate method that
+  wraps `#timeout`:
+
+  ```ruby
+  TimeoutValueError < StandardError
+
+  def timeout_with_value(interval, value, &block)
+    timeout_error = TimeoutValueError
+    timeout(interval, timeout_error, &block)
+  rescue TimeoutValueError => e
+    raise if e != timeout_error
+    
+    value
+  end
+  ```
+
 - Add tests for support for Set in `machine#await_fibers`
 - Add tests for support for Set, Array in `machine#join`
 - Add `#read_file` for reading entire file
@@ -145,3 +165,14 @@ jobs = (1..100).map { |i|
 }
 machine.join(jobs)
 ```
+
+## Other abstractions
+
+- Happy eyeballs connect
+
+  ```ruby
+  # addrs: [['1.1.1.1', 80], ['2.2.2.2', 80]]
+  #        ['1.1.1.1:80', '2.2.2.2:80']
+  tcp_connect_happy_eyeballs(*addrs)
+  ```
+
