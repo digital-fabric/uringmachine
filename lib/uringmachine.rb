@@ -96,7 +96,7 @@ class UringMachine
   #
   # @param fibers [Fiber, Array<Fiber>] fibers to wait for
   # @return [Integer] number of fibers
-  def await_fibers(*fibers)
+  def await(*fibers)
     if fibers.size == 1
       first = fibers.first
       case first

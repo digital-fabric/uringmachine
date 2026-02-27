@@ -200,7 +200,7 @@ class UMBenchmark
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
-    machine.await_fibers(fibers)
+    machine.await(fibers)
     fds.each { machine.close(it) }
   end
 
@@ -209,7 +209,7 @@ class UMBenchmark
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
-    machine.await_fibers(fibers)
+    machine.await(fibers)
     fds.each { machine.close(it) }
   end
 
@@ -218,7 +218,7 @@ class UMBenchmark
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
-    machine.await_fibers(fibers)
+    machine.await(fibers)
     fds.each { machine.close(it) }
   end
 
@@ -229,7 +229,7 @@ class UMBenchmark
         fibers = []
         fds = []
         do_um_x(2, machine, fibers, fds)
-        machine.await_fibers(fibers)
+        machine.await(fibers)
         fds.each { machine.close(it) }
       end
     end
@@ -243,7 +243,7 @@ class UMBenchmark
         fibers = []
         fds = []
         do_um_x(4, machine, fibers, fds)
-        machine.await_fibers(fibers)
+        machine.await(fibers)
         fds.each { machine.close(it) }
       end
     end
@@ -257,7 +257,7 @@ class UMBenchmark
         fibers = []
         fds = []
         do_um_x(8, machine, fibers, fds)
-        machine.await_fibers(fibers)
+        machine.await(fibers)
         fds.each { machine.close(it) }
       end
     end

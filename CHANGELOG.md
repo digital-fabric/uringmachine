@@ -67,7 +67,7 @@
 - Add `UM#metrics` for getting metrics
 - Add `UM#pending_fibers` for detecting leaking fibers in tests
 - More tests and benchmarks
-- Add `UM#await_fibers` for awaiting fibers
+- Add `UM#await` for awaiting fibers
 - Add `UM.socketpair` for creating a socket pair
 - Fix segfault caused by waiting fibers not being marked
 - Fiber scheduler:

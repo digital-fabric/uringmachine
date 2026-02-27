@@ -144,7 +144,7 @@ class UringMachine
         @fiber_map = ObjectSpace::WeakMap.new
       end
 
-      @machine.await_fibers(fibers)
+      @machine.await(fibers)
     end
 
     if BLOCKING_OP_SUPPORT

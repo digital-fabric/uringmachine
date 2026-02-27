@@ -1493,9 +1493,9 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
     W.times {
       fibers << Fiber.schedule { run_client(port) }
     }
-    @machine.await_fibers(fibers)
+    @machine.await(fibers)
     server.close
-    @machine.await_fibers(server_fiber)
+    @machine.await(server_fiber)
   rescue Exception => e
     p test_run_server: e
     p e.backtrace
@@ -1557,7 +1557,7 @@ class FiberSchedulerMultiTCPTest < UMBaseTest
         run_server(port)
       end
     end
-    @machine.await_fibers(fibers)
+    @machine.await(fibers)
     @calls = scheduler_calls_tally
   ensure
     # p ensure: ios

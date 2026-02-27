@@ -20,7 +20,7 @@
   end
   ```
 
-- Add tests for support for Set in `machine#await_fibers`
+- Add tests for support for Set in `machine#await`
 - Add tests for support for Set, Array in `machine#join`
 - Add `#read_file` for reading entire file
 - Add `#write_file` for writing entire file
