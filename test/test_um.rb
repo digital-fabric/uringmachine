@@ -2082,7 +2082,7 @@ class SendRecvFdTest < UMBaseTest
     end
 
     buf = +''
-    
+
     machine.send(@s1_fd, 'coocoo', 6, 0)
     machine.recv(@s1_fd, buf, 128, 0)
     assert_equal 'coocoo', buf
@@ -2116,7 +2116,7 @@ class SendRecvFdTest < UMBaseTest
   def test_recv_fd_bad_msg
     buf = "\0" * 1000
     machine.write(@s1_fd, buf)
-    
+
     assert_raises(Errno::EINVAL) {
       res = machine.recv_fd(@s2_fd)
       p res: res
@@ -3390,7 +3390,7 @@ class SetChildSubreaperTest < Minitest::Test
   def test_pr_set_child_subreaper
     r, w = IO.pipe
     UM.pr_set_child_subreaper(true)
-    
+
     child_pid = fork {
       r2, w2 = IO.pipe
       pid = fork {

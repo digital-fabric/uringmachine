@@ -15,7 +15,7 @@
     timeout(interval, timeout_error, &block)
   rescue TimeoutValueError => e
     raise if e != timeout_error
-    
+
     value
   end
   ```

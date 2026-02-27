@@ -374,7 +374,7 @@ VALUE UM_periodically(VALUE self, VALUE interval) {
  * which the data will be read. A negative `buffer_offset` denotes a position
  * relative to the end of the buffer, e.g. a value of `-1` means the data will
  * be appended to the buffer.
- * 
+ *
  * - https://www.man7.org/linux/man-pages/man2/read.2.html
  * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_read.3.html
  *

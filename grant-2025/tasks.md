@@ -147,9 +147,10 @@
   - [ ] docs (similar to papercraft docs)
 
 - [ ] Uma - web server
-  - [ ] Rack 3.0-compatible
+  - [v] Rack 3.0-compatible
         see: https://github.com/socketry/protocol-rack
   - [ ] Rails integration (Railtie)
         see: https://github.com/socketry/falcon
+  - [ ] Hanami?
   - [ ] Benchmarks
-  - [ ] Add to the TechEmpower benchmarks
+  - [ ] Add to the TechEmpower benchmarks?

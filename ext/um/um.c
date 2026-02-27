@@ -981,7 +981,7 @@ struct send_recv_fd_ctx {
   struct msghdr msgh;
   char iobuf[1];
   struct iovec iov;
-  union { // Ancillary data buffer, wrapped in a union for alignment 
+  union { // Ancillary data buffer, wrapped in a union for alignment
     char buf[CMSG_SPACE(sizeof(int))];
     struct cmsghdr align;
   } u;
