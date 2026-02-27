@@ -96,15 +96,20 @@ class UringMachine
   #
   # @param fibers [Fiber, Array<Fiber>] fibers to wait for
   # @return [Integer] number of fibers
-  def await_fibers(fibers)
-    if fibers.is_a?(Fiber)
-      f = fibers
-      if !f.done?
-        queue = Fiber.current.mailbox
-        f.add_done_listener(queue)
-        self.shift(queue)
+  def await_fibers(*fibers)
+    if fibers.size == 1
+      first = fibers.first
+      case first
+      when Enumerable
+        fibers = first
+      when Fiber
+        if !first.done?
+          queue = Fiber.current.mailbox
+          first.add_done_listener(queue)
+          self.shift(queue)
+        end
+        return 1
       end
-      return 1
     end
 
     queue = nil

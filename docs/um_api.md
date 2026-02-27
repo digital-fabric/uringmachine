@@ -22,6 +22,7 @@
 - `accept_into_queue(sockfd, queue)` - accepts incoming connections to the given
   server socket in an infinite loop, pushing each one to the given queue.
 - `accept(sockfd)` - accepts an incoming connection, returning its fd.
+- `await(*fibers)` - awaits fiber termination
 - `bind(sockfd, host, port)` - binds the given socket to the given address.
 - `close_async(fd)` - closes the given fd asynchronously, i.e. <w>ithout waiting
   for the operation to complete.
@@ -29,6 +30,7 @@
 - `connect(sockfd, host, port)` - connects the given socket to the given
   address.
 - `getsockopt(sockfd, level, opt)` - returns a socket option value.
+- `join(*fibers)` - waits for fibers to terminate and returns return values.
 - `listen(sockfd)` - starts listening on the given socket.
 - `metrics` - returns metrics for the machine.
 - `open(pathname, flags)` - opens the given path and returns an fd.

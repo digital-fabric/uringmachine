@@ -191,6 +191,30 @@ class WaitFibersTest < UMBaseTest
 
     res = machine.await_fibers([f1, f2, f3])
     assert_equal 3, res
+    assert_equal true, f1.done?
+    assert_equal true, f2.done?
+    assert_equal true, f3.done?
+  end
+
+  def test_await_fibers_multiple_splat
+    f1 = machine.spin do
+      :foo
+    end
+
+    f2 = machine.spin do
+      machine.sleep(0.001)
+      :bar
+    end
+
+    f3 = machine.spin do
+      :baz
+    end
+
+    res = machine.await_fibers(f1, f2, f3)
+    assert_equal 3, res
+    assert_equal true, f1.done?
+    assert_equal true, f2.done?
+    assert_equal true, f3.done?
   end
 
   def test_await_fibers_cross_thread
