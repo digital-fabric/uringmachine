@@ -66,20 +66,41 @@ class UringMachine
   #
   # @return [Array<any>] return values of the given fibers
   def join(*fibers)
-    fibers = fibers.first if fibers.size == 1 && fibers.first.is_a?(Enumerable)
+    queue = Fiber.current.mailbox
 
-    results = fibers.inject({}) { |h, f| h[f] = nil; h }
-    queue = nil
+    if fibers.size == 1
+      first = fibers.first
+      case first
+      when Enumerable
+        fibers = first
+      when Fiber
+        if first.is_a?(Proc)
+          pr = first
+          first = spin(&pr)
+        end
+        if !first.done?
+          first.add_done_listener(queue)
+          self.shift(queue)
+        end
+        return first.result
+      end
+    end
+
+
+    results = {}
     pending = nil
     fibers.each do |f|
+      (pr = f; f = spin(&pr)) if f.is_a?(Proc)
+
+      results[f] = nil
       if f.done?
         results[f] = f.result
       else
         (pending ||= []) << f
-        queue ||= Fiber.current.mailbox
         f.add_done_listener(queue)
       end
     end
+
     if pending
       while !pending.empty?
         f = self.shift(queue)

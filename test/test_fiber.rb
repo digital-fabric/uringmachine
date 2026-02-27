@@ -109,6 +109,35 @@ class FiberJoinTest < UMBaseTest
     assert_equal [:foo, :bar, :baz], res
   end
 
+  def test_join_array
+    f1 = machine.spin do
+      :foo
+    end
+
+    f2 = machine.spin do
+      machine.sleep(0.001)
+      :bar
+    end
+
+    f3 = machine.spin do
+      :baz
+    end
+
+    res = machine.join([f1, f2, f3])
+    assert_equal [:foo, :bar, :baz], res
+  end
+
+  def test_join_procs
+    buf = []
+    res = machine.join(
+      ->(_) { machine.snooze;      :f1 },
+      ->(_) { machine.sleep(0.01); :f2 },
+      ->(_) { machine.sleep(0.02); :f3 }
+    )
+    assert_equal [:f1, :f2, :f3], res
+    assert machine.fiber_set.empty?
+  end
+
   def test_join_cross_thread
     q = UM::Queue.new
 
