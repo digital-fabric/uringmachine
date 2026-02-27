@@ -217,6 +217,35 @@ class WaitFibersTest < UMBaseTest
     assert_equal true, f3.done?
   end
 
+  def test_await_procs
+    buf = []
+    res = machine.await(
+      ->(_) { machine.snooze;      buf << :f1 },
+      ->(_) { machine.sleep(0.01); buf << :f2 },
+      ->(_) { machine.sleep(0.02); buf << :f3 }
+    )
+    assert_equal 3, res
+    assert_equal [:f1, :f2, :f3], buf
+  end
+  
+  def test_await_mixed
+    buf = []
+    
+    f1 = machine.spin do
+      machine.sleep(0.01)
+      buf << :f1
+    end
+    f2 = ->(_) { buf << :f2_in; machine.sleep(0.02); buf << :f2_out }
+    f3 = machine.spin do
+      machine.sleep(0.005)
+      buf << :f3
+    end
+
+    res = machine.await(f1, f2, f3)
+    assert_equal 3, res
+    assert_equal [:f2_in, :f3, :f1, :f2_out], buf
+  end
+
   def test_await_cross_thread
     q = UM::Queue.new
 

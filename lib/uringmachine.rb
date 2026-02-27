@@ -97,14 +97,19 @@ class UringMachine
   # @param fibers [Fiber, Array<Fiber>] fibers to wait for
   # @return [Integer] number of fibers
   def await(*fibers)
+    queue = Fiber.current.mailbox
+
     if fibers.size == 1
       first = fibers.first
       case first
       when Enumerable
         fibers = first
       when Fiber
+        if first.is_a?(Proc)
+          pr = first
+          first = spin(&pr)
+        end
         if !first.done?
-          queue = Fiber.current.mailbox
           first.add_done_listener(queue)
           self.shift(queue)
         end
@@ -112,12 +117,14 @@ class UringMachine
       end
     end
 
-    queue = nil
     pending = nil
     fibers.each do |f|
+      if f.is_a?(Proc)
+        pr = f
+        f = spin(&pr)
+      end
       if !f.done?
         (pending ||= []) << f
-        queue ||= Fiber.current.mailbox
         f.add_done_listener(queue)
       end
     end
