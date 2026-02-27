@@ -235,7 +235,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'oba', buf
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_pread: 1,
       io_close: 1,
       join: 1
@@ -261,7 +260,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'fobazr', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_pwrite: 1,
       io_close: 1,
       join: 1
@@ -402,7 +400,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,
-      blocking_operation_wait: 2,
       io_write: 1,
       io_read: 2,
       io_close: 2,
@@ -430,7 +427,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,
-      blocking_operation_wait: 2,
       io_write: 1,
       io_read: 2,
       io_close: 2,
@@ -452,7 +448,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foo', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_write: 1,
       io_close: 1,
       join: 1
@@ -472,7 +467,6 @@ class FiberSchedulerTest < UMBaseTest
     assert_equal 'foobar', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_write: 2,
       io_close: 1,
       join: 1
@@ -492,7 +486,6 @@ class FiberSchedulerTest < UMBaseTest
     # assert_equal 'foo', IO.read(fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1, # open
       io_write: 1,
       io_close: 1,
       join: 1
@@ -667,7 +660,6 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       io_write: 2,
       io_read: 1,
-      blocking_operation_wait: 1,
       process_wait: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -718,7 +710,6 @@ class FiberSchedulerTest < UMBaseTest
       fiber: 1,
       io_read: 2,
       io_close: 1,
-      blocking_operation_wait: 1,
       address_resolve: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -764,30 +755,6 @@ class FiberSchedulerTest < UMBaseTest
     r.close rescue nil
     w.close rescue nil
   end
-
-  def test_fiber_scheduler_blocking_operation_wait_single_issuer
-    buf = []
-    (1..10).each { |i|
-      op = -> { i * 10}
-      buf << @scheduler.blocking_operation_wait(op)
-      sleep 0.01
-      @machine.snooze
-    }
-    assert_equal (1..10).map { it * 10 }, buf
-
-    buf = []
-    (1..20).each { |i|
-      op = -> { i * 10}
-      Fiber.schedule do
-        sleep 0.001
-        buf << @scheduler.blocking_operation_wait(op)
-        sleep 0.001
-      end
-    }
-    @scheduler.join
-
-    assert_equal (1..20).map { it * 10 }, buf.sort
-  end
 end
 
 class FiberSchedulerIOClassMethodsTest < UMBaseTest
@@ -816,7 +783,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 2,
-      blocking_operation_wait: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -832,7 +798,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal '==***', IO.read(@fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_write: 1,
       io_close: 1,
       join: 1
@@ -850,7 +815,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal '===', IO.read(fn2)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 3,
       io_close: 2,
       join: 1
     }, scheduler_calls_tally)
@@ -868,7 +832,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 3,
-      blocking_operation_wait: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -899,7 +862,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 2,
-      blocking_operation_wait: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -915,7 +877,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 3,
-      blocking_operation_wait: 1,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
@@ -948,7 +909,6 @@ class FiberSchedulerIOClassMethodsTest < UMBaseTest
     assert_equal '==***', IO.read(@fn)
     assert_equal({
       fiber: 1,
-      blocking_operation_wait: 1,
       io_write: 1,
       io_close: 1,
       join: 1
@@ -1459,7 +1419,6 @@ class FiberSchedulerNetHTTPTest < UMBaseTest
     assert_equal C, calls[:fiber]
     assert_equal C, calls[:io_close]
     assert_in_range (C * 2)..(C * 4), calls[:io_wait]
-    assert_in_range (C * 7)..(C * 20), calls[:blocking_operation_wait]
   end
 end
 
@@ -1653,7 +1612,6 @@ class FiberSchedulerErrorTest < UMBaseTest
     assert_equal({
       fiber: 1,
       io_read: 1,
-      blocking_operation_wait: 3,
       io_close: 1,
       join: 1
     }, scheduler_calls_tally)
