@@ -62,9 +62,18 @@ class UringMachine
     fiber
   end
 
-  # Waits for the given fibers to terminate.
+  # Waits for the given fibers to terminate, returning the return value for each
+  # given fiber. This method also accepts procs instead of fibers. When a proc
+  # is given, it is ran in a separate fiber which will be joined.
   #
-  # @return [Array<any>] return values of the given fibers
+  #     machine.join(
+  #       -> { machine.sleep(0.01); :f1 },
+  #       -> { machine.sleep(0.02); :f2 },
+  #       -> { machine.sleep(0.03); :f3 }
+  #     ) #=> [:f1, :f2, :f3]
+  #
+  # @param *fibers [Array<Fiber, Proc>] fibers @return [Array<any>] return
+  # values of the given fibers
   def join(*fibers)
     queue = Fiber.current.mailbox
 
@@ -74,10 +83,7 @@ class UringMachine
       when Enumerable
         fibers = first
       when Fiber
-        if first.is_a?(Proc)
-          pr = first
-          first = spin(&pr)
-        end
+        first = proc_spin(first) if first.is_a?(Proc)
         if !first.done?
           first.add_done_listener(queue)
           self.shift(queue)
@@ -86,16 +92,14 @@ class UringMachine
       end
     end
 
-
     results = {}
     pending = nil
     fibers.each do |f|
-      (pr = f; f = spin(&pr)) if f.is_a?(Proc)
-
-      results[f] = nil
+      f = proc_spin(f) if f.is_a?(Proc)
       if f.done?
         results[f] = f.result
       else
+        results[f] = nil
         (pending ||= []) << f
         f.add_done_listener(queue)
       end
@@ -126,10 +130,7 @@ class UringMachine
       when Enumerable
         fibers = first
       when Fiber
-        if first.is_a?(Proc)
-          pr = first
-          first = spin(&pr)
-        end
+        first = proc_spin(first) if first.is_a?(Proc)
         if !first.done?
           first.add_done_listener(queue)
           self.shift(queue)
@@ -140,10 +141,7 @@ class UringMachine
 
     pending = nil
     fibers.each do |f|
-      if f.is_a?(Proc)
-        pr = f
-        f = spin(&pr)
-      end
+      f = proc_spin(f) if f.is_a?(Proc)
       if !f.done?
         (pending ||= []) << f
         f.add_done_listener(queue)
@@ -246,6 +244,16 @@ class UringMachine
       mask: event[:mask],
       fn: File.join(wd_map[event[:wd]], event[:name])
     }
+  end
+
+  # @param proc [Proc]
+  # @return [Fiber]
+  def proc_spin(proc)
+    if proc.arity == 0
+      spin { proc.call }
+    else
+      spin(&proc)
+    end
   end
 
   # Fiber extensions
