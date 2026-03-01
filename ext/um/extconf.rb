@@ -30,9 +30,7 @@ def get_config
 end
 
 config = get_config
-puts "Building UringMachine (\n#{config.map { |(k, v)| "  #{k}: #{v}\n"}.join})"
-
-# require_relative 'zlib_conf'
+STDERR.puts "Building UringMachine (\n#{config.map { |(k, v)| "  #{k}: #{v}\n"}.join})"
 
 liburing_path = File.expand_path('../../vendor/liburing', __dir__)
 FileUtils.cd liburing_path do
@@ -76,8 +74,11 @@ $defs << '-DHAVE_IO_URING_PREP_BIND'            if config[:prep_bind]
 $defs << '-DHAVE_IO_URING_PREP_LISTEN'          if config[:prep_listen]
 $defs << '-DHAVE_IO_URING_SEND_VECTORIZED'      if config[:send_vectoized]
 
-$CFLAGS << ' -Wno-pointer-arith'
+$CFLAGS << ' -Werror -Wall -Wextra'
 
-CONFIG['optflags'] << ' -fno-strict-aliasing'
+if ENV['SANITIZE']
+  $CFLAGS << ' -fsanitize=undefined,address -lasan'
+  $LDFLAGS << ' -fsanitize=undefined,address -lasan'
+end
 
 create_makefile 'um_ext'

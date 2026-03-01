@@ -422,8 +422,8 @@ class FiberSchedulerTest < UMBaseTest
       sleep 0.001
       File.open(fn, 'r') { buf = it.read  }
     end
-    assert_equal 2, machine.metrics[:total_ops]
     @scheduler.join
+    assert_equal 8, machine.metrics[:total_ops]
     assert_equal 'foobar', buf
     assert_equal({
       fiber: 2,

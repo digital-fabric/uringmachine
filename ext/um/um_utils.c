@@ -62,16 +62,16 @@ inline void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs) {
     return RSTRING_PTR(buffer) + ofs;
   }
   else if (IO_BUFFER_P(buffer)) {
-    void *base;
+    char *base;
     size_t size;
-    rb_io_buffer_get_bytes_for_writing(buffer, &base, &size); // writing *to* buffer
+    rb_io_buffer_get_bytes_for_writing(buffer, (void *)&base, &size); // writing *to* buffer
     if (len == -1) len = size;
     if (ofs < 0) ofs = size + ofs + 1;
     size_t new_size = len + (size_t)ofs;
 
     if (size < new_size) {
       rb_io_buffer_resize(buffer, new_size);
-      rb_io_buffer_get_bytes_for_writing(buffer, &base, &size);
+      rb_io_buffer_get_bytes_for_writing(buffer, (void *)&base, &size);
     }
     return base + ofs;
   }
@@ -148,7 +148,7 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
       um_raise_internal_error("Failed to allocate buffers");
     }
 
-    void *ptr = desc->buf_base;
+    char *ptr = desc->buf_base;
     for (unsigned i = 0; i < desc->buf_count; i++) {
 	  	io_uring_buf_ring_add(desc->br, ptr, desc->buf_size, i, desc->buf_mask, i);
       ptr += desc->buf_size;
@@ -164,7 +164,7 @@ inline VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 
 
   unsigned buf_idx = flags >> IORING_CQE_BUFFER_SHIFT;
   struct buf_ring_descriptor *desc = machine->buffer_rings + bgid;
-  char *src = desc->buf_base + desc->buf_size * buf_idx;
+  char *src = (char *)desc->buf_base + desc->buf_size * buf_idx;
   // TODO: add support for UTF8
   // buf = rd->utf8_encoding ? rb_utf8_str_new(src, cqe->res) : rb_str_new(src, cqe->res);
   VALUE buf = rb_str_new(src, result);
@@ -224,7 +224,7 @@ inline struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *
 inline void um_advance_iovecs_for_writing(struct iovec **ptr, int *len, size_t adv) {
   while (adv) {
     if (adv < (*ptr)->iov_len) {
-      (*ptr)->iov_base += adv;
+      (*ptr)->iov_base = (char *)(*ptr)->iov_base + adv;
       (*ptr)->iov_len -= adv;
       return;
     }
