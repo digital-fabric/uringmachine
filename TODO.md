@@ -27,6 +27,42 @@
 
 - (?) Fix all futex value (Queue, Mutex) to be properly aligned
 
+<<<<<<< HEAD
+=======
+## Buffer rings - automatic management
+
+- Take the buffer_pool branch, rewrite it
+- Allow multiple stream modes:
+  - :buffer_pool - uses buffer rings
+  - :ssl - read from an SSL connection (`SSLSocket`)
+  - :io - read from an `IO`
+
+The API will look something like:
+
+```ruby
+# The mode is selected automatically according to the given target
+
+stream = UM::Stream.new(machine, fd) # buffer_pool mode (read)
+stream = UM::Stream.new(machine, fd, :recv) # buffer_pool mode (recv)
+stream = UM::Stream.new(machine, ssl_sock) # SSLSocket mode
+stream = UM::Stream.new(machine, conn) # IO mode
+stream = UM::Stream.new(machine, str) # string mode
+stream = UM::Stream.new(machine, io_buf) # IO:Buffer mode
+```
+
+This can be very useful in testing of stuff such as protocol implementations:
+
+```ruby
+stream = UM::Stream.new(machine, "GET /foo HTTP/1.1\r\nHost: bar.com\r\n")
+```
+
+So basically the stream is tied to a machine, and that means it can only be used
+on the thread with which the machine is associated. It is not thread-safe. (This
+is incidentally true also for most of the UringMachine instance methods!)
+
+Continued discussion in docs/design/buffer_pool.md
+
+>>>>>>> 04d9eb7 (Docs)
 ## Balancing I/O with the runqueue
 
 - in some cases where there are many entries in the runqueue, this can
