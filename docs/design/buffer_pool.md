@@ -20,9 +20,43 @@ buffers, to using managed buffers from the buffer pool.
 
 ## Design
 
+### Goals
+
+- We want an abstract design that will work with both multishot read/recv and
+  automatic buffer management, *and* other readable sources, such as an SSL
+  socket, an `IO` instance, or even a string or a `IO::Buffer`.
+
+### The Stream Data Model
+
+- A stream is a series of `segments` (containing a `ptr` and `len`), held in a
+  linked list. A segment also has a `type` and a potential backing store
+  reference. For example, a segment with a `SEGMENT_STRING` type points to a
+  `String` object. A segment with a `SEGMENT_BUFFER_POOL` has a reference to a
+  managed buffer from the buffer pool with the given id.
+- The buffer pool is linked list of buffer descriptors, each referencing a piece
+  of memory of a certain length, along with some metadata.
+- Buffer descriptors are allocated in batches as needed and added to the buffer
+  pool.
+- A buffer group describes a buffer ring. It has a certain size, which limits
+  the number of buffers that can be added to the buffer ring.
+- When a buffer group is used for a multishot read/recv, buffers will be
+  automatically checked out from the buffer pool and added to the buffer ring
+  and commited to the kernel. The buffer group allocates and tracks a buffer id
+  for each buffer descriptor.
+
+### How buffer groups are checked out
+
+- We need a freelist of buffer groups
+
+- Once a segment is completely consumed, some cleanup code might be needed (for
+  example to decrement a ref_count on a managed buffer, or unlocking a string
+  backing store.)
+
+
 ### The API
 
 - The buffer pool is created and managed automatically. No API is involved.
+- 
 
 - To use the buffer pool, two dedicated APIs are added:
 

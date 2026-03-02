@@ -1,7 +1,7 @@
 ## immediate
 
 - Add support for exception instances in `#timeout`.
-- Add support for returning a value on timeout:
+- Add support for returning a value on timeout
 
   Since to do this safely we need to actually raise an exception that wraps the
   value, rescue it and return the value, we might want a separate method that
@@ -28,6 +28,7 @@
 - (?) Fix all futex value (Queue, Mutex) to be properly aligned
 
 ## Buffer rings - automatic management
+
 - Take the buffer_pool branch, rewrite it
 - Allow multiple stream modes:
   - :buffer_pool - uses buffer rings
@@ -39,12 +40,25 @@ The API will look something like:
 ```ruby
 # The mode is selected automatically according to the given target
 
-stream = UM::Stream.new(fd) # buffer_pool mode
-
-stream = UM::Stream.new(ssl_sock) # ssl mode
-
-stream = UM::Stream.new(conn) # io mode
+stream = UM::Stream.new(machine, fd) # buffer_pool mode (read)
+stream = UM::Stream.new(machine, fd, :recv) # buffer_pool mode (recv)
+stream = UM::Stream.new(machine, ssl_sock) # SSLSocket mode
+stream = UM::Stream.new(machine, conn) # IO mode
+stream = UM::Stream.new(machine, str) # string mode
+stream = UM::Stream.new(machine, io_buf) # IO:Buffer mode
 ```
+
+This can be very useful in testing of stuff such as protocol implementations:
+
+```ruby
+stream = UM::Stream.new(machine, "GET /foo HTTP/1.1\r\nHost: bar.com\r\n")
+```
+
+So basically the stream is tied to a machine, and that means it can only be used
+on the thread with which the machine is associated. It is not thread-safe. (This
+is incidentally true also for most of the UringMachine instance methods!)
+
+Continued discussion in docs/design/buffer_pool.md
 
 ## Balancing I/O with the runqueue
 
