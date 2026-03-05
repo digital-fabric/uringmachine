@@ -27,6 +27,8 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   machine->size = (size > 0) ? size : DEFAULT_SIZE;
   machine->sqpoll_mode = !!sqpoll_timeout_msec;
 
+  um_buffer_pool_setup(machine);
+
   // sidecar handling
   machine->sidecar_mode = sidecar_mode;
   machine->sidecar_signal = aligned_alloc(4, sizeof(uint32_t));
@@ -1533,26 +1535,39 @@ extern VALUE SYM_ops_free;
 extern VALUE SYM_ops_transient;
 extern VALUE SYM_time_total_cpu;
 extern VALUE SYM_time_total_wait;
+extern VALUE SYM_buffer_groups;
+extern VALUE SYM_buffers_allocated;
+extern VALUE SYM_buffers_free;
+extern VALUE SYM_segments_free;
+extern VALUE SYM_buffer_space_allocated;
+extern VALUE SYM_buffer_space_commited;
 
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics) {
   VALUE hash = rb_hash_new();
 
-  rb_hash_aset(hash, SYM_size,            UINT2NUM(machine->size));
+  rb_hash_aset(hash, SYM_size,                    UINT2NUM(machine->size));
 
-  rb_hash_aset(hash, SYM_total_ops,       ULONG2NUM(metrics->total_ops));
-  rb_hash_aset(hash, SYM_total_switches,  ULONG2NUM(metrics->total_switches));
-  rb_hash_aset(hash, SYM_total_waits,     ULONG2NUM(metrics->total_waits));
+  rb_hash_aset(hash, SYM_total_ops,               ULONG2NUM(metrics->total_ops));
+  rb_hash_aset(hash, SYM_total_switches,          ULONG2NUM(metrics->total_switches));
+  rb_hash_aset(hash, SYM_total_waits,             ULONG2NUM(metrics->total_waits));
 
-  rb_hash_aset(hash, SYM_ops_pending,     UINT2NUM(metrics->ops_pending));
-  rb_hash_aset(hash, SYM_ops_unsubmitted, UINT2NUM(metrics->ops_unsubmitted));
-  rb_hash_aset(hash, SYM_ops_runqueue,    UINT2NUM(metrics->ops_runqueue));
-  rb_hash_aset(hash, SYM_ops_free,        UINT2NUM(metrics->ops_free));
-  rb_hash_aset(hash, SYM_ops_transient,   UINT2NUM(metrics->ops_transient));
+  rb_hash_aset(hash, SYM_ops_pending,             UINT2NUM(metrics->ops_pending));
+  rb_hash_aset(hash, SYM_ops_unsubmitted,         UINT2NUM(metrics->ops_unsubmitted));
+  rb_hash_aset(hash, SYM_ops_runqueue,            UINT2NUM(metrics->ops_runqueue));
+  rb_hash_aset(hash, SYM_ops_free,                UINT2NUM(metrics->ops_free));
+  rb_hash_aset(hash, SYM_ops_transient,           UINT2NUM(metrics->ops_transient));
+
+  rb_hash_aset(hash, SYM_buffer_groups,           UINT2NUM(metrics->buffer_groups));
+  rb_hash_aset(hash, SYM_buffers_allocated,       UINT2NUM(metrics->buffers_allocated));
+  rb_hash_aset(hash, SYM_buffers_free,            UINT2NUM(metrics->buffers_free));
+  rb_hash_aset(hash, SYM_segments_free,           UINT2NUM(metrics->segments_free));
+  rb_hash_aset(hash, SYM_buffer_space_allocated,  ULONG2NUM(metrics->buffer_space_allocated));
+  rb_hash_aset(hash, SYM_buffer_space_commited,   ULONG2NUM(metrics->buffer_space_commited));
 
   if (machine->profile_mode) {
     double total_cpu = um_get_time_cpu() - metrics->time_first_cpu;
-    rb_hash_aset(hash, SYM_time_total_cpu,  DBL2NUM(total_cpu));
-    rb_hash_aset(hash, SYM_time_total_wait, DBL2NUM(metrics->time_total_wait));
+    rb_hash_aset(hash, SYM_time_total_cpu,        DBL2NUM(total_cpu));
+    rb_hash_aset(hash, SYM_time_total_wait,       DBL2NUM(metrics->time_total_wait));
   }
 
   return hash;

@@ -1,160 +1,478 @@
 #include "um.h"
 #include <stdlib.h>
 
-static inline void stream_check_truncate_buffer(struct um_stream *stream) {
-  if ((stream->pos == stream->len) && (stream->len >= 1 << 12)) {
-    rb_str_modify(stream->buffer);
-    rb_str_set_len(stream->buffer, 0);
-    stream->len = 0;
-    stream->pos = 0;
+void stream_teardown(struct um_stream *stream) {
+  stream_clear(stream);
+}
+
+// void stream_setup(VALUE self, struct um_stream *stream, struct um *machine, int fd, enum um_op_kind kind) {
+//   memset(stream, 0, sizeof(struct um_stream));
+//   stream->self = self;
+
+//   RB_OBJ_WRITE(self, &stream->self, self);
+
+//   stream->machine = machine;
+//   stream->fd = fd;
+//   stream->kind = kind;
+// }
+
+// static inline struct um_stream *um_stream_prepare(struct um *machine, int fd, enum um_op_kind kind) {
+//   static ID ID_allocate;
+//   if (!ID_allocate) ID_allocate = rb_intern_const("allocate");
+//   VALUE stream_self = rb_funcall(cStream, ID_allocate, 0);
+//   struct um_stream *stream = um_get_stream(stream_self);
+//   stream_setup(stream_self, stream, machine, fd, kind);
+//   return stream;
+// }
+
+inline void stream_add_segment(struct um_stream *stream, struct um_segment *segment) {
+  segment->next = NULL;
+  if (stream->tail) {
+    stream->tail->next = segment;
+    stream->tail = segment;
   }
-  else if (stream->pos >= 1 << 12) {
-    rb_str_modify(stream->buffer);
-    char *base = RSTRING_PTR(stream->buffer);
-    int len_rest = stream->len - stream->pos;
-    memmove(base, base + stream->pos, len_rest);
-    rb_str_set_len(stream->buffer, len_rest);
-    stream->len = len_rest;
-    stream->pos = 0;
+  else {
+    stream->head = stream->tail = segment;
   }
 }
 
-// returns true if eof
-int stream_read_more(struct um_stream *stream) {
-  stream_check_truncate_buffer(stream);
-
-  size_t maxlen = 1 << 12;
-  size_t capa = rb_str_capacity(stream->buffer);
-  if (capa - stream->pos < maxlen)
-    rb_str_modify_expand(stream->buffer, maxlen - (capa - stream->pos));
-
-  rb_str_modify(stream->buffer);
-  char *ptr = RSTRING_PTR(stream->buffer) + stream->pos;
-  size_t ret = um_read_raw(stream->machine, stream->fd, ptr, maxlen);
-
-  if (ret == 0) {
+inline int stream_multishot_op_process_result(struct um_stream *stream, struct um_op_result *result) { 
+  if (likely(result->res > 0)) {
+    if (likely(result->segment)) {
+      stream_add_segment(stream, result->segment);
+      result->segment = NULL;
+    }
+  }
+  else {
     stream->eof = 1;
-    return 0;
   }
 
-  stream->len = stream->pos + ret;
-  rb_str_set_len(stream->buffer, stream->len);
-  return 1;
+  return result->res;
 }
 
-// ensures given string can hold at least given len bytes (+trailing null)
-static inline void str_expand(VALUE str, size_t len) {
-  rb_str_resize(str, len);
+#define STREAM_OP_FLAGS (OP_F_MULTISHOT | OP_F_BUFFER_POOL)
+
+void stream_multishot_op_start(struct um_stream *stream) {
+  struct um_buffer_group *group = um_buffer_group_select(stream->machine);
+  stream->op = um_op_acquire(stream->machine);
+  struct io_uring_sqe *sqe;
+
+  switch (stream->mode) {
+    case STREAM_BUFFER_POOL_READ:
+      um_prep_op(stream->machine, stream->op, OP_READ_MULTISHOT, 2, STREAM_OP_FLAGS);
+      stream->op->buffer_group = group;
+      sqe = um_get_sqe(stream->machine, stream->op);
+      io_uring_prep_read_multishot(sqe, stream->fd, 0, -1, group->bgid);
+      break;
+    case STREAM_BUFFER_POOL_RECV:
+      um_prep_op(stream->machine, stream->op, OP_RECV_MULTISHOT, 2, STREAM_OP_FLAGS);
+      stream->op->buffer_group = group;
+      sqe = um_get_sqe(stream->machine, stream->op);
+      io_uring_prep_recv_multishot(sqe, stream->fd, NULL, 0, 0);
+	    sqe->buf_group = group->bgid;
+	    sqe->flags |= IOSQE_BUFFER_SELECT;
+      break;
+    default:
+      um_raise_internal_error("Invalid multishot op");
+  }
 }
 
-static inline void str_copy_bytes(VALUE dest, const char *src, ssize_t len) {
-  str_expand(dest, len + 1);
-  char *dest_ptr = RSTRING_PTR(dest);
-  memcpy(dest_ptr, src, len);
-  dest_ptr[len] = 0;
-  rb_str_set_len(dest, len);
+void stream_multishot_op_stop(struct um_stream *stream) {
+  // if (!stream->op) return;
+  // if (!(stream->op->flags & OP_F_CQE_DONE)) {
+  //   stream->op->flags |= OP_F_FREE_ON_COMPLETE;
+  //   // printf("\n* cancelling... op: %p\n", stream->op);
+  //   um_cancel_op(stream->machine, stream->op);
+  // }
+  // else
+  //   um_op_free(stream->machine, stream->op);
+  // stream->op = NULL;
 }
 
-VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen) {
+void um_stream_cleanup(struct um_stream *stream) {
+  if (stream->op)
+    stream_multishot_op_stop(stream);
+
+  while (stream->head) {
+    struct um_segment *next = stream->head->next;
+    um_segment_checkin(stream->machine, stream->head);
+    stream->head = next;
+  }
+}
+
+// returns true if case of ENOBUFS
+inline int stream_process_segments(
+  struct um_stream *stream, size_t *total_bytes, int *more) {
+
+  int count = 0;
+  *more = 0;  
+  struct um_op_result *result = &stream->op->result;
+  while (result) {
+    count++;
+    uint dbg_bid = result->flags >> IORING_CQE_BUFFER_SHIFT;
+    uint dbg_more = !!(result->flags & IORING_CQE_F_MORE);
+    uint dbg_buf_more = !!(result->flags & IORING_CQE_F_BUF_MORE);
+    fprintf(stderr, "* process_segment result: %p next: %p res: %d flags: %06x bgid: %d bid: %d more: %d buf_more: %d\n",
+      result, result->next, result->res, result->flags, stream->op->buffer_group->bgid, dbg_bid, dbg_more, dbg_buf_more
+    );
+    if (result->res < 0) exit(1);
+    if (result->res == -ENOBUFS) {
+      *more = 0;
+      return true;
+    }
+    if (result->res == -ECANCELED) {
+      *more = 0;
+      return false;
+    }
+    // if (result->res < 0) printf("got err: %d\n", result->res);
+    um_raise_on_error_result(result->res);
+
+    *more = (result->flags & IORING_CQE_F_MORE);
+    *total_bytes += result->res;
+    stream_multishot_op_process_result(stream, result);
+    result = result->next;
+  }
+  return false;
+}
+
+void stream_clear(struct um_stream *stream) {
+  if (stream->op) {
+    if (OP_CQE_SEEN_P(stream->op)) {
+      size_t total_bytes = 0;
+      int more = false;
+      stream_process_segments(stream, &total_bytes, &more);
+      um_op_multishot_results_clear(stream->machine, stream->op);
+    }
+    if (!OP_CQE_DONE_P(stream->op)) {
+      um_cancel_op_and_discard_cqe(stream->machine, stream->op);
+    }
+  }
+
+  while (stream->head) {
+    struct um_segment *next = stream->head->next;
+    um_segment_checkin(stream->machine, stream->head);
+    stream->head = next;
+  }
+}
+
+inline void stream_await_segments(struct um_stream *stream) {
+  if (!stream->op) stream_multishot_op_start(stream);
+
+  if (!OP_CQE_SEEN_P(stream->op)) {
+    stream->op->flags &= ~OP_F_ASYNC;
+    VALUE ret = um_yield(stream->machine);
+    stream->op->flags |= OP_F_ASYNC;
+    if (!OP_CQE_SEEN_P(stream->op)) RAISE_IF_EXCEPTION(ret);
+    RB_GC_GUARD(ret);
+  }
+}
+
+int stream_get_more_segments(struct um_stream *stream) {
+  size_t total_bytes = 0;
+  int more = false;
+  int enobufs = false;
+
+  while (1) {
+    if (stream->eof) return 0;
+
+    stream_await_segments(stream);
+    enobufs = stream_process_segments(stream, &total_bytes, &more);
+    um_op_multishot_results_clear(stream->machine, stream->op);
+    if (enobufs) {
+      stream_multishot_op_stop(stream);
+
+      if (total_bytes) return total_bytes;
+      // else {
+      //   printf("* ENOBUFS! commited: %d\n", stream->machine->metrics.buffer_pool_commited);
+      //   printf("  available: %d\n", avail);        
+      //   for (int i = 0; i++; i < 1000000) {
+      //     um_schedule(stream->machine, rb_fiber_current(), Qnil);
+      //     VALUE ret = um_switch(stream->machine);
+      //     RAISE_IF_EXCEPTION(ret);
+      //   }
+      // }
+      // return total_bytes;
+    }
+    else {
+      // printf("done waiting: total_bytes: %ld more: %d eof: %d\n",
+      //   total_bytes, more, stream->eof
+      // );
+      if (more) {
+        stream->op->flags &= ~OP_F_CQE_SEEN;
+        // printf("* reset F_COMPLETED op: %p total: %ld eof: %d\n", stream->op, total_bytes, stream->eof);
+      }
+      else {
+        stream_multishot_op_stop(stream);
+      }
+      if (total_bytes || stream->eof) return total_bytes;
+    }
+  }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+
+VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
+  VALUE str = Qnil;
+  if (!NIL_P(out_buffer)) {
+    str = out_buffer;
+    if ((size_t)RSTRING_LEN(str) < len)
+      rb_str_resize(str, len);
+  }
+  else
+    str = rb_str_new(NULL, len);
+  char *str_ptr = RSTRING_PTR(str);
+  while (len) {
+    char *segment_ptr = stream->head->ptr + stream->pos;
+    size_t segment_len = stream->head->len - stream->pos;
+    size_t cpy_len = (segment_len <= len) ? segment_len : len;
+
+    // struct um_buffer *buffer = stream->head->buffer;
+    // size_t sz = sizeof(struct um_buffer);
+    // char *buffer_ptr = buffer->buf;
+    // fprintf(stderr, "  buffer: %p cpy_len: %ld segment_len: %ld len: %ld pos: %ld\n", buffer, cpy_len, segment_len, len, stream->pos);
+    // size_t ofs = segment_ptr - buffer_ptr;
+    // fprintf(stderr, "  segment_ptr: %p buffer_ptr: %p ofs: %ld buffer_pos: %ld sz: %ld\n", segment_ptr, buffer_ptr, ofs, buffer->pos, sz);
+    // fprintf(stderr, "  \"%*s\"\n", (int)cpy_len, segment_ptr);
+
+    // VALUE tmp = rb_str_new(segment_ptr, cpy_len);
+    // static int tmp_i = 0;
+    // INSPECT("  ", tmp);
+    // tmp_i++;
+    // if (tmp_i >= 10) exit(1);
+    // printf("* consume cur %p next: %p pos: %ld len: %ld seg_len: %ld cpy_len: %ld\n",
+    //   stream->head, stream->head->next, stream->pos, len, segment_len, cpy_len
+    // );
+    // if (cpy_len > 1) cpy_len = 1;
+    memcpy(str_ptr, segment_ptr, cpy_len);
+    // memset(str_ptr, 0, cpy_len);
+
+    len -= cpy_len;
+    stream->pos += cpy_len;
+    str_ptr += cpy_len;
+    if (stream->pos == stream->head->len) {
+      struct um_segment *consumed = stream->head;
+      stream->head = consumed->next;
+      if (!stream->head) stream->tail = NULL;
+      um_segment_checkin(stream->machine, consumed);
+      stream->pos = 0;
+    }
+  }
+
+  while (inc) {
+    size_t segment_len = stream->head->len - stream->pos;
+    size_t inc_len = (segment_len <= inc) ? segment_len : inc;
+    inc -= inc_len;
+    stream->pos += inc_len;
+    if (stream->pos == stream->head->len) {
+      struct um_segment *consumed = stream->head;
+      stream->head = consumed->next;
+      um_segment_checkin(stream->machine, consumed);
+      if (!stream->head) {
+        stream->tail = NULL;
+        if (inc && safe_inc) {
+          if (!stream_get_more_segments(stream)) break;
+        }
+      }
+      stream->pos = 0;
+    }
+  }
+  // printf("  str_len: %ld\n", RSTRING_LEN(str));
+  return str;
+  RB_GC_GUARD(str);
+}
+
+// inline void stream_advance(struct um_stream *stream, size_t inc) {
+//   while (inc) {
+//     size_t segment_len = stream->head->len - stream->pos;
+//     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
+//     inc -= inc_len;
+//     stream->pos += inc_len;
+//     if (stream->pos == stream->head->len) {
+//       struct um_segment *consumed = stream->head;
+//       stream->head = consumed->next;
+//       um_segment_checkin(stream->machine, consumed);
+//       if (!stream->head) {
+//         stream->tail = NULL;
+//         if (!stream_get_more_segments(stream)) return;
+//       }
+//       stream->pos = 0;
+//     }
+//   }
+// }
+
+VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
+  // int x = stream->eof && !stream->head;
+  // printf("get_line eof: %d head: %p x: %d\n", stream->eof, stream->head, x);
+  if (unlikely(stream->eof && !stream->head)) return Qnil;
+
+  if (unlikely(!stream->tail))
+    if (!stream_get_more_segments(stream)) {
+      // printf("* return Qnil 1\n");
+      return Qnil;
+    }
+
+  struct um_segment *last = NULL;
+  struct um_segment *current = stream->head;
+  size_t remaining_len = maxlen;
+  size_t total_len = 0;
+  size_t inc = 1;
+  size_t pos = stream->pos;
+  
   while (true) {
-    char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-    ssize_t pending_len = stream->len - stream->pos;
-    ssize_t search_len = pending_len;
-    ssize_t absmax_len = labs(maxlen);
-    int should_limit_len = (absmax_len > 0) && (search_len > maxlen);
-    if (should_limit_len) search_len = absmax_len;
+    size_t segment_len = current->len - pos;
+    // printf("* get_line current: %p next: %p pos: %ld seg_len: %ld\n",
+      // current, current->next, stream->pos, segment_len);
+    size_t search_len = segment_len;
+    if (maxlen && (search_len > remaining_len)) search_len = remaining_len;
+    char *start = current->ptr + pos;
+    char *lf_ptr = memchr(start, '\n', search_len);
 
-    char * lf_ptr = memchr(start, '\n', search_len);
     if (lf_ptr) {
-      ssize_t len = lf_ptr - start;
-      if (len && (start[len - 1] == '\r')) len -= 1;
+      size_t len = lf_ptr - start;
+      // printf("  len: %ld\n", len);
 
-      stream->pos += lf_ptr - start + 1;
-      if (NIL_P(buf)) return rb_utf8_str_new(start, len);
+      total_len += len;
 
-      str_copy_bytes(buf, start, len);
-      return buf;
-    }
-    else if (should_limit_len && pending_len > search_len)
-      // hit maxlen
-      return Qnil;
-
-    if (!stream_read_more(stream))
-      return Qnil;
-  }
-}
-
-VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len) {
-  size_t abslen = labs(len);
-  while (stream->len - stream->pos < abslen) {
-    if (!stream_read_more(stream)) {
-      if (len > 0)
-        return Qnil;
-
-      abslen = stream->len - stream->pos;
-    }
-  }
-
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  stream->pos += abslen;
-
-  if (NIL_P(buf)) return rb_utf8_str_new(start, abslen);
-
-  str_copy_bytes(buf, start, abslen);
-  return buf;
-}
-
-VALUE stream_skip(struct um_stream *stream, size_t len) {
-  while (stream->len - stream->pos < len)
-    if (!stream_read_more(stream)) {
-      return Qnil;
-    }
-
-  stream->pos += len;
-  return NUM2INT(len);
-}
-
-VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  while (true) {
-    char * lf_ptr = memchr(start, '\r', stream->len - stream->pos);
-    if (lf_ptr) {
-      ulong len = lf_ptr - start;
-      stream->pos += len + 2;
-
-      if (NIL_P(out_buffer)) {
-        VALUE str = rb_interned_str(start, len + 1);
-        rb_str_set_len(str, len);
-        RSTRING_PTR(str)[len] = 0;
-        RB_GC_GUARD(str);
-        return str;
+      // search for \r
+      if (total_len) {
+        if (len) {
+          if  (start[len - 1] == '\r') {
+            total_len -= 1;
+            inc = 2;
+          }
+        }
+        else {
+          if (last && (((char *)last->ptr)[last->len - 1] == '\r')) {
+            total_len -= 1;
+            inc = 2;
+          }
+        }
       }
 
-      str_copy_bytes(out_buffer, start, len);
-      return out_buffer;
+      return stream_consume_string(stream, out_buffer, total_len, inc, false);
+    }
+    else {
+      if (maxlen && segment_len >= maxlen) return Qnil;
+
+      total_len += segment_len;
+      remaining_len -= segment_len;
     }
 
-    if (stream_read_more(stream))
-      // buffer ptr and pos may have changed after reading
-      start = RSTRING_PTR(stream->buffer) + stream->pos;
-    else
-      return Qnil;
+    if (!current->next) {
+      if (!stream_get_more_segments(stream)) {
+        // printf("* return Qnil 2\n");
+        return Qnil;
+      }
+    }
+
+    last = current;
+    current = current->next;
+    pos = 0;
   }
 }
 
-VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
-  ulong read_len = len + 2;
+VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
+  if (unlikely(stream->eof && !stream->head)) return Qnil;
+  if (unlikely(!stream->tail)) {
+    if (!stream_get_more_segments(stream)) return Qnil;
+  }
 
-  while (stream->len - stream->pos < read_len)
-    if (!stream_read_more(stream)) return Qnil;
+  struct um_segment *current = stream->head;
+  size_t abs_len = labs(len);
+  size_t remaining_len = abs_len;
+  size_t total_len = 0;
+  size_t pos = stream->pos;
 
-  char *start = RSTRING_PTR(stream->buffer) + stream->pos;
-  stream->pos += read_len;
+  while (true) {
+    // printf("* current bgid: %d bid: %d pos: %ld len: %ld next: %p\n", current->bgid, current->bid, pos, current->len, current->next);
+    size_t segment_len = current->len - pos;
+    if (abs_len && segment_len > remaining_len) {
+      segment_len = remaining_len;
+    }
+    total_len += segment_len;
+    // printf("  segment_len: %ld total_len: %ld abs_len: %ld remaining_len: %ld\n",
+    //   segment_len, total_len, abs_len, remaining_len
+    // );
+    if (abs_len) {
+      remaining_len -= segment_len;
+      if (!remaining_len) {
+        // printf("  consume1 len: %ld\n", total_len);
+        return stream_consume_string(stream, out_buffer, total_len, inc, safe_inc);
+      }
+    }
 
-  if (NIL_P(out_buffer)) return rb_utf8_str_new(start, len);
+    if (!current->next) {
+      if (len <= 0) {
+        // printf("  consume2 len: %ld\n", total_len);
+        return stream_consume_string(stream, out_buffer, total_len, inc, safe_inc);
+      }
 
-  str_copy_bytes(out_buffer, start, len);
-  return out_buffer;
+      if (!stream_get_more_segments(stream)) {
+        // printf("* Qnil 3! eof: %d\n", stream->eof);
+        return Qnil;
+      }
+    }
+    current = current->next;
+    pos = 0;
+  }
+}
+
+// char resp_get_char(struct um_stream *stream) {
+//   if (unlikely(stream->eof && !stream->head)) return Qnil;
+
+//   if (unlikely(!stream->tail))
+//     if (!stream_get_more_segments(stream)) return Qnil;
+
+//   struct um_segment *current = stream->head;
+//   size_t total_len = 0;
+
+//   while (true) {
+//     size_t segment_len = current->len - stream->pos;
+//     if (segment_len >= 1) {
+//       char c = ((char *)current->ptr)[stream->pos];
+//       stream->pos++;
+//       if (stream->pos == current->len) {
+//         stream->head = stream->head->next;
+//         um_segment_checkin(stream->machine, current);
+//         stream->pos = 0;
+//       }
+//     }
+//   }
+// }
+
+VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
+  if (unlikely(stream->eof && !stream->head)) return Qnil;
+
+  if (unlikely(!stream->tail))
+    if (!stream_get_more_segments(stream)) return Qnil;
+
+  struct um_segment *current = stream->head;
+  size_t total_len = 0;
+  size_t pos = stream->pos;
+
+  while (true) {
+    size_t segment_len = current->len - pos;
+    char *start = current->ptr + pos;
+    char *lf_ptr = memchr(start, '\r', segment_len);
+    if (lf_ptr) {
+      size_t len = lf_ptr - start;
+      total_len += len;
+      return stream_consume_string(stream, out_buffer, total_len, 2, true);
+    }
+    else
+      total_len += segment_len;
+
+    if (!current->next)
+      if (!stream_get_more_segments(stream)) return Qnil;
+
+    current = current->next;
+    pos = 0;
+  }
+}
+
+inline VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
+  return stream_get_string(stream, out_buffer, len, 2, true);
 }
 
 inline ulong resp_parse_length_field(const char *ptr, int len) {
@@ -180,8 +498,7 @@ VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
   VALUE array = rb_ary_new2(len);
 
   for (ulong i = 0; i < len; i++) {
-    VALUE buf = rb_str_new(NULL, 100);
-    VALUE value = resp_decode(stream, buf);
+    VALUE value = resp_decode(stream, out_buffer);
     rb_ary_push(array, value);
     RB_GC_GUARD(value);
   }
@@ -191,11 +508,11 @@ VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
 }
 
 static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
-  return rb_interned_str(ptr + 1, len - 1);
+  return rb_str_new(ptr + 1, len - 1);
 }
 
-static inline VALUE resp_decode_string(struct um_stream *stream, ulong len) {
-  return resp_get_string(stream, len, Qnil);
+static inline VALUE resp_decode_string(struct um_stream *stream, VALUE out_buffer, ulong len) {
+  return resp_get_string(stream, len, out_buffer);
 }
 
 static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, VALUE out_buffer, ulong len) {
@@ -221,7 +538,7 @@ static inline VALUE resp_decode_simple_error(char *ptr, ulong len) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = rb_interned_str(ptr + 1, len - 1);
+  VALUE msg = rb_str_new(ptr + 1, len - 1);
   VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
@@ -231,7 +548,7 @@ static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = resp_decode_string(stream, len);
+  VALUE msg = resp_decode_string(stream, out_buffer, len);
   VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
@@ -262,7 +579,7 @@ VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
       return resp_decode_simple_string(ptr, len);
     case '$': // string
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string(stream, data_len);
+      return resp_decode_string(stream, out_buffer, data_len);
     case '=': // string with encoding
       data_len = resp_parse_length_field(ptr, len);
       return resp_decode_string_with_encoding(stream, out_buffer, data_len);
@@ -403,35 +720,4 @@ void resp_encode(struct um_write_buffer *buf, VALUE obj) {
     default:
       um_raise_internal_error("Can't encode object");
   }
-}
-
-void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv) {
-  char tmp1[48];
-  char tmp2[60];
-
-  sprintf(tmp1, "*%d\r\n", argc);
-  write_buffer_append_cstr(buf, tmp1);
-  for (int i = 0; i < argc; i++) {
-    switch (TYPE(argv[i])) {
-      case T_FIXNUM:
-        sprintf(tmp1, "%ld", NUM2LONG(argv[i]));
-        sprintf(tmp2, "$%ld\r\n%s\r\n", strlen(tmp1), (char *)tmp1);
-        write_buffer_append_cstr(buf, tmp2);
-        break;
-      case T_FLOAT:
-        sprintf(tmp1, "%lg", NUM2DBL(argv[i]));
-        sprintf(tmp2, "$%ld\r\n%s\r\n", strlen(tmp1), (char *)tmp1);
-        write_buffer_append_cstr(buf, tmp2);
-        break;
-      case T_STRING:
-        write_buffer_append_resp_bulk_string(buf, argv[i]);
-        break;
-      case T_SYMBOL:
-        write_buffer_append_resp_bulk_string(buf, rb_sym_to_s(argv[i]));
-        break;
-      default:
-        um_raise_internal_error("Can't encode object");
-    }
-  }
-  return;
 }

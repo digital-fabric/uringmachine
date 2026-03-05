@@ -5,19 +5,25 @@ VALUE eStreamRESPError;
 
 static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
-  rb_gc_mark_movable(stream->buffer);
+  rb_gc_mark_movable(stream->self);
+  rb_gc_mark_movable(stream->machine->self);
 }
 
 static void Stream_compact(void *ptr) {
   struct um_stream *stream = ptr;
-  stream->buffer = rb_gc_location(stream->buffer);
+  stream->self = rb_gc_location(stream->self);
+}
+
+static void Stream_free(void *ptr) {
+  struct um_stream *stream = ptr;
+  stream_teardown(stream);
 }
 
 static const rb_data_type_t Stream_type = {
   .wrap_struct_name = "UringMachine::Stream",
   .function = {
     .dmark = Stream_mark,
-    .dfree = RUBY_TYPED_DEFAULT_FREE,
+    .dfree = Stream_free,
     .dsize = NULL,
     .dcompact = Stream_compact
   },
@@ -26,67 +32,40 @@ static const rb_data_type_t Stream_type = {
 
 static VALUE Stream_allocate(VALUE klass) {
   struct um_stream *stream;
-  return TypedData_Make_Struct(klass, struct um_stream, &Stream_type, stream);
+  VALUE self = TypedData_Make_Struct(klass, struct um_stream, &Stream_type, stream);
+  return self;
 }
 
-static inline struct um_stream *Stream_data(VALUE self) {
+static inline struct um_stream *um_get_stream(VALUE self) {
   struct um_stream *stream;
   TypedData_Get_Struct(self, struct um_stream, &Stream_type, stream);
   return stream;
 }
 
-VALUE Stream_initialize(VALUE self, VALUE machine, VALUE fd) {
-  struct um_stream *stream = Stream_data(self);
+VALUE Stream_initialize(VALUE self, VALUE machine, VALUE target) {
+  struct um_stream *stream = um_get_stream(self);
+  memset(stream, 0, sizeof(struct um_stream));
 
+  RB_OBJ_WRITE(self, &stream->self, self);
   stream->machine = um_get_machine(machine);
-  stream->fd = NUM2ULONG(fd);
-  stream->buffer = rb_utf8_str_new_literal("");
-  rb_str_resize(stream->buffer, 1 << 16); // 64KB
-  rb_str_set_len(stream->buffer, 0);
-
-  stream->len = 0;
-  stream->pos = 0;
-  stream->eof = 0;
+  stream->mode = STREAM_BUFFER_POOL_READ;
+  stream->fd = NUM2INT(target);
 
   return self;
 }
 
-VALUE Stream_machine(VALUE self) {
-  struct um_stream *stream = Stream_data(self);
-  return stream->machine->self;
+VALUE Stream_get_line(VALUE self, VALUE limit) {
+  struct um_stream *stream = um_get_stream(self);
+  return stream_get_line(stream, Qnil, NUM2ULONG(limit));
 }
 
-VALUE Stream_fd(VALUE self) {
-  struct um_stream *stream = Stream_data(self);
-  return ULONG2NUM(stream->fd);
-}
-
-VALUE Stream_get_line(VALUE self, VALUE buf, VALUE limit) {
-  struct um_stream *stream = Stream_data(self);
-  if (unlikely(stream->eof)) return Qnil;
-
-  return stream_get_line(stream, buf, NUM2LONG(limit));
-}
-
-VALUE Stream_get_string(VALUE self, VALUE buf, VALUE len) {
-  struct um_stream *stream = Stream_data(self);
-  if (unlikely(stream->eof)) return Qnil;
-
-  return stream_get_string(stream, buf, NUM2LONG(len));
-}
-
-// skips `len` bytes in the stream. This function returns nil if eof is
-// encountered.
-VALUE Stream_skip(VALUE self, VALUE len) {
-  struct um_stream *stream = Stream_data(self);
-
-  return stream_skip(stream, NUM2LONG(len));
+VALUE Stream_get_string(VALUE self, VALUE len) {
+  struct um_stream *stream = um_get_stream(self);
+  return stream_get_string(stream, Qnil, NUM2LONG(len), 0, false);
 }
 
 VALUE Stream_resp_decode(VALUE self) {
-  struct um_stream *stream = Stream_data(self);
-  if (unlikely(stream->eof)) return Qnil;
-
+  struct um_stream *stream = um_get_stream(self);
   VALUE out_buffer = rb_utf8_str_new_literal("");
   VALUE obj = resp_decode(stream, out_buffer);
   RB_GC_GUARD(out_buffer);
@@ -102,34 +81,31 @@ VALUE Stream_resp_encode(VALUE self, VALUE str, VALUE obj) {
   return str;
 }
 
-VALUE Stream_resp_encode_cmd(int argc, VALUE *argv, VALUE self) {
-  struct um_write_buffer buf;
-  VALUE str;
-  rb_check_arity(argc, 2, UNLIMITED_ARGUMENTS);
-  str = argv[0];
-  write_buffer_init(&buf, str);
-  rb_str_modify(str);
-  resp_encode_cmd(&buf, argc - 1, argv + 1);
-  write_buffer_update_len(&buf);
-  return str;
+VALUE Stream_eof_p(VALUE self) {
+  struct um_stream *stream = um_get_stream(self);
+  return stream->eof ? Qtrue : Qfalse;
+}
+
+VALUE Stream_clear(VALUE self) {
+  struct um_stream *stream = um_get_stream(self);
+  stream_clear(stream);
+  return self;
 }
 
 void Init_Stream(void) {
-  VALUE cStream = rb_define_class_under(cUM, "Stream", rb_cObject);
+  cStream = rb_define_class_under(cUM, "Stream", rb_cObject);
   rb_define_alloc_func(cStream, Stream_allocate);
 
   rb_define_method(cStream, "initialize", Stream_initialize, 2);
-  rb_define_method(cStream, "machine", Stream_machine, 0);
-  rb_define_method(cStream, "fd", Stream_fd, 0);
 
-  rb_define_method(cStream, "get_line", Stream_get_line, 2);
-  rb_define_method(cStream, "get_string", Stream_get_string, 2);
-  rb_define_method(cStream, "skip", Stream_skip, 1);
+  rb_define_method(cStream, "get_line", Stream_get_line, 1);
+  rb_define_method(cStream, "get_string", Stream_get_string, 1);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
-
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
-  rb_define_singleton_method(cStream, "resp_encode_cmd", Stream_resp_encode_cmd, -1);
+
+  rb_define_method(cStream, "eof?", Stream_eof_p, 0);
+  rb_define_method(cStream, "clear", Stream_clear, 0);
 
   eStreamRESPError = rb_define_class_under(cStream, "RESPError", rb_eStandardError);
 }

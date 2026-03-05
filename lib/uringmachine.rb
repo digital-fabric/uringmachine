@@ -207,11 +207,11 @@ class UringMachine
     fiber.set_result(e)
   ensure
     fiber.mark_as_done
-    # cleanup
     fiber_set.delete(fiber)
     self.notify_done_listeners(fiber)
 
-    # switch away to a different fiber
+    # finally switch away to a different fiber, the current fiber should not be
+    # resumed after this.
     self.switch
   end
 
