@@ -91,11 +91,11 @@ enum um_stream_mode {
 #define OP_F_SCHEDULED      (1U << 2) // op is on runqueue
 #define OP_F_CANCELED       (1U << 3) // op is cancelled (disregard CQE results)
 #define OP_F_MULTISHOT      (1U << 4) // op is multishot
-#define OP_F_ASYNC          (1U << 5) // op is async (no fiber is scheduled to be resumed on completion)
-#define OP_F_TRANSIENT      (1U << 6) // op is on transient list (for GC purposes)
+#define OP_F_ASYNC          (1U << 5) // op is async (don't schedule fiber)
+#define OP_F_TRANSIENT      (1U << 6) // op is on transient list (for GC marking)
 #define OP_F_FREE_IOVECS    (1U << 7) // op->iovecs should be freed on release
 #define OP_F_SKIP           (1U << 8) // op should be skipped when pulled from runqueue
-#define OP_F_BUFFER_POOL    (1U << 9) // multishot op using buffer pool, generate segment for each cqe
+#define OP_F_BUFFER_POOL    (1U << 9) // multishot op using buffer pool
 
 #define OP_F_SELECT_POLLIN  (1U << 13) // select POLLIN
 #define OP_F_SELECT_POLLOUT (1U << 14) // select POLLOUT
@@ -110,10 +110,15 @@ enum um_stream_mode {
 #define OP_TRANSIENT_P(op)  ((op)->flags & OP_F_TRANSIENT)
 #define OP_SKIP_P(op)       ((op)->flags & OP_F_SKIP)
 
-#define MAX_BUFFER_GROUPS     64
-#define MAX_BUFFERS_PER_GROUP 64
-#define BUFFER_SIZE           (1U << 16) // 64KB
-#define BUFFER_BATCH_SIZE     16
+#define BP_BGID                     0xF00B
+#define BP_BR_ENTRIES               1024
+
+#define BP_INITIAL_BUFFER_SIZE      (1U << 14) // 16KB
+#define BP_INITIAL_COMMIT_THRESHOLD (1U << 16) // 64KB
+#define BP_MAX_BUFFER_SIZE          (1U << 20) // 1MB
+
+#define BP_MAX_COMMIT_THRESHOLD     (BP_MAX_BUFFER_SIZE * BP_BR_ENTRIES) // 1GB
+#define BP_AVAIL_BID_BITMAP_WORDS   (BP_BR_ENTRIES / 64)
 
 struct um_buffer {
   size_t len;
@@ -140,20 +145,6 @@ struct um_op_result {
   struct um_op_result *next;
 };
 
-struct um_buffer_group {
-  int bgid;
-  uint buffer_count;
-  size_t total_commited;
-  struct io_uring_buf_ring *br;
-  struct um_buffer *buffers[MAX_BUFFERS_PER_GROUP];
-};
-
-struct um_buffer_pool {
-  uint32_t group_count;
-  struct um_buffer_group *groups[MAX_BUFFER_GROUPS];
-  struct um_buffer *buffer_freelist;
-};
-
 struct um_op {
   struct um_op *prev;
   struct um_op *next;
@@ -175,7 +166,7 @@ struct um_op {
     struct iovec *iovecs; // used for vectorized write/send
     siginfo_t siginfo; // used for waitid
     int int_value; // used for getsockopt
-    struct um_buffer_group *buffer_group; // multishot ops on managed buffers
+    size_t bp_commit_threshold; // buffer pool commit threshold
   };
 };
 
@@ -199,7 +190,6 @@ struct um_metrics {
   uint ops_free;                  // number of ops in freelist
   uint ops_transient;             // number of ops in transient list
 
-  uint buffer_groups;             // registered buffer groups
   uint buffers_allocated;         // number of allocated buffers
   uint buffers_free;              // number of available buffers
   uint segments_free;             // free segments
@@ -244,8 +234,16 @@ struct um {
   struct um_op *op_freelist;
   struct um_op_result *result_freelist;
   struct um_segment *segment_freelist;
-  
-  struct um_buffer_pool buffer_pool;
+
+  struct io_uring_buf_ring *bp_br;
+  size_t bp_buffer_size;
+  size_t bp_commit_threshold;
+  struct um_buffer **bp_commited_buffers;
+  uint64_t bp_avail_bid_bitmap[BP_AVAIL_BID_BITMAP_WORDS];
+
+  struct um_buffer *bp_buffer_freelist;
+  uint bp_buffer_count;
+  size_t bp_total_commited;
 };
 
 struct um_mutex {
@@ -461,10 +459,12 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
 int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, int maxlen);
 int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, int len);
 
-void um_buffer_pool_setup(struct um *machine);
-struct um_segment *um_get_op_result_segment(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
-void um_buffer_group_replenish(struct um *machine, struct um_buffer_group *group);
-struct um_buffer_group *um_buffer_group_select(struct um *machine);
+void bp_setup(struct um *machine);
+void bp_teardown(struct um *machine);
+
+struct um_segment *bp_get_op_result_segment(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
 void um_segment_checkin(struct um *machine, struct um_segment *segment);
+void bp_handle_enobufs(struct um *machine);
+void bp_ensure_commit_level(struct um *machine);
 
 #endif // UM_H

@@ -16,7 +16,7 @@ static void Stream_compact(void *ptr) {
 
 static void Stream_free(void *ptr) {
   struct um_stream *stream = ptr;
-  stream_teardown(stream);
+  stream_clear(stream);
 }
 
 static const rb_data_type_t Stream_type = {

@@ -2,7 +2,6 @@
 
 #define UM_OP_ALLOC_BATCH_SIZE        256
 #define UM_OP_RESULT_ALLOC_BATCH_SIZE 256
-#define UM_SEGMENT_ALLOC_BATCH_SIZE   256
 
 const char * um_op_kind_name(enum um_op_kind kind) {
   switch (kind) {
@@ -159,8 +158,7 @@ inline void um_op_multishot_results_push(struct um *machine, struct um_op *op, _
   result->flags = flags;
   result->next  = NULL;
   if (op->flags & OP_F_BUFFER_POOL && res >= 0) {
-    result->segment = um_get_op_result_segment(machine, op, res, flags);
-    um_buffer_group_replenish(machine, op->buffer_group);
+    result->segment = bp_get_op_result_segment(machine, op, res, flags);
   }
 
   op->multishot_result_tail = result;
@@ -219,30 +217,3 @@ inline void um_op_release(struct um *machine, struct um_op *op) {
     um_op_multishot_results_clear(machine, op);
   um_op_free(machine, op);
 }
-
-inline struct um_segment *um_segment_alloc(struct um *machine) {
-  if (machine->segment_freelist) {
-    struct um_segment *segment = machine->segment_freelist;
-    machine->segment_freelist = segment->next;
-    machine->metrics.segments_free--;
-    segment->next = NULL;
-    return segment;
-  }
-
-  struct um_segment *batch = malloc(sizeof(struct um_segment) * UM_SEGMENT_ALLOC_BATCH_SIZE);
-  for (int i = 1; i < (UM_SEGMENT_ALLOC_BATCH_SIZE - 1); i++) {
-    batch[i].next = &batch[i + 1];
-  }
-  batch->next = NULL;
-  batch[UM_SEGMENT_ALLOC_BATCH_SIZE - 1].next = NULL;
-  machine->segment_freelist = batch + 1;
-  machine->metrics.segments_free += (UM_SEGMENT_ALLOC_BATCH_SIZE - 1);
-  return batch;
-}
-
-inline void um_segment_free(struct um *machine, struct um_segment *segment) {
-  segment->next = machine->segment_freelist;
-  machine->segment_freelist = segment;
-  machine->metrics.segments_free++;
-}
-

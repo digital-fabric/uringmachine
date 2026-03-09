@@ -27,8 +27,6 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   machine->size = (size > 0) ? size : DEFAULT_SIZE;
   machine->sqpoll_mode = !!sqpoll_timeout_msec;
 
-  um_buffer_pool_setup(machine);
-
   // sidecar handling
   machine->sidecar_mode = sidecar_mode;
   machine->sidecar_signal = aligned_alloc(4, sizeof(uint32_t));
@@ -39,6 +37,8 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   int ret = io_uring_queue_init_params(machine->size, &machine->ring, &params);
   if (ret) rb_syserr_fail(-ret, strerror(-ret));
   machine->ring_initialized = 1;
+
+  bp_setup(machine);
 
   if (machine->sidecar_mode) um_sidecar_setup(machine);
 }
@@ -59,6 +59,7 @@ inline void um_teardown(struct um *machine) {
   machine->ring_initialized = 0;
 
   um_free_buffer_linked_list(machine);
+  bp_teardown(machine);
 }
 
 inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
@@ -1571,7 +1572,6 @@ VALUE um_metrics(struct um *machine, struct um_metrics *metrics) {
   rb_hash_aset(hash, SYM_ops_free,                UINT2NUM(metrics->ops_free));
   rb_hash_aset(hash, SYM_ops_transient,           UINT2NUM(metrics->ops_transient));
 
-  rb_hash_aset(hash, SYM_buffer_groups,           UINT2NUM(metrics->buffer_groups));
   rb_hash_aset(hash, SYM_buffers_allocated,       UINT2NUM(metrics->buffers_allocated));
   rb_hash_aset(hash, SYM_buffers_free,            UINT2NUM(metrics->buffers_free));
   rb_hash_aset(hash, SYM_segments_free,           UINT2NUM(metrics->segments_free));
