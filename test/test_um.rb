@@ -3141,15 +3141,20 @@ end
 class MetricsTest < UMBaseTest
   def test_metrics_empty
     assert_equal({
-      size:             4096,
-      total_ops:        0,
-      total_switches:   0,
-      total_waits:      0,
-      ops_pending:      0,
-      ops_unsubmitted:  0,
-      ops_runqueue:     0,
-      ops_free:         0,
-      ops_transient:    0
+      size:                   4096,
+      total_ops:              0,
+      total_switches:         0,
+      total_waits:            0,
+      ops_pending:            0,
+      ops_unsubmitted:        0,
+      ops_runqueue:           0,
+      ops_free:               0,
+      ops_transient:          0,
+      buffers_allocated:      0,
+      buffers_free:           0,
+      segments_free:          0, 
+      buffer_space_allocated: 0,
+      buffer_space_commited:  0
     }, machine.metrics)
   end
 
@@ -3262,7 +3267,9 @@ class ProfileModeTest < UMBaseTest
     assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
-      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
 
     machine.profile_mode = true
@@ -3270,6 +3277,8 @@ class ProfileModeTest < UMBaseTest
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffer_space_allocated, :buffer_space_commited,
       :time_total_cpu, :time_total_wait,
     ], machine.metrics.keys)
 
@@ -3277,7 +3286,9 @@ class ProfileModeTest < UMBaseTest
     assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
-      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
   end
 
