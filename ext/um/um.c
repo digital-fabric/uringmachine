@@ -1298,6 +1298,13 @@ VALUE accept_each_start(VALUE arg) {
     struct um_op_result *result = &ctx->op->result;
     while (result) {
       if (unlikely(result->res < 0)) {
+        if (result->res == -EINVAL) {
+          // An EINVAL indicates the socket was shutdown, so we just break of of
+          // the loop. We also need to prevent raising error in
+          // um_verify_op_completion.
+          result->res = 0;
+          break;
+        }
         rb_syserr_fail(-result->res, strerror(-result->res));
       }
       rb_yield(INT2NUM(result->res));
@@ -1328,6 +1335,13 @@ VALUE accept_into_queue_start(VALUE arg) {
     struct um_op_result *result = &ctx->op->result;
     while (result) {
       if (unlikely(result->res < 0)) {
+        if (result->res == -EINVAL) {
+          // An EINVAL indicates the socket was shutdown, so we just break of of
+          // the loop. We also need to prevent raising error in
+          // um_verify_op_completion.
+          result->res = 0;
+          break;
+        }
         rb_syserr_fail(-result->res, strerror(-result->res));
       }
       um_queue_push(ctx->machine, ctx->queue, INT2NUM(result->res));
