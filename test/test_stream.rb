@@ -423,7 +423,6 @@ class StreamStressTest < UMBaseTest
 
     client_count = 1000
     msg_count = 16
-    total_msgs = client_count * msg_count
     msg = "GET http://127.0.0.1:1234/ HTTP/1.1\r\nhost: 127.0.0.1\r\n\r\n"
     client_fibers = client_count.times.map {
       machine.snooze
@@ -485,5 +484,34 @@ class StreamDevRandomTest < UMBaseTest
     assert_equal n, count
   ensure
     stream.clear rescue nil
+  end
+end
+
+class StreamModeTest < UMBaseTest
+  def test_stream_recv_mode_non_socket
+    r, w = UM.pipe
+    machine.write(w, 'foobar')
+    machine.close(w)
+
+    stream = UM::Stream.new(machine, r, :bp_recv)
+    # assert :bp_recv, stream.mode
+    assert_raises(Errno::ENOTSOCK) { stream.get_string(0) }
+  ensure
+    machine.close(r) rescue nil
+    machine.close(w) rescue nil
+  end
+
+  def test_stream_recv_mode_socket
+    r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    machine.write(w, 'foobar')
+    machine.close(w)
+
+    stream = UM::Stream.new(machine, r, :bp_recv)
+    # assert :bp_recv, stream.mode
+    buf = stream.get_string(0)
+    assert_equal 'foobar', buf
+  ensure
+    machine.close(r) rescue nil
+    machine.close(w) rescue nil
   end
 end

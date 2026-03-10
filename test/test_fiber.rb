@@ -128,7 +128,6 @@ class FiberJoinTest < UMBaseTest
   end
 
   def test_join_procs
-    buf = []
     res = machine.join(
       ->(_) { machine.snooze;      :f1 },
       ->(_) { machine.sleep(0.01); :f2 },

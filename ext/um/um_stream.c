@@ -35,12 +35,12 @@ void stream_multishot_op_start(struct um_stream *stream) {
   bp_ensure_commit_level(stream->machine);
 
   switch (stream->mode) {
-    case STREAM_BUFFER_POOL_READ:
+    case STREAM_BP_READ:
       um_prep_op(stream->machine, stream->op, OP_READ_MULTISHOT, 2, STREAM_OP_FLAGS);
       sqe = um_get_sqe(stream->machine, stream->op);
       io_uring_prep_read_multishot(sqe, stream->fd, 0, -1, BP_BGID);
       break;
-    case STREAM_BUFFER_POOL_RECV:
+    case STREAM_BP_RECV:
       um_prep_op(stream->machine, stream->op, OP_RECV_MULTISHOT, 2, STREAM_OP_FLAGS);
       sqe = um_get_sqe(stream->machine, stream->op);
       io_uring_prep_recv_multishot(sqe, stream->fd, NULL, 0, 0);

@@ -3,6 +3,10 @@
 VALUE cStream;
 VALUE eStreamRESPError;
 
+VALUE SYM_bp_read;
+VALUE SYM_bp_recv;
+VALUE SYM_io;
+
 static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
   rb_gc_mark_movable(stream->self);
@@ -42,16 +46,45 @@ static inline struct um_stream *um_get_stream(VALUE self) {
   return stream;
 }
 
-VALUE Stream_initialize(VALUE self, VALUE machine, VALUE target) {
+static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mode) {
+  if (mode == SYM_bp_read || mode == Qnil) {
+    stream->mode = STREAM_BP_READ;
+    stream->fd = NUM2INT(target);
+  }
+  else if (mode == SYM_bp_recv) {
+    stream->mode = STREAM_BP_RECV;
+    stream->fd = NUM2INT(target);
+  }
+  else
+    rb_raise(eUMError, "Invalid stream mode");
+}
+
+VALUE Stream_initialize(int argc, VALUE *argv, VALUE self) {
+  VALUE machine;
+  VALUE target;
+  VALUE mode;
+  rb_scan_args(argc, argv, "21", &machine, &target, &mode);
+
   struct um_stream *stream = um_get_stream(self);
   memset(stream, 0, sizeof(struct um_stream));
 
   RB_OBJ_WRITE(self, &stream->self, self);
   stream->machine = um_get_machine(machine);
-  stream->mode = STREAM_BUFFER_POOL_READ;
-  stream->fd = NUM2INT(target);
+  stream_setup(stream, target, mode);
 
   return self;
+}
+
+VALUE Stream_mode(VALUE self) {
+  struct um_stream *stream = um_get_stream(self);
+  if (stream->mode)
+  switch (stream->mode) {
+    case STREAM_BP_READ:  return SYM_bp_read;
+    case STREAM_BP_RECV:  return SYM_bp_recv;
+    case STREAM_IO:       return SYM_io;
+    default:              return Qnil;
+  }
+  return Qnil;
 }
 
 VALUE Stream_get_line(VALUE self, VALUE limit) {
@@ -96,7 +129,7 @@ void Init_Stream(void) {
   cStream = rb_define_class_under(cUM, "Stream", rb_cObject);
   rb_define_alloc_func(cStream, Stream_allocate);
 
-  rb_define_method(cStream, "initialize", Stream_initialize, 2);
+  rb_define_method(cStream, "initialize", Stream_initialize, -1);
 
   rb_define_method(cStream, "get_line", Stream_get_line, 1);
   rb_define_method(cStream, "get_string", Stream_get_string, 1);
@@ -108,4 +141,8 @@ void Init_Stream(void) {
   rb_define_method(cStream, "clear", Stream_clear, 0);
 
   eStreamRESPError = rb_define_class_under(cStream, "RESPError", rb_eStandardError);
+
+  SYM_bp_read = ID2SYM(rb_intern("bp_read"));
+  SYM_bp_recv = ID2SYM(rb_intern("bp_recv"));
+  SYM_io      = ID2SYM(rb_intern("io"));
 }

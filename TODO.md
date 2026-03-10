@@ -1,3 +1,15 @@
+## Streams
+
+- Add optional mode argument to stream:
+
+  ```ruby
+  Stream.new(machine, fd, :bp_recv)
+  Stream.new(machine, io, :io)
+  Stream.new(machine, ssl_sock, :ssl)
+  Stream.new(machine, str, :string)
+  Stream.new(machine, buf, :io_buffer)
+  ```
+
 ## immediate
 
 - Add support for exception instances in `#timeout`.
@@ -26,39 +38,6 @@
 - Add `#write_file` for writing entire file
 
 - (?) Fix all futex value (Queue, Mutex) to be properly aligned
-
-## Buffer rings - automatic management
-
-- Take the buffer_pool branch, rewrite it
-- Allow multiple stream modes:
-  - :buffer_pool - uses buffer rings
-  - :ssl - read from an SSL connection (`SSLSocket`)
-  - :io - read from an `IO`
-
-The API will look something like:
-
-```ruby
-# The mode is selected automatically according to the given target
-
-stream = UM::Stream.new(machine, fd) # buffer_pool mode (read)
-stream = UM::Stream.new(machine, fd, :recv) # buffer_pool mode (recv)
-stream = UM::Stream.new(machine, ssl_sock) # SSLSocket mode
-stream = UM::Stream.new(machine, conn) # IO mode
-stream = UM::Stream.new(machine, str) # string mode
-stream = UM::Stream.new(machine, io_buf) # IO:Buffer mode
-```
-
-This can be very useful in testing of stuff such as protocol implementations:
-
-```ruby
-stream = UM::Stream.new(machine, "GET /foo HTTP/1.1\r\nHost: bar.com\r\n")
-```
-
-So basically the stream is tied to a machine, and that means it can only be used
-on the thread with which the machine is associated. It is not thread-safe. (This
-is incidentally true also for most of the UringMachine instance methods!)
-
-Continued discussion in docs/design/buffer_pool.md
 
 ## Balancing I/O with the runqueue
 
