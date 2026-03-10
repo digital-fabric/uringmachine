@@ -470,13 +470,19 @@ class StreamDevRandomTest < UMBaseTest
     fd = machine.open('/dev/random', UM::O_RDONLY)
     stream = UM::Stream.new(machine, fd)
 
-    n = 10000
-    lines = []
+    n = 256
+    size = 65536 * 8
+    count = 0
+    # lines = []
     n.times {
-      lines << stream.get_string(16384)
+      l = stream.get_string(size)
+      refute_nil l
+      assert_equal size, l.bytesize
+
+      count += 1
     }
 
-    assert_equal n, lines.size
+    assert_equal n, count
   ensure
     stream.clear rescue nil
   end
