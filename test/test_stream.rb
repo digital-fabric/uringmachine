@@ -82,21 +82,13 @@ class StreamTest < StreamBaseTest
       machine.sendv(s1, msg)
       machine.snooze
       machine.shutdown(s1, UM::SHUT_WR)
-    rescue Exception => e
-      p e
-      p e.backtrace
-      exit!
     end
 
     buf = stream.get_string(msg.bytesize)
     assert_equal msg, buf
-  rescue Exception => e
-    p e: e
-    p e.backtrace
-    exit!
   ensure
-    # machine.terminate(f)
-    # machine.join(f)
+    machine.terminate(f)
+    machine.join(f)
   end
 
   def test_stream_buffer_reuse
@@ -105,12 +97,12 @@ class StreamTest < StreamBaseTest
     
     msg = '1234567' * 20000
 
-    f = machine.spin {
+    f = machine.spin do
       machine.sendv(s1, msg, msg)
       machine.sleep(0.05)
       machine.sendv(s1, msg, msg)
       machine.shutdown(s1, UM::SHUT_WR)
-    }
+    end
 
     buf = stream.get_string(msg.bytesize)
     assert_equal msg, buf
@@ -124,16 +116,11 @@ class StreamTest < StreamBaseTest
     buf = stream.get_string(msg.bytesize)
     assert_equal msg, buf
 
-    assert_equal 8, machine.metrics[:buffers_allocated]
-    assert_equal 3, machine.metrics[:buffers_free]
+    assert_equal 16, machine.metrics[:buffers_allocated]
+    assert_equal 11, machine.metrics[:buffers_free]
     assert_equal 256, machine.metrics[:segments_free]
-    assert_equal 65536 * 8, machine.metrics[:buffer_space_allocated]
-    assert machine.metrics[:buffer_space_commited] > 65536 * 4
-    assert_equal 1, machine.metrics[:ops_pending]
+    assert_equal 65536 * 4, machine.metrics[:buffer_space_allocated]
 
-    machine.join(f)
-
-    assert_equal 0, machine.metrics[:ops_pending]
   ensure
     machine.terminate(f)
     machine.join(f)
@@ -459,5 +446,38 @@ class StreamStressTest < UMBaseTest
     machine.snooze
     # assert_equal total_msgs, @received.size
     assert_equal msg * msg_count * client_count, @received.map { it + "\r\n" }.join
+  end
+end
+
+class StreamDevRandomTest < UMBaseTest
+  def test_stream_dev_random_get_line
+    fd = machine.open('/dev/random', UM::O_RDONLY)
+    stream = UM::Stream.new(machine, fd)
+
+    n = 100000
+    lines = []
+    n.times {
+      lines << stream.get_line(0)
+    }
+
+    assert_equal n, lines.size
+  ensure
+    stream.clear rescue nil
+    machine.close(fd) rescue nil
+  end
+
+  def test_stream_dev_random_get_string
+    fd = machine.open('/dev/random', UM::O_RDONLY)
+    stream = UM::Stream.new(machine, fd)
+
+    n = 10000
+    lines = []
+    n.times {
+      lines << stream.get_string(16384)
+    }
+
+    assert_equal n, lines.size
+  ensure
+    stream.clear rescue nil
   end
 end

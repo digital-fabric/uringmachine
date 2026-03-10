@@ -9,6 +9,7 @@ inline void stream_add_segment(struct um_stream *stream, struct um_segment *segm
   }
   else
     stream->head = stream->tail = segment;
+  stream->pending_len += segment->len;
 }
 
 inline int stream_process_op_result(struct um_stream *stream, struct um_op_result *result) {
@@ -72,6 +73,7 @@ void um_stream_cleanup(struct um_stream *stream) {
     um_segment_checkin(stream->machine, stream->head);
     stream->head = next;
   }
+  stream->pending_len = 0;
 }
 
 // returns true if case of ENOBUFS error, sets more to true if more data forthcoming
@@ -122,6 +124,7 @@ void stream_clear(struct um_stream *stream) {
     um_segment_checkin(stream->machine, stream->head);
     stream->head = next;
   }
+  stream->pending_len = 0;
 }
 
 inline void stream_await_segments(struct um_stream *stream) {
@@ -148,12 +151,21 @@ int stream_get_more_segments(struct um_stream *stream) {
     enobufs = stream_process_segments(stream, &total_bytes, &more);
     um_op_multishot_results_clear(stream->machine, stream->op);
     if (unlikely(enobufs)) {
+      int should_restart = stream->pending_len < (stream->machine->bp_buffer_size * 4);
+
       // If multiple stream ops are happening at the same time, they'll all get
       // ENOBUFS! We track the commit threshold in the op in order to prevent
       // running bp_handle_enobufs() more than once.
-      if (stream->op->bp_commit_threshold == stream->machine->bp_commit_threshold)
-        bp_handle_enobufs(stream->machine);
-      stream_multishot_op_start(stream);
+
+      if (should_restart) {
+        if (stream->op->bp_commit_threshold == stream->machine->bp_commit_threshold)
+          bp_handle_enobufs(stream->machine);
+        stream_multishot_op_start(stream);
+      }
+      else {
+        um_op_release(stream->machine, stream->op);
+        stream->op = NULL;
+      }
 
       if (total_bytes) return total_bytes;
     }
@@ -189,6 +201,7 @@ VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t l
 
     len -= cpy_len;
     stream->pos += cpy_len;
+    stream->pending_len -= cpy_len;
     str_ptr += cpy_len;
     if (stream->pos == stream->head->len) {
       struct um_segment *consumed = stream->head;
@@ -204,6 +217,7 @@ VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t l
     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
     inc -= inc_len;
     stream->pos += inc_len;
+    stream->pending_len -= inc_len;
     if (stream->pos == stream->head->len) {
       struct um_segment *consumed = stream->head;
       stream->head = consumed->next;

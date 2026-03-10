@@ -287,6 +287,7 @@ struct um_stream {
   struct um_op *op;
   struct um_segment *head;
   struct um_segment *tail;
+  size_t pending_len;
   size_t pos;
   int eof;
 };

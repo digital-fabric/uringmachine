@@ -182,7 +182,7 @@ inline void bp_ensure_commit_level(struct um *machine) {
 }
 
 inline void bp_handle_enobufs(struct um *machine) {
-  if (unlikely(machine->bp_commit_threshold == BP_MAX_COMMIT_THRESHOLD))
+  if (unlikely(machine->bp_commit_threshold >= BP_MAX_COMMIT_THRESHOLD))
     rb_raise(eUMError, "Buffer starvation");
 
   machine->bp_commit_threshold *= 2;

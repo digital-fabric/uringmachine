@@ -40,7 +40,6 @@ def um_stream_get_line
   @stream.get_line(0)
 end
 
-
 Benchmark.ips do |x|
   x.report('IO#gets')     { io_gets }
   x.report('UM#read+buf') { um_read }
