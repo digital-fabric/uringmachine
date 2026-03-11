@@ -38,7 +38,7 @@ static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
   rb_gc_mark_movable(stream->self);
   rb_gc_mark_movable(stream->machine->self);
-  
+
   if (stream_has_target_obj_p(stream)) {
     rb_gc_mark_movable(stream->target);
     stream_mark_segments(stream);

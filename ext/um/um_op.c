@@ -146,7 +146,7 @@ inline void multishot_result_free(struct um *machine, struct um_op_result *resul
 
 inline void um_op_multishot_results_push(struct um *machine, struct um_op *op, __s32 res, __u32 flags) {
   struct um_op_result *result;
-  
+
   if (!op->multishot_result_count)
     result = &op->result;
   else {

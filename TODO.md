@@ -119,7 +119,7 @@ stream.read_to_eof(nil)
 Select (see above):
 
 ```ruby
-# select 
+# select
 machine.join_select(*fibers) #=> [result, fiber]
 machine.shift_select(*queues) #=> [result, queue]
 ```

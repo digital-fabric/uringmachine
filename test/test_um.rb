@@ -3152,7 +3152,7 @@ class MetricsTest < UMBaseTest
       ops_transient:          0,
       buffers_allocated:      0,
       buffers_free:           0,
-      segments_free:          0, 
+      segments_free:          0,
       buffer_space_allocated: 0,
       buffer_space_commited:  0
     }, machine.metrics)
@@ -3268,7 +3268,7 @@ class ProfileModeTest < UMBaseTest
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
-      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffers_allocated, :buffers_free, :segments_free,
       :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
 
@@ -3277,7 +3277,7 @@ class ProfileModeTest < UMBaseTest
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
-      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffers_allocated, :buffers_free, :segments_free,
       :buffer_space_allocated, :buffer_space_commited,
       :time_total_cpu, :time_total_wait,
     ], machine.metrics.keys)
@@ -3287,7 +3287,7 @@ class ProfileModeTest < UMBaseTest
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
-      :buffers_allocated, :buffers_free, :segments_free, 
+      :buffers_allocated, :buffers_free, :segments_free,
       :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
   end

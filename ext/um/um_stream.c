@@ -55,7 +55,7 @@ void stream_multishot_op_start(struct um_stream *stream) {
 
 void stream_multishot_op_stop(struct um_stream *stream) {
   assert(!stream->op);
-  
+
   if (!(stream->op->flags & OP_F_CQE_DONE)) {
     stream->op->flags |= OP_F_ASYNC;
     um_cancel_op(stream->machine, stream->op);
@@ -110,7 +110,7 @@ void stream_clear(struct um_stream *stream) {
       stream_process_segments(stream, &total_bytes, &more);
       um_op_multishot_results_clear(stream->machine, stream->op);
     }
-    
+
     if (OP_CQE_DONE_P(stream->op))
       um_op_release(stream->machine, stream->op);
     else
@@ -185,7 +185,7 @@ int stream_get_more_segments_bp(struct um_stream *stream) {
 int stream_get_more_segments_ssl(struct um_stream *stream) {
   if (!stream->working_buffer)
     stream->working_buffer = bp_buffer_checkout(stream->machine);
-  
+
   char *ptr = stream->working_buffer->buf + stream->working_buffer->pos;
   size_t maxlen = stream->working_buffer->len - stream->working_buffer->pos;
   int res = um_ssl_read_raw(stream->machine, stream->target, ptr, maxlen);
@@ -300,7 +300,7 @@ VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen)
   size_t total_len = 0;
   size_t inc = 1;
   size_t pos = stream->pos;
-  
+
   while (true) {
     size_t segment_len = current->len - pos;
     size_t search_len = segment_len;

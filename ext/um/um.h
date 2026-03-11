@@ -191,7 +191,7 @@ struct um_metrics {
   uint buffers_free;              // number of available buffers
   uint segments_free;             // free segments
   size_t buffer_space_allocated;  // total allocated buffer space
-  size_t buffer_space_commited;   // commited buffer space 
+  size_t buffer_space_commited;   // commited buffer space
 
   double time_total_wait;         // total CPU time waiting for CQEs
   double time_last_cpu;           // last seen time stamp

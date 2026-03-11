@@ -77,7 +77,7 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj)
 
 int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen) {
   SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
-  
+
   int ret = SSL_read(ssl, ptr, maxlen);
   if (ret < 0) rb_raise(eUMError, "Failed to read");
 

@@ -80,7 +80,7 @@ inline void bp_setup(struct um *machine) {
   machine->bp_commited_buffers = malloc(sizeof(struct um_buffer) * BP_BR_ENTRIES);
   memset(machine->bp_commited_buffers, 0, sizeof(struct um_buffer) * BP_BR_ENTRIES);
   memset(machine->bp_avail_bid_bitmap, 0xFF, sizeof(machine->bp_avail_bid_bitmap));
-  
+
   machine->bp_buffer_freelist = NULL;
   machine->bp_buffer_count = 0;
   machine->bp_total_commited = 0;
@@ -99,7 +99,7 @@ inline int bitmap_find_first_set_bit(uint64_t *bitmap, size_t word_count) {
   uint word = 0;
   for (; word < word_count && !bitmap[word]; word++)
   if (word == word_count) return -1;
-  
+
   int bit = ffsll(bitmap[word]);
   return (word * 64 + bit - 1);
 }
@@ -133,12 +133,12 @@ static inline int commit_buffer(struct um *machine, int added) {
   struct um_buffer *buffer = bp_buffer_checkout(machine);
   assert(buffer->ref_count == 0);
   buffer->ref_count = 1;
-  
+
   machine->bp_buffer_count++;
   machine->bp_commited_buffers[bid] = buffer;
   machine->bp_total_commited += buffer->len;
   machine->metrics.buffer_space_commited += buffer->len;
-    
+
   io_uring_buf_ring_add(machine->bp_br, buffer->buf, buffer->len, bid, buf_mask, added);
   return true;
 }
@@ -159,7 +159,7 @@ inline struct um_buffer *get_buffer(struct um *machine, int bid) {
 }
 
 inline int should_commit_more_p(struct um *machine) {
-  return (machine->bp_buffer_count < BP_BR_ENTRIES) && 
+  return (machine->bp_buffer_count < BP_BR_ENTRIES) &&
          (machine->bp_total_commited < machine->bp_commit_threshold);
 }
 

@@ -6,7 +6,7 @@ require 'openssl'
 require 'localhost/authority'
 
 class StreamBaseTest < UMBaseTest
-  attr_reader :stream  
+  attr_reader :stream
 
   def setup
     super
@@ -37,7 +37,7 @@ class StreamTest < StreamBaseTest
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
-    
+
     buf = stream.get_string(3)
     assert_equal 'foo', buf
 
@@ -56,7 +56,7 @@ class StreamTest < StreamBaseTest
 
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(wfd, "foobar")
-    
+
     buf = stream.get_string(3)
     assert_equal 'foo', buf
 
@@ -77,7 +77,7 @@ class StreamTest < StreamBaseTest
   def test_stream_big_read
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     stream = UM::Stream.new(machine, s2)
-    
+
     msg = '1234567' * 20000
 
     f = machine.spin do
@@ -96,7 +96,7 @@ class StreamTest < StreamBaseTest
   def test_stream_buffer_reuse
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     stream = UM::Stream.new(machine, s2)
-    
+
     msg = '1234567' * 20000
 
     f = machine.spin do
@@ -568,7 +568,7 @@ class StreamModeTest < UMBaseTest
     p e.backtrace
     exit!
   ensure
-    machine.join(f) 
+    machine.join(f)
     sock1&.close rescue nil
     sock2&.close rescue nil
   end

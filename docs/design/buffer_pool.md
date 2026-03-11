@@ -56,7 +56,7 @@ buffers, to using managed buffers from the buffer pool.
 ### The API
 
 - The buffer pool is created and managed automatically. No API is involved.
-- 
+-
 
 - To use the buffer pool, two dedicated APIs are added:
 
