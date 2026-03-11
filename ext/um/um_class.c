@@ -22,6 +22,12 @@ VALUE SYM_ops_free;
 VALUE SYM_ops_transient;
 VALUE SYM_time_total_cpu;
 VALUE SYM_time_total_wait;
+VALUE SYM_buffer_groups;
+VALUE SYM_buffers_allocated;
+VALUE SYM_buffers_free;
+VALUE SYM_segments_free;
+VALUE SYM_buffer_space_allocated;
+VALUE SYM_buffer_space_commited;
 
 VALUE SYM_wd;
 VALUE SYM_mask;
@@ -1521,17 +1527,23 @@ void Init_UM(void) {
 
   um_define_net_constants(cUM);
 
-  SYM_size =            ID2SYM(rb_intern("size"));
-  SYM_total_ops =       ID2SYM(rb_intern("total_ops"));
-  SYM_total_switches =  ID2SYM(rb_intern("total_switches"));
-  SYM_total_waits =     ID2SYM(rb_intern("total_waits"));
-  SYM_ops_pending =     ID2SYM(rb_intern("ops_pending"));
-  SYM_ops_unsubmitted = ID2SYM(rb_intern("ops_unsubmitted"));
-  SYM_ops_runqueue =    ID2SYM(rb_intern("ops_runqueue"));
-  SYM_ops_free =        ID2SYM(rb_intern("ops_free"));
-  SYM_ops_transient =   ID2SYM(rb_intern("ops_transient"));
-  SYM_time_total_cpu =  ID2SYM(rb_intern("time_total_cpu"));
-  SYM_time_total_wait = ID2SYM(rb_intern("time_total_wait"));
+  SYM_size                    = ID2SYM(rb_intern("size"));
+  SYM_total_ops               = ID2SYM(rb_intern("total_ops"));
+  SYM_total_switches          = ID2SYM(rb_intern("total_switches"));
+  SYM_total_waits             = ID2SYM(rb_intern("total_waits"));
+  SYM_ops_pending             = ID2SYM(rb_intern("ops_pending"));
+  SYM_ops_unsubmitted         = ID2SYM(rb_intern("ops_unsubmitted"));
+  SYM_ops_runqueue            = ID2SYM(rb_intern("ops_runqueue"));
+  SYM_ops_free                = ID2SYM(rb_intern("ops_free"));
+  SYM_ops_transient           = ID2SYM(rb_intern("ops_transient"));
+  SYM_time_total_cpu          = ID2SYM(rb_intern("time_total_cpu"));
+  SYM_time_total_wait         = ID2SYM(rb_intern("time_total_wait"));
+  SYM_buffer_groups           = ID2SYM(rb_intern("buffer_groups"));
+  SYM_buffers_allocated       = ID2SYM(rb_intern("buffers_allocated"));
+  SYM_buffers_free            = ID2SYM(rb_intern("buffers_free"));
+  SYM_segments_free           = ID2SYM(rb_intern("segments_free"));
+  SYM_buffer_space_allocated  = ID2SYM(rb_intern("buffer_space_allocated"));
+  SYM_buffer_space_commited   = ID2SYM(rb_intern("buffer_space_commited"));
 
   SYM_wd              = ID2SYM(rb_intern("wd"));
   SYM_mask            = ID2SYM(rb_intern("mask"));

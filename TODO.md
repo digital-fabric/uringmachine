@@ -1,7 +1,7 @@
 ## immediate
 
 - Add support for exception instances in `#timeout`.
-- Add support for returning a value on timeout:
+- Add support for returning a value on timeout
 
   Since to do this safely we need to actually raise an exception that wraps the
   value, rescue it and return the value, we might want a separate method that
@@ -26,25 +26,6 @@
 - Add `#write_file` for writing entire file
 
 - (?) Fix all futex value (Queue, Mutex) to be properly aligned
-
-## Buffer rings - automatic management
-- Take the buffer_pool branch, rewrite it
-- Allow multiple stream modes:
-  - :buffer_pool - uses buffer rings
-  - :ssl - read from an SSL connection (`SSLSocket`)
-  - :io - read from an `IO`
-
-The API will look something like:
-
-```ruby
-# The mode is selected automatically according to the given target
-
-stream = UM::Stream.new(fd) # buffer_pool mode
-
-stream = UM::Stream.new(ssl_sock) # ssl mode
-
-stream = UM::Stream.new(conn) # io mode
-```
 
 ## Balancing I/O with the runqueue
 
@@ -138,7 +119,7 @@ stream.read_to_eof(nil)
 Select (see above):
 
 ```ruby
-# select 
+# select
 machine.join_select(*fibers) #=> [result, fiber]
 machine.shift_select(*queues) #=> [result, queue]
 ```

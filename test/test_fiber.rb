@@ -128,7 +128,6 @@ class FiberJoinTest < UMBaseTest
   end
 
   def test_join_procs
-    buf = []
     res = machine.join(
       ->(_) { machine.snooze;      :f1 },
       ->(_) { machine.sleep(0.01); :f2 },
@@ -256,10 +255,10 @@ class WaitFibersTest < UMBaseTest
     assert_equal 3, res
     assert_equal [:f1, :f2, :f3], buf
   end
-  
+
   def test_await_mixed
     buf = []
-    
+
     f1 = machine.spin do
       machine.sleep(0.01)
       buf << :f1

@@ -38,6 +38,8 @@ void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_mse
   if (ret) rb_syserr_fail(-ret, strerror(-ret));
   machine->ring_initialized = 1;
 
+  bp_setup(machine);
+
   if (machine->sidecar_mode) um_sidecar_setup(machine);
 }
 
@@ -56,7 +58,8 @@ inline void um_teardown(struct um *machine) {
   io_uring_queue_exit(&machine->ring);
   machine->ring_initialized = 0;
 
-  um_free_buffer_linked_list(machine);
+  bp_discard_buffer_freelist(machine);
+  bp_teardown(machine);
 }
 
 inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
@@ -1296,6 +1299,13 @@ VALUE accept_each_start(VALUE arg) {
     struct um_op_result *result = &ctx->op->result;
     while (result) {
       if (unlikely(result->res < 0)) {
+        if (result->res == -EINVAL) {
+          // An EINVAL indicates the socket was shutdown, so we just break of of
+          // the loop. We also need to prevent raising error in
+          // um_verify_op_completion.
+          result->res = 0;
+          break;
+        }
         rb_syserr_fail(-result->res, strerror(-result->res));
       }
       rb_yield(INT2NUM(result->res));
@@ -1326,6 +1336,13 @@ VALUE accept_into_queue_start(VALUE arg) {
     struct um_op_result *result = &ctx->op->result;
     while (result) {
       if (unlikely(result->res < 0)) {
+        if (result->res == -EINVAL) {
+          // An EINVAL indicates the socket was shutdown, so we just break of of
+          // the loop. We also need to prevent raising error in
+          // um_verify_op_completion.
+          result->res = 0;
+          break;
+        }
         rb_syserr_fail(-result->res, strerror(-result->res));
       }
       um_queue_push(ctx->machine, ctx->queue, INT2NUM(result->res));
@@ -1533,26 +1550,38 @@ extern VALUE SYM_ops_free;
 extern VALUE SYM_ops_transient;
 extern VALUE SYM_time_total_cpu;
 extern VALUE SYM_time_total_wait;
+extern VALUE SYM_buffer_groups;
+extern VALUE SYM_buffers_allocated;
+extern VALUE SYM_buffers_free;
+extern VALUE SYM_segments_free;
+extern VALUE SYM_buffer_space_allocated;
+extern VALUE SYM_buffer_space_commited;
 
 VALUE um_metrics(struct um *machine, struct um_metrics *metrics) {
   VALUE hash = rb_hash_new();
 
-  rb_hash_aset(hash, SYM_size,            UINT2NUM(machine->size));
+  rb_hash_aset(hash, SYM_size,                    UINT2NUM(machine->size));
 
-  rb_hash_aset(hash, SYM_total_ops,       ULONG2NUM(metrics->total_ops));
-  rb_hash_aset(hash, SYM_total_switches,  ULONG2NUM(metrics->total_switches));
-  rb_hash_aset(hash, SYM_total_waits,     ULONG2NUM(metrics->total_waits));
+  rb_hash_aset(hash, SYM_total_ops,               ULONG2NUM(metrics->total_ops));
+  rb_hash_aset(hash, SYM_total_switches,          ULONG2NUM(metrics->total_switches));
+  rb_hash_aset(hash, SYM_total_waits,             ULONG2NUM(metrics->total_waits));
 
-  rb_hash_aset(hash, SYM_ops_pending,     UINT2NUM(metrics->ops_pending));
-  rb_hash_aset(hash, SYM_ops_unsubmitted, UINT2NUM(metrics->ops_unsubmitted));
-  rb_hash_aset(hash, SYM_ops_runqueue,    UINT2NUM(metrics->ops_runqueue));
-  rb_hash_aset(hash, SYM_ops_free,        UINT2NUM(metrics->ops_free));
-  rb_hash_aset(hash, SYM_ops_transient,   UINT2NUM(metrics->ops_transient));
+  rb_hash_aset(hash, SYM_ops_pending,             UINT2NUM(metrics->ops_pending));
+  rb_hash_aset(hash, SYM_ops_unsubmitted,         UINT2NUM(metrics->ops_unsubmitted));
+  rb_hash_aset(hash, SYM_ops_runqueue,            UINT2NUM(metrics->ops_runqueue));
+  rb_hash_aset(hash, SYM_ops_free,                UINT2NUM(metrics->ops_free));
+  rb_hash_aset(hash, SYM_ops_transient,           UINT2NUM(metrics->ops_transient));
+
+  rb_hash_aset(hash, SYM_buffers_allocated,       UINT2NUM(metrics->buffers_allocated));
+  rb_hash_aset(hash, SYM_buffers_free,            UINT2NUM(metrics->buffers_free));
+  rb_hash_aset(hash, SYM_segments_free,           UINT2NUM(metrics->segments_free));
+  rb_hash_aset(hash, SYM_buffer_space_allocated,  ULONG2NUM(metrics->buffer_space_allocated));
+  rb_hash_aset(hash, SYM_buffer_space_commited,   ULONG2NUM(metrics->buffer_space_commited));
 
   if (machine->profile_mode) {
     double total_cpu = um_get_time_cpu() - metrics->time_first_cpu;
-    rb_hash_aset(hash, SYM_time_total_cpu,  DBL2NUM(total_cpu));
-    rb_hash_aset(hash, SYM_time_total_wait, DBL2NUM(metrics->time_total_wait));
+    rb_hash_aset(hash, SYM_time_total_cpu,        DBL2NUM(total_cpu));
+    rb_hash_aset(hash, SYM_time_total_wait,       DBL2NUM(metrics->time_total_wait));
   }
 
   return hash;

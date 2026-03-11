@@ -77,16 +77,24 @@ enum um_op_kind {
   OP_TIMEOUT_MULTISHOT,
 };
 
+enum um_stream_mode {
+  STREAM_BP_READ,
+  STREAM_BP_RECV,
+  STREAM_SSL,
+  STREAM_STRING,
+  STREAM_IO_BUFFER
+};
 
 #define OP_F_CQE_SEEN       (1U << 0) // CQE has been seen
 #define OP_F_CQE_DONE       (1U << 1) // CQE has been seen and operation is done
 #define OP_F_SCHEDULED      (1U << 2) // op is on runqueue
 #define OP_F_CANCELED       (1U << 3) // op is cancelled (disregard CQE results)
 #define OP_F_MULTISHOT      (1U << 4) // op is multishot
-#define OP_F_ASYNC          (1U << 5) // op is async (no fiber is scheduled to be resumed on completion)
-#define OP_F_TRANSIENT      (1U << 6) // op is on transient list (for GC purposes)
+#define OP_F_ASYNC          (1U << 5) // op is async (don't schedule fiber)
+#define OP_F_TRANSIENT      (1U << 6) // op is on transient list (for GC marking)
 #define OP_F_FREE_IOVECS    (1U << 7) // op->iovecs should be freed on release
 #define OP_F_SKIP           (1U << 8) // op should be skipped when pulled from runqueue
+#define OP_F_BUFFER_POOL    (1U << 9) // multishot op using buffer pool
 
 #define OP_F_SELECT_POLLIN  (1U << 13) // select POLLIN
 #define OP_F_SELECT_POLLOUT (1U << 14) // select POLLOUT
@@ -101,9 +109,36 @@ enum um_op_kind {
 #define OP_TRANSIENT_P(op)  ((op)->flags & OP_F_TRANSIENT)
 #define OP_SKIP_P(op)       ((op)->flags & OP_F_SKIP)
 
+#define BP_BGID                     0xF00B
+#define BP_BR_ENTRIES               1024
+
+#define BP_INITIAL_BUFFER_SIZE      (1U << 14) // 16KB
+#define BP_INITIAL_COMMIT_THRESHOLD (1U << 16) // 64KB
+#define BP_MAX_BUFFER_SIZE          (1U << 20) // 1MB
+
+#define BP_MAX_COMMIT_THRESHOLD     (BP_MAX_BUFFER_SIZE * BP_BR_ENTRIES) // 1GB
+#define BP_AVAIL_BID_BITMAP_WORDS   (BP_BR_ENTRIES / 64)
+
+struct um_buffer {
+  size_t len;
+  size_t pos;
+  uint ref_count;
+  struct um_buffer *next;
+  char buf[];
+};
+
+struct um_segment {
+  char *ptr;
+  size_t len;
+
+  struct um_buffer *buffer;
+  struct um_segment *next;
+};
+
 struct um_op_result {
   __s32 res;
   __u32 flags;
+  struct um_segment *segment;
   struct um_op_result *next;
 };
 
@@ -128,13 +163,8 @@ struct um_op {
     struct iovec *iovecs; // used for vectorized write/send
     siginfo_t siginfo; // used for waitid
     int int_value; // used for getsockopt
+    size_t bp_commit_threshold; // buffer pool commit threshold
   };
-};
-
-struct um_buffer {
-  struct um_buffer *next;
-  void *ptr;
-  long len;
 };
 
 struct buf_ring_descriptor {
@@ -147,27 +177,31 @@ struct buf_ring_descriptor {
 };
 
 struct um_metrics {
-  ulong total_ops;        // total ops submitted
-  ulong total_switches;   // total fiber switches
-  ulong total_waits;      // total number of CQE waits
+  ulong total_ops;                // total ops submitted
+  ulong total_switches;           // total fiber switches
+  ulong total_waits;              // total number of CQE waits
 
-  uint ops_pending;       // number of pending ops
-  uint ops_unsubmitted;   // number of unsubmitted
-  uint ops_runqueue;      // number of ops in runqueue
-  uint ops_free;          // number of ops in freelist
-  uint ops_transient;     // number of ops in transient list
+  uint ops_pending;               // number of pending ops
+  uint ops_unsubmitted;           // number of unsubmitted
+  uint ops_runqueue;              // number of ops in runqueue
+  uint ops_free;                  // number of ops in freelist
+  uint ops_transient;             // number of ops in transient list
 
-  double time_total_wait; // total CPU time waiting for CQEs
-  double time_last_cpu; // last seen time stamp
-  double time_first_cpu; // last seen time stamp
+  uint buffers_allocated;         // number of allocated buffers
+  uint buffers_free;              // number of available buffers
+  uint segments_free;             // free segments
+  size_t buffer_space_allocated;  // total allocated buffer space
+  size_t buffer_space_commited;   // commited buffer space
+
+  double time_total_wait;         // total CPU time waiting for CQEs
+  double time_last_cpu;           // last seen time stamp
+  double time_first_cpu;          // last seen time stamp
 };
 
 #define BUFFER_RING_MAX_COUNT 10
 
 struct um {
   VALUE self;
-
-  struct um_buffer *buffer_freelist;
 
   struct io_uring ring;
 
@@ -196,6 +230,17 @@ struct um {
 
   struct um_op *op_freelist;
   struct um_op_result *result_freelist;
+  struct um_segment *segment_freelist;
+
+  struct io_uring_buf_ring *bp_br;
+  size_t bp_buffer_size;
+  size_t bp_commit_threshold;
+  struct um_buffer **bp_commited_buffers;
+  uint64_t bp_avail_bid_bitmap[BP_AVAIL_BID_BITMAP_WORDS];
+
+  struct um_buffer *bp_buffer_freelist;
+  uint bp_buffer_count;
+  size_t bp_total_commited;
 };
 
 struct um_mutex {
@@ -227,11 +272,21 @@ struct um_async_op {
 };
 
 struct um_stream {
+  VALUE self;
   struct um *machine;
-  int fd;
-  VALUE buffer;
-  ulong len;
-  ulong pos;
+
+  enum um_stream_mode mode;
+  union {
+    int fd;
+    VALUE target;
+  };
+
+  struct um_buffer *working_buffer;
+  struct um_op *op;
+  struct um_segment *head;
+  struct um_segment *tail;
+  size_t pending_len;
+  size_t pos;
   int eof;
 };
 
@@ -271,12 +326,15 @@ void um_op_list_compact(struct um *machine, struct um_op *head);
 void um_op_multishot_results_push(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
 void um_op_multishot_results_clear(struct um *machine, struct um_op *op);
 
+struct um_segment *um_segment_alloc(struct um *machine);
+void um_segment_free(struct um *machine, struct um_segment *segment);
+
 void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
-void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
-void um_free_buffer_linked_list(struct um *machine);
+void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer);
+void bp_discard_buffer_freelist(struct um *machine);
 
 struct __kernel_timespec um_double_to_timespec(double value);
 double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
@@ -375,8 +433,10 @@ VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
-VALUE stream_get_line(struct um_stream *stream, VALUE buf, ssize_t maxlen);
-VALUE stream_get_string(struct um_stream *stream, VALUE buf, ssize_t len);
+void stream_teardown(struct um_stream *stream);
+void stream_clear(struct um_stream *stream);
+VALUE stream_get_line(struct um_stream *stream, VALUE buf, size_t maxlen);
+VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
 VALUE stream_skip(struct um_stream *stream, size_t len);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
@@ -396,6 +456,18 @@ void um_sidecar_signal_wake(struct um *machine);
 
 void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
 int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, int maxlen);
+int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen);
 int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, int len);
+
+void bp_setup(struct um *machine);
+void bp_teardown(struct um *machine);
+
+struct um_segment *bp_get_op_result_segment(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
+void um_segment_checkin(struct um *machine, struct um_segment *segment);
+void bp_handle_enobufs(struct um *machine);
+void bp_ensure_commit_level(struct um *machine);
+struct um_buffer *bp_buffer_checkout(struct um *machine);
+void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer);
+struct um_segment *bp_buffer_consume(struct um *machine, struct um_buffer *buffer, size_t len);
 
 #endif // UM_H

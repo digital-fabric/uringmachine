@@ -68,6 +68,8 @@ class UMBaseTest < Minitest::Test
   def teardown
     return if !@machine
 
+    @machine = nil
+
     # pending_fibers = @machine.pending_fibers
     # raise "leaked fibers: #{pending_fibers}" if pending_fibers.size > 0
 

@@ -46,7 +46,7 @@ class UringMachine
   def terminate(*fibers)
     fibers = fibers.first if fibers.size == 1 && fibers.first.is_a?(Enumerable)
 
-    fibers.each { schedule(it, TERMINATE_EXCEPTION) }
+    fibers.each { schedule(it, TERMINATE_EXCEPTION) unless it.done? }
   end
 
   # Runs the given block in the given fiber. This method is used to run fibers
@@ -207,11 +207,11 @@ class UringMachine
     fiber.set_result(e)
   ensure
     fiber.mark_as_done
-    # cleanup
     fiber_set.delete(fiber)
     self.notify_done_listeners(fiber)
 
-    # switch away to a different fiber
+    # finally switch away to a different fiber, the current fiber should not be
+    # resumed after this.
     self.switch
   end
 

@@ -1222,63 +1222,63 @@ end
 class ShutdownTest < UMBaseTest
   def test_shutdown
     c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    res = @machine.send(c_fd, 'abc', 3, 0)
+    res = machine.send(c_fd, 'abc', 3, 0)
     assert_equal 3, res
 
     buf = +''
-    res = @machine.recv(s_fd, buf, 256, 0)
+    res = machine.recv(s_fd, buf, 256, 0)
     assert_equal 3, res
     assert_equal 'abc', buf
 
-    res = @machine.shutdown(c_fd, UM::SHUT_WR)
+    res = machine.shutdown(c_fd, UM::SHUT_WR)
     assert_equal 0, res
 
-    assert_raises(Errno::EPIPE) { @machine.send(c_fd, 'abc', 3, 0) }
+    assert_raises(Errno::EPIPE) { machine.send(c_fd, 'abc', 3, 0) }
 
-    res = @machine.shutdown(s_fd, UM::SHUT_RD)
+    res = machine.shutdown(s_fd, UM::SHUT_RD)
     assert_equal 0, res
 
-    res = @machine.recv(s_fd, buf, 256, 0)
+    res = machine.recv(s_fd, buf, 256, 0)
     assert_equal 0, res
 
-    res = @machine.shutdown(c_fd, UM::SHUT_RDWR)
+    res = machine.shutdown(c_fd, UM::SHUT_RDWR)
     assert_equal 0, res
 
-    assert_raises(Errno::EINVAL) { @machine.shutdown(c_fd, -9999) }
+    assert_raises(Errno::EINVAL) { machine.shutdown(c_fd, -9999) }
   ensure
-    @machine.close(c_fd)
-    @machine.close(s_fd)
+    machine.close(c_fd)
+    machine.close(s_fd)
   end
 end
 
 class ShutdownAsyncTest < UMBaseTest
   def test_shutdown_async
     c_fd, s_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    res = @machine.send(c_fd, 'abc', 3, 0)
+    res = machine.send(c_fd, 'abc', 3, 0)
     assert_equal 3, res
 
     buf = +''
-    res = @machine.recv(s_fd, buf, 256, 0)
+    res = machine.recv(s_fd, buf, 256, 0)
     assert_equal 3, res
     assert_equal 'abc', buf
 
-    res = @machine.shutdown_async(c_fd, UM::SHUT_WR)
+    res = machine.shutdown_async(c_fd, UM::SHUT_WR)
     assert_equal c_fd, res
 
     machine.sleep(0.01)
-    assert_raises(Errno::EPIPE) { @machine.send(c_fd, 'abc', 3, 0) }
+    assert_raises(Errno::EPIPE) { machine.send(c_fd, 'abc', 3, 0) }
 
-    res = @machine.shutdown_async(s_fd, UM::SHUT_RD)
+    res = machine.shutdown_async(s_fd, UM::SHUT_RD)
     assert_equal s_fd, res
 
-    res = @machine.recv(s_fd, buf, 256, 0)
+    res = machine.recv(s_fd, buf, 256, 0)
     assert_equal 0, res
 
-    res = @machine.shutdown_async(c_fd, UM::SHUT_RDWR)
+    res = machine.shutdown_async(c_fd, UM::SHUT_RDWR)
     assert_equal c_fd, res
   ensure
-    @machine.close(c_fd)
-    @machine.close(s_fd)
+    machine.close(c_fd)
+    machine.close(s_fd)
   end
 end
 
@@ -1345,7 +1345,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each_interrupted
     count = 0
     terminated = nil
-    f = @machine.spin do
+    f = machine.spin do
       machine.accept_each(@server.fileno) do |fd|
         count += 1
         break if count == 3
@@ -1355,13 +1355,13 @@ class AcceptEachTest < UMBaseTest
     end
 
     s = TCPSocket.new('127.0.0.1', @port)
-    @machine.sleep(0.01)
+    machine.sleep(0.01)
 
     assert_equal 1, count
     refute terminated
 
-    @machine.schedule(f, UM::Terminate.new)
-    @machine.sleep(0.01)
+    machine.schedule(f, UM::Terminate.new)
+    machine.sleep(0.01)
 
     assert f.done?
     assert terminated
@@ -1375,7 +1375,7 @@ class AcceptEachTest < UMBaseTest
   def test_accept_each_closed
     count = 0
     done = nil
-    @machine.spin do
+    machine.spin do
       machine.accept_each(@server.fileno) do |fd|
         count += 1
       end
@@ -1384,20 +1384,49 @@ class AcceptEachTest < UMBaseTest
     end
 
     s = TCPSocket.new('127.0.0.1', @port)
-    @machine.sleep(0.01)
+    machine.sleep(0.01)
 
     assert_equal 1, count
     refute done
 
     machine.close(@server.fileno)
-    @machine.sleep(0.01)
+    machine.sleep(0.01)
     refute done
 
     s = TCPSocket.new('127.0.0.1', @port)
-    @machine.sleep(0.01)
+    machine.sleep(0.01)
 
     assert_equal 2, count
     refute done
+  ensure
+    s.close rescue nil
+  end
+
+  def test_accept_each_shutdown
+    count = 0
+    done = nil
+    e = nil
+    machine.spin do
+      machine.accept_each(@server.fileno) do |fd|
+        count += 1
+      end
+    rescue => e
+    ensure
+      done = true
+    end
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    machine.sleep(0.01)
+
+    assert_equal 1, count
+    refute done
+
+    machine.shutdown(@server.fileno, UM::SHUT_RD)
+    machine.sleep(0.01)
+    assert_equal true, done
+    assert_nil e
+
+    assert_raises(Errno::ECONNREFUSED) { TCPSocket.new('127.0.0.1', @port) }
   ensure
     s.close rescue nil
   end
@@ -1451,23 +1480,53 @@ class AcceptIntoQueueTest < UMBaseTest
   def test_accept_into_queue_interrupted
     terminated = nil
     queue = UM::Queue.new
-    f = @machine.spin do
+    f = machine.spin do
       machine.accept_into_queue(@server_fd, queue)
     rescue UM::Terminate
       terminated = true
     end
 
     s = TCPSocket.new('127.0.0.1', @port)
-    @machine.sleep(0.01)
+    machine.sleep(0.01)
 
     assert_equal 1, queue.count
     refute terminated
 
-    @machine.schedule(f, UM::Terminate.new)
-    @machine.sleep(0.01)
+    machine.schedule(f, UM::Terminate.new)
+    machine.sleep(0.01)
 
     assert f.done?
     assert terminated
+
+    assert_equal 0, machine.metrics[:ops_pending]
+    assert_equal 256, machine.metrics[:ops_free]
+  ensure
+    s.close
+  end
+
+  def test_accept_into_queue_shutdown
+    done = nil
+    err = nil
+    queue = UM::Queue.new
+    f = machine.spin do
+      machine.accept_into_queue(@server_fd, queue)
+    rescue => err
+    ensure
+      done = true
+    end
+
+    s = TCPSocket.new('127.0.0.1', @port)
+    machine.sleep(0.01)
+
+    assert_equal 1, queue.count
+    refute done
+
+    machine.shutdown(@server_fd, UM::SHUT_RD)
+    machine.sleep(0.01)
+
+    assert f.done?
+    assert done
+    assert_nil err
 
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:ops_free]
@@ -1664,8 +1723,8 @@ class SendvTest < UMBaseTest
   end
 
   def teardown
-    @machine.close(@s1)
-    @machine.close(@s2)
+    machine.close(@s1)
+    machine.close(@s2)
     super
   end
 
@@ -2968,7 +3027,7 @@ class StatxTest < UMBaseTest
   end
 
   def test_statx_mask
-    fd = @machine.open(__FILE__, UM::O_RDONLY)
+    fd = machine.open(__FILE__, UM::O_RDONLY)
     ustat = machine.statx(fd, nil, UM::AT_EMPTY_PATH, UM::STATX_MTIME | UM::STATX_SIZE)
     rstat = File.stat(__FILE__)
 
@@ -2977,7 +3036,7 @@ class StatxTest < UMBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:ops_free]
   ensure
-    @machine.close_async(fd)
+    machine.close_async(fd)
   end
 
   def test_statx_bad_path
@@ -3082,15 +3141,20 @@ end
 class MetricsTest < UMBaseTest
   def test_metrics_empty
     assert_equal({
-      size:             4096,
-      total_ops:        0,
-      total_switches:   0,
-      total_waits:      0,
-      ops_pending:      0,
-      ops_unsubmitted:  0,
-      ops_runqueue:     0,
-      ops_free:         0,
-      ops_transient:    0
+      size:                   4096,
+      total_ops:              0,
+      total_switches:         0,
+      total_waits:            0,
+      ops_pending:            0,
+      ops_unsubmitted:        0,
+      ops_runqueue:           0,
+      ops_free:               0,
+      ops_transient:          0,
+      buffers_allocated:      0,
+      buffers_free:           0,
+      segments_free:          0,
+      buffer_space_allocated: 0,
+      buffer_space_commited:  0
     }, machine.metrics)
   end
 
@@ -3203,7 +3267,9 @@ class ProfileModeTest < UMBaseTest
     assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
-      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free,
+      :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
 
     machine.profile_mode = true
@@ -3211,6 +3277,8 @@ class ProfileModeTest < UMBaseTest
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
       :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free,
+      :buffer_space_allocated, :buffer_space_commited,
       :time_total_cpu, :time_total_wait,
     ], machine.metrics.keys)
 
@@ -3218,7 +3286,9 @@ class ProfileModeTest < UMBaseTest
     assert_equal false, machine.profile_mode?
     assert_equal([
       :size, :total_ops, :total_switches, :total_waits, :ops_pending,
-      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient
+      :ops_unsubmitted, :ops_runqueue, :ops_free, :ops_transient,
+      :buffers_allocated, :buffers_free, :segments_free,
+      :buffer_space_allocated, :buffer_space_commited
     ], machine.metrics.keys)
   end
 
