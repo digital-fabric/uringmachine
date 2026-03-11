@@ -24,15 +24,19 @@
 
     https://www.man7.org/linux/man-pages/man7/inotify.7.html
 
-  - [ ] Better buffer management
+  - [v] Better buffer management
     - [v] Add `UM#sendv` method (see below)
     - [v] Benchmark `#sendv` vs `#send_bundle` (in concurrent situation)
     - [v] Support for `IO::Buffer`?
     - [ ] Benchmark `#read_each` vs `#read` (in concurrent situation)
-    - [ ] Implement automatic buffer pool:
-      - [ ] Automatic buffer allocation,registration and management.
-      - [ ] Support for partial buffer consumption.
-      - [ ] Data processing through a rewritten stream implementation.
+    - [v] Implement automatic buffer pool:
+      - [v] Automatic buffer allocation,registration and management.
+      - [v] Support for partial buffer consumption.
+      - [v] Data processing through a rewritten stream implementation.
+
+  - [ ] More benchmarks
+    - Different reading methods in concurrent setting
+    - SSL vs SSL-custom-BIO vs SSL-stream
 
   - [v] Sidecar mode
     - [v] Convert `UM#initialize` to take kwargs

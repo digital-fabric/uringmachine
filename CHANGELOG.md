@@ -1,3 +1,12 @@
+# 0.29.0 2026-03-11
+
+- Reimplement streams based on buffer pool
+- Add buffer pool with automatic buffer commit
+- Add support for procs in `#await`, `#join`
+- Accept splat fibers in `#await`
+- Rename `#await_fibers` to `#await`
+- Fiber scheduler: make `blocking_operation_wait` optional
+
 # 0.28.3 2026-02-22
 
 - Accept array in `#terminate` and `#join`
