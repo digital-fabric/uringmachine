@@ -18,7 +18,7 @@ inline struct um_buffer *buffer_alloc(struct um *machine) {
   return buffer;
 }
 
-inline struct um_buffer *buffer_checkout(struct um *machine) {
+inline struct um_buffer *bp_buffer_checkout(struct um *machine) {
   struct um_buffer *buffer = machine->bp_buffer_freelist;
   if (buffer) {
     struct um_buffer *next = buffer->next;
@@ -51,13 +51,13 @@ inline void buffer_free(struct um *machine, struct um_buffer *buffer) {
   }
 }
 
-inline void buffer_checkin(struct um *machine, struct um_buffer *buffer) {
+inline void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer) {
   assert(buffer->ref_count > 0);
   buffer->ref_count--;
   if (!buffer->ref_count) buffer_free(machine, buffer);
 }
 
-inline void buffer_discard_free(struct um *machine) {
+inline void bp_discard_buffer_freelist(struct um *machine) {
   while (machine->bp_buffer_freelist) {
     struct um_buffer *buffer = machine->bp_buffer_freelist;
     struct um_buffer *next = buffer->next;
@@ -68,10 +68,6 @@ inline void buffer_discard_free(struct um *machine) {
     free(buffer);
     machine->bp_buffer_freelist = next;
   }
-}
-
-inline void um_free_buffer_linked_list(struct um *machine) {
-  buffer_discard_free(machine);
 }
 
 inline void bp_setup(struct um *machine) {
@@ -91,11 +87,10 @@ inline void bp_setup(struct um *machine) {
 }
 
 inline void bp_teardown(struct um *machine) {
-  buffer_discard_free(machine);
+  bp_discard_buffer_freelist(machine);
   for (int i = 0; i < BP_BR_ENTRIES; i++) {
     struct um_buffer *buffer = machine->bp_commited_buffers[i];
-    if (buffer)
-      buffer_checkin(machine, buffer);
+    if (buffer) bp_buffer_checkin(machine, buffer);
   }
   free(machine->bp_commited_buffers);
 }
@@ -135,7 +130,7 @@ static inline int commit_buffer(struct um *machine, int added) {
   if (bid < 0) return false;
 
   bitmap_unset(machine->bp_avail_bid_bitmap, bid);
-  struct um_buffer *buffer = buffer_checkout(machine);
+  struct um_buffer *buffer = bp_buffer_checkout(machine);
   assert(buffer->ref_count == 0);
   buffer->ref_count = 1;
   
@@ -154,7 +149,7 @@ inline void uncommit_buffer(struct um *machine, struct um_op *op, struct um_buff
   machine->bp_buffer_count--;
   machine->bp_commited_buffers[bid] = NULL;
   bitmap_set(machine->bp_avail_bid_bitmap, bid);
-  buffer_checkin(machine, buffer);
+  bp_buffer_checkin(machine, buffer);
 }
 
 inline struct um_buffer *get_buffer(struct um *machine, int bid) {
@@ -163,13 +158,14 @@ inline struct um_buffer *get_buffer(struct um *machine, int bid) {
   return buffer;
 }
 
+inline int should_commit_more_p(struct um *machine) {
+  return (machine->bp_buffer_count < BP_BR_ENTRIES) && 
+         (machine->bp_total_commited < machine->bp_commit_threshold);
+}
+
 inline void bp_ensure_commit_level(struct um *machine) {
-  size_t threshold = machine->bp_commit_threshold;
   int added = 0;
-  while (
-    (machine->bp_buffer_count < BP_BR_ENTRIES) &&
-    (machine->bp_total_commited < threshold)
-  ) {
+  while (should_commit_more_p(machine)) {
     if (likely(commit_buffer(machine, added))) added++;
   }
   if (added) io_uring_buf_ring_advance(machine->bp_br, added);
@@ -188,7 +184,7 @@ inline void bp_handle_enobufs(struct um *machine) {
   machine->bp_commit_threshold *= 2;
   while (machine->bp_buffer_size < machine->bp_commit_threshold / 4)
     machine->bp_buffer_size *= 2;
-  buffer_discard_free(machine);
+  bp_discard_buffer_freelist(machine);
 }
 
 inline struct um_segment *um_segment_alloc(struct um *machine) {
@@ -201,11 +197,10 @@ inline struct um_segment *um_segment_alloc(struct um *machine) {
   }
 
   struct um_segment *batch = malloc(sizeof(struct um_segment) * UM_SEGMENT_ALLOC_BATCH_SIZE);
+  memset(batch, 0, sizeof(struct um_segment) * UM_SEGMENT_ALLOC_BATCH_SIZE);
   for (int i = 1; i < (UM_SEGMENT_ALLOC_BATCH_SIZE - 1); i++) {
     batch[i].next = &batch[i + 1];
   }
-  batch->next = NULL;
-  batch[UM_SEGMENT_ALLOC_BATCH_SIZE - 1].next = NULL;
   machine->segment_freelist = batch + 1;
   machine->metrics.segments_free += (UM_SEGMENT_ALLOC_BATCH_SIZE - 1);
   return batch;
@@ -217,20 +212,24 @@ inline void um_segment_free(struct um *machine, struct um_segment *segment) {
   machine->metrics.segments_free++;
 }
 
+inline struct um_segment *bp_buffer_consume(struct um *machine, struct um_buffer *buffer, size_t len) {
+  struct um_segment *segment = um_segment_alloc(machine);
+  segment->ptr = buffer->buf + buffer->pos;
+  segment->len = len;
+  segment->buffer = buffer;
+  buffer->pos += len;
+  buffer->ref_count++;
+  return segment;
+}
+
 struct um_segment *bp_get_op_result_segment(struct um *machine, struct um_op *op, __s32 res, __u32 flags) {
   assert(res >= 0);
   if (!res) return NULL;
 
   uint bid = flags >> IORING_CQE_BUFFER_SHIFT;
   struct um_buffer *buffer = get_buffer(machine, bid);
-  struct um_segment *segment = um_segment_alloc(machine);
-  
-  segment->ptr = buffer->buf + buffer->pos;
-  segment->len = res;
-  segment->buffer = buffer;
-  buffer->pos += res;
-  buffer->ref_count++;
 
+  struct um_segment *segment = bp_buffer_consume(machine, buffer, res);
   machine->bp_total_commited -= res;
   machine->metrics.buffer_space_commited -= res;
   bp_ensure_commit_level(machine);
@@ -242,6 +241,6 @@ struct um_segment *bp_get_op_result_segment(struct um *machine, struct um_op *op
 }
 
 inline void um_segment_checkin(struct um *machine, struct um_segment *segment) {
-  buffer_checkin(machine, segment->buffer);
+  bp_buffer_checkin(machine, segment->buffer);
   um_segment_free(machine, segment);
 }

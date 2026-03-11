@@ -1,15 +1,3 @@
-## Streams
-
-- Add optional mode argument to stream:
-
-  ```ruby
-  Stream.new(machine, fd, :bp_recv)
-  Stream.new(machine, io, :io)
-  Stream.new(machine, ssl_sock, :ssl)
-  Stream.new(machine, str, :string)
-  Stream.new(machine, buf, :io_buffer)
-  ```
-
 ## immediate
 
 - Add support for exception instances in `#timeout`.

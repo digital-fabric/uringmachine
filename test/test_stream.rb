@@ -2,6 +2,8 @@
 
 require_relative 'helper'
 require 'securerandom'
+require 'openssl'
+require 'localhost/authority'
 
 class StreamBaseTest < UMBaseTest
   attr_reader :stream  
@@ -488,12 +490,22 @@ class StreamDevRandomTest < UMBaseTest
 end
 
 class StreamModeTest < UMBaseTest
+  def test_stream_default_mode
+    r, w = UM.pipe
+    stream = UM::Stream.new(machine, r)
+    assert_equal :bp_read, stream.mode
+  ensure
+    machine.close(r) rescue nil
+    machine.close(w) rescue nil
+  end
+
   def test_stream_recv_mode_non_socket
     r, w = UM.pipe
     machine.write(w, 'foobar')
     machine.close(w)
 
     stream = UM::Stream.new(machine, r, :bp_recv)
+    assert_equal :bp_recv, stream.mode
     # assert :bp_recv, stream.mode
     assert_raises(Errno::ENOTSOCK) { stream.get_string(0) }
   ensure
@@ -507,11 +519,57 @@ class StreamModeTest < UMBaseTest
     machine.close(w)
 
     stream = UM::Stream.new(machine, r, :bp_recv)
-    # assert :bp_recv, stream.mode
+    assert_equal :bp_recv, stream.mode
     buf = stream.get_string(0)
     assert_equal 'foobar', buf
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
+  end
+
+  def test_stream_ssl_mode
+    authority = Localhost::Authority.fetch
+    @server_ctx = authority.server_context
+    sock1, sock2 = UNIXSocket.pair
+
+    s1 = OpenSSL::SSL::SSLSocket.new(sock1, @server_ctx)
+    s1.sync_close = true
+    s2 = OpenSSL::SSL::SSLSocket.new(sock2, OpenSSL::SSL::SSLContext.new)
+    s2.sync_close = true
+
+    @machine.ssl_set_bio(s1)
+    @machine.ssl_set_bio(s2)
+    assert_equal true, s1.instance_variable_get(:@__um_bio__)
+    assert_equal true, s2.instance_variable_get(:@__um_bio__)
+
+    f = machine.spin { s1.accept rescue nil }
+
+    s2.connect
+    refute_equal 0, @machine.metrics[:total_ops]
+
+    buf = "foobar\nbaz"
+    assert_equal 10, @machine.ssl_write(s1, buf, buf.bytesize)
+    buf = +''
+
+    stream = UM::Stream.new(machine, s2, :ssl)
+    assert_equal "foobar", stream.get_line(0)
+
+    buf = "buh"
+    @machine.ssl_write(s1, buf, buf.bytesize)
+
+    assert_equal "baz", stream.get_string(0)
+    assert_equal "buh", stream.get_string(0)
+
+    s1.close
+
+    assert_nil stream.get_string(0)
+  rescue => e
+    p e
+    p e.backtrace
+    exit!
+  ensure
+    machine.join(f) 
+    sock1&.close rescue nil
+    sock2&.close rescue nil
   end
 end

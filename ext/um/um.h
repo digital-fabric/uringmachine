@@ -80,7 +80,6 @@ enum um_op_kind {
 enum um_stream_mode {
   STREAM_BP_READ,
   STREAM_BP_RECV,
-  STREAM_IO,
   STREAM_SSL,
   STREAM_STRING,
   STREAM_IO_BUFFER
@@ -129,8 +128,6 @@ struct um_buffer {
 };
 
 struct um_segment {
-  uint8_t bgid; // buffer group id
-  uint8_t bid; // buffer id
   char *ptr;
   size_t len;
 
@@ -284,6 +281,7 @@ struct um_stream {
     VALUE target;
   };
 
+  struct um_buffer *working_buffer;
   struct um_op *op;
   struct um_segment *head;
   struct um_segment *tail;
@@ -335,8 +333,8 @@ void um_runqueue_push(struct um *machine, struct um_op *op);
 struct um_op *um_runqueue_shift(struct um *machine);
 
 struct um_buffer *um_buffer_checkout(struct um *machine, int len);
-void um_buffer_checkin(struct um *machine, struct um_buffer *buffer);
-void um_free_buffer_linked_list(struct um *machine);
+void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer);
+void bp_discard_buffer_freelist(struct um *machine);
 
 struct __kernel_timespec um_double_to_timespec(double value);
 double um_timestamp_to_double(__s64 tv_sec, __u32 tv_nsec);
@@ -458,6 +456,7 @@ void um_sidecar_signal_wake(struct um *machine);
 
 void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
 int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, int maxlen);
+int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen);
 int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, int len);
 
 void bp_setup(struct um *machine);
@@ -467,5 +466,8 @@ struct um_segment *bp_get_op_result_segment(struct um *machine, struct um_op *op
 void um_segment_checkin(struct um *machine, struct um_segment *segment);
 void bp_handle_enobufs(struct um *machine);
 void bp_ensure_commit_level(struct um *machine);
+struct um_buffer *bp_buffer_checkout(struct um *machine);
+void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer);
+struct um_segment *bp_buffer_consume(struct um *machine, struct um_buffer *buffer, size_t len);
 
 #endif // UM_H

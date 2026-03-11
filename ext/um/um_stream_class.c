@@ -5,17 +5,54 @@ VALUE eStreamRESPError;
 
 VALUE SYM_bp_read;
 VALUE SYM_bp_recv;
-VALUE SYM_io;
+VALUE SYM_ssl;
+
+inline int stream_has_target_obj_p(struct um_stream *stream) {
+  switch (stream->mode) {
+    case STREAM_SSL:
+    case STREAM_STRING:
+    case STREAM_IO_BUFFER:
+      return true;
+    default:
+      return false;
+  }
+}
+
+inline void stream_mark_segments(struct um_stream *stream) {
+  struct um_segment *curr = stream->head;
+  while (curr) {
+    // rb_gc_mark_movable(curr->obj);
+    curr = curr->next;
+  }
+}
+
+inline void stream_compact_segments(struct um_stream *stream) {
+  struct um_segment *curr = stream->head;
+  while (curr) {
+    // curr->obj = rb_gc_location(curr->obj);
+    curr = curr->next;
+  }
+}
 
 static void Stream_mark(void *ptr) {
   struct um_stream *stream = ptr;
   rb_gc_mark_movable(stream->self);
   rb_gc_mark_movable(stream->machine->self);
+  
+  if (stream_has_target_obj_p(stream)) {
+    rb_gc_mark_movable(stream->target);
+    stream_mark_segments(stream);
+  }
 }
 
 static void Stream_compact(void *ptr) {
   struct um_stream *stream = ptr;
   stream->self = rb_gc_location(stream->self);
+
+  if (stream_has_target_obj_p(stream)) {
+    stream->target = rb_gc_location(stream->target);
+    stream_compact_segments(stream);
+  }
 }
 
 static void Stream_free(void *ptr) {
@@ -47,6 +84,7 @@ static inline struct um_stream *um_get_stream(VALUE self) {
 }
 
 static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mode) {
+  stream->working_buffer = NULL;
   if (mode == SYM_bp_read || mode == Qnil) {
     stream->mode = STREAM_BP_READ;
     stream->fd = NUM2INT(target);
@@ -54,6 +92,11 @@ static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mo
   else if (mode == SYM_bp_recv) {
     stream->mode = STREAM_BP_RECV;
     stream->fd = NUM2INT(target);
+  }
+  else if (mode == SYM_ssl) {
+    stream->mode = STREAM_SSL;
+    stream->target = target;
+    um_ssl_set_bio(stream->machine, target);
   }
   else
     rb_raise(eUMError, "Invalid stream mode");
@@ -77,11 +120,10 @@ VALUE Stream_initialize(int argc, VALUE *argv, VALUE self) {
 
 VALUE Stream_mode(VALUE self) {
   struct um_stream *stream = um_get_stream(self);
-  if (stream->mode)
   switch (stream->mode) {
     case STREAM_BP_READ:  return SYM_bp_read;
     case STREAM_BP_RECV:  return SYM_bp_recv;
-    case STREAM_IO:       return SYM_io;
+    case STREAM_SSL:      return SYM_ssl;
     default:              return Qnil;
   }
   return Qnil;
@@ -130,6 +172,7 @@ void Init_Stream(void) {
   rb_define_alloc_func(cStream, Stream_allocate);
 
   rb_define_method(cStream, "initialize", Stream_initialize, -1);
+  rb_define_method(cStream, "mode", Stream_mode, 0);
 
   rb_define_method(cStream, "get_line", Stream_get_line, 1);
   rb_define_method(cStream, "get_string", Stream_get_string, 1);
@@ -144,5 +187,5 @@ void Init_Stream(void) {
 
   SYM_bp_read = ID2SYM(rb_intern("bp_read"));
   SYM_bp_recv = ID2SYM(rb_intern("bp_recv"));
-  SYM_io      = ID2SYM(rb_intern("io"));
+  SYM_ssl     = ID2SYM(rb_intern("ssl"));
 }

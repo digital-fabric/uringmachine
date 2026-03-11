@@ -125,6 +125,11 @@ void stream_clear(struct um_stream *stream) {
     stream->head = next;
   }
   stream->pending_len = 0;
+
+  if (stream->working_buffer) {
+    bp_buffer_checkin(stream->machine, stream->working_buffer);
+    stream->working_buffer = NULL;
+  }
 }
 
 inline void stream_await_segments(struct um_stream *stream) {
@@ -139,7 +144,7 @@ inline void stream_await_segments(struct um_stream *stream) {
   }
 }
 
-int stream_get_more_segments(struct um_stream *stream) {
+int stream_get_more_segments_bp(struct um_stream *stream) {
   size_t total_bytes = 0;
   int more = false;
   int enobufs = false;
@@ -174,6 +179,37 @@ int stream_get_more_segments(struct um_stream *stream) {
         stream->op->flags &= ~OP_F_CQE_SEEN;
       if (total_bytes || stream->eof) return total_bytes;
     }
+  }
+}
+
+int stream_get_more_segments_ssl(struct um_stream *stream) {
+  if (!stream->working_buffer)
+    stream->working_buffer = bp_buffer_checkout(stream->machine);
+  
+  char *ptr = stream->working_buffer->buf + stream->working_buffer->pos;
+  size_t maxlen = stream->working_buffer->len - stream->working_buffer->pos;
+  int res = um_ssl_read_raw(stream->machine, stream->target, ptr, maxlen);
+  if (res == 0) return 0;
+  if (res < 0) rb_raise(eUMError, "Failed to read segment");
+
+  struct um_segment *segment = bp_buffer_consume(stream->machine, stream->working_buffer, res);
+  if ((size_t)res == maxlen) {
+    bp_buffer_checkin(stream->machine, stream->working_buffer);
+    stream->working_buffer = NULL;
+  }
+  stream_add_segment(stream, segment);
+  return 1;
+}
+
+int stream_get_more_segments(struct um_stream *stream) {
+  switch (stream->mode) {
+    case STREAM_BP_READ:
+    case STREAM_BP_RECV:
+      return stream_get_more_segments_bp(stream);
+    case STREAM_SSL:
+      return stream_get_more_segments_ssl(stream);
+    default:
+      rb_raise(eUMError, "Invalid stream mode");
   }
 }
 

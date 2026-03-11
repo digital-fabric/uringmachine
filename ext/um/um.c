@@ -58,7 +58,7 @@ inline void um_teardown(struct um *machine) {
   io_uring_queue_exit(&machine->ring);
   machine->ring_initialized = 0;
 
-  um_free_buffer_linked_list(machine);
+  bp_discard_buffer_freelist(machine);
   bp_teardown(machine);
 }
 
