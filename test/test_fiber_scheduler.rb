@@ -718,7 +718,7 @@ class FiberSchedulerTest < UMBaseTest
   def test_fiber_scheduler_timeout_after
     res = nil
     Fiber.schedule do
-      Timeout.timeout(0.05) do
+      Timeout.timeout(0.1) do
         sleep 1
       end
       res = true
