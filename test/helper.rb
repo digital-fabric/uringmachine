@@ -103,3 +103,5 @@ class UMBaseTest < Minitest::Test
     dir
   end
 end
+
+puts "Ruby: #{RUBY_VERSION}\nKernel: #{UringMachine.kernel_version}"

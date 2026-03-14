@@ -726,8 +726,8 @@ class FiberSchedulerTest < UMBaseTest
       res = e
     end
     @scheduler.join
-    assert_equal 3, machine.metrics[:total_ops]
     assert_kind_of Timeout::Error, res
+    assert_equal 3, machine.metrics[:total_ops]
     assert_equal({
       fiber: 1,
       timeout_after: 1,

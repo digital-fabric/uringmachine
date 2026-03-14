@@ -122,6 +122,7 @@ class StreamTest < StreamBaseTest
     assert_equal msg, buf
 
     stream.clear
+    # numbers may vary with different kernel versions
     assert_in_range 24..32, machine.metrics[:buffers_allocated]
     assert_in_range 10..18, machine.metrics[:buffers_free]
     assert_equal 256, machine.metrics[:segments_free]
