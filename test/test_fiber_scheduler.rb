@@ -723,6 +723,9 @@ class FiberSchedulerTest < UMBaseTest
       end
       res = true
     rescue => e
+      puts '*' * 40
+      p e
+      p e.backtrace.join
       res = e
     end
     @scheduler.join
