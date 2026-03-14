@@ -1,3 +1,8 @@
+# 0.29.1 2026-03-14
+
+- Add support for exception instance in `#timeout`
+- Improve buffer commit level handling
+
 # 0.29.0 2026-03-11
 
 - Reimplement streams based on buffer pool
