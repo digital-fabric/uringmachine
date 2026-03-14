@@ -173,7 +173,7 @@ int stream_get_more_segments_bp(struct um_stream *stream) {
       if (should_restart) {
         if (stream->op->bp_commit_level == stream->machine->bp_commit_level)
           bp_handle_enobufs(stream->machine);
-  
+
         um_op_release(stream->machine, stream->op);
         stream->op = NULL;
         // stream_multishot_op_start(stream);

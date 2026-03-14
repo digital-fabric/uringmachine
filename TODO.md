@@ -1,6 +1,5 @@
 ## immediate
 
-- Add support for exception instances in `#timeout`.
 - Add support for returning a value on timeout
 
   Since to do this safely we need to actually raise an exception that wraps the
