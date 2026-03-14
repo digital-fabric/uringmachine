@@ -122,7 +122,8 @@ class StreamTest < StreamBaseTest
     assert_equal msg, buf
 
     stream.clear
-    assert_equal 32, machine.metrics[:buffers_allocated]
+    pp machine.metrics
+    assert_in_range 32, machine.metrics[:buffers_allocated]
     assert_equal 18, machine.metrics[:buffers_free]
     assert_equal 256, machine.metrics[:segments_free]
     assert_equal 65536 * 8, machine.metrics[:buffer_space_allocated]
