@@ -139,6 +139,12 @@ VALUE Stream_get_string(VALUE self, VALUE len) {
   return stream_get_string(stream, Qnil, NUM2LONG(len), 0, false);
 }
 
+VALUE Stream_skip(VALUE self, VALUE len) {
+  struct um_stream *stream = um_get_stream(self);
+  stream_skip(stream, NUM2LONG(len), true);
+  return len;
+}
+
 VALUE Stream_resp_decode(VALUE self) {
   struct um_stream *stream = um_get_stream(self);
   VALUE out_buffer = rb_utf8_str_new_literal("");
@@ -176,6 +182,7 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "get_line", Stream_get_line, 1);
   rb_define_method(cStream, "get_string", Stream_get_string, 1);
+  rb_define_method(cStream, "skip", Stream_skip, 1);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);

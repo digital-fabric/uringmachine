@@ -235,6 +235,9 @@ inline void stream_shift_head(struct um_stream *stream) {
 }
 
 inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
+  if (unlikely(stream->eof && !stream->head)) return;
+  if (safe_inc && !stream->tail && !stream_get_more_segments(stream)) return;
+
   while (inc) {
     size_t segment_len = stream->head->len - stream->pos;
     size_t inc_len = (segment_len <= inc) ? segment_len : inc;

@@ -221,6 +221,16 @@ class StreamTest < StreamBaseTest
     assert_nil stream.get_string(-3)
   end
 
+  def test_stream_skip
+    machine.write(@wfd, "foobarbaz")
+
+    stream.skip(2)
+    assert_equal 'obar', stream.get_string(4)
+
+    stream.skip(1)
+    assert_equal 'az', stream.get_string(0)
+  end
+
   def test_stream_big_data
     data = SecureRandom.random_bytes(300_000)
     fiber = machine.spin {
