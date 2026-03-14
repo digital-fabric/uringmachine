@@ -111,12 +111,10 @@ enum um_stream_mode {
 
 #define BP_BGID                     0xF00B
 #define BP_BR_ENTRIES               1024
-
 #define BP_INITIAL_BUFFER_SIZE      (1U << 14) // 16KB
-#define BP_INITIAL_COMMIT_THRESHOLD (1U << 16) // 64KB
+#define BP_INITIAL_COMMIT_LEVEL     (BP_INITIAL_BUFFER_SIZE * 16) // 256KB
 #define BP_MAX_BUFFER_SIZE          (1U << 20) // 1MB
-
-#define BP_MAX_COMMIT_THRESHOLD     (BP_MAX_BUFFER_SIZE * BP_BR_ENTRIES) // 1GB
+#define BP_MAX_COMMIT_LEVEL         (BP_MAX_BUFFER_SIZE * BP_BR_ENTRIES) // 1GB
 #define BP_AVAIL_BID_BITMAP_WORDS   (BP_BR_ENTRIES / 64)
 
 struct um_buffer {
@@ -163,7 +161,7 @@ struct um_op {
     struct iovec *iovecs; // used for vectorized write/send
     siginfo_t siginfo; // used for waitid
     int int_value; // used for getsockopt
-    size_t bp_commit_threshold; // buffer pool commit threshold
+    size_t bp_commit_level; // buffer pool commit threshold
   };
 };
 
@@ -234,7 +232,7 @@ struct um {
 
   struct io_uring_buf_ring *bp_br;
   size_t bp_buffer_size;
-  size_t bp_commit_threshold;
+  size_t bp_commit_level;
   struct um_buffer **bp_commited_buffers;
   uint64_t bp_avail_bid_bitmap[BP_AVAIL_BID_BITMAP_WORDS];
 
@@ -437,7 +435,7 @@ void stream_teardown(struct um_stream *stream);
 void stream_clear(struct um_stream *stream);
 VALUE stream_get_line(struct um_stream *stream, VALUE buf, size_t maxlen);
 VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
-VALUE stream_skip(struct um_stream *stream, size_t len);
+void stream_skip(struct um_stream *stream, size_t inc, int safe_inc);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);

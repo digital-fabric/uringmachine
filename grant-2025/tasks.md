@@ -35,8 +35,9 @@
       - [v] Data processing through a rewritten stream implementation.
 
   - [ ] More benchmarks
-    - Different reading methods in concurrent setting
-    - SSL vs SSL-custom-BIO vs SSL-stream
+    - [ ] Different reading methods in concurrent setting
+    - [ ] SSL vs SSL-custom-BIO vs SSL-stream in concurrent setting
+    - [ ] stream resp client vs redis gem in concurrent setting
 
   - [v] Sidecar mode
     - [v] Convert `UM#initialize` to take kwargs

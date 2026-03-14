@@ -31,7 +31,6 @@ inline struct um_buffer *bp_buffer_checkout(struct um *machine) {
   buffer->ref_count++;
   buffer->pos = 0;
   buffer->next = NULL;
-
   return buffer;
 }
 
@@ -76,7 +75,7 @@ inline void bp_setup(struct um *machine) {
   if (unlikely(!machine->bp_br)) rb_syserr_fail(ret, strerror(ret));
 
   machine->bp_buffer_size = BP_INITIAL_BUFFER_SIZE;
-  machine->bp_commit_threshold = BP_INITIAL_COMMIT_THRESHOLD;
+  machine->bp_commit_level = BP_INITIAL_COMMIT_LEVEL;
   machine->bp_commited_buffers = malloc(sizeof(struct um_buffer) * BP_BR_ENTRIES);
   memset(machine->bp_commited_buffers, 0, sizeof(struct um_buffer) * BP_BR_ENTRIES);
   memset(machine->bp_avail_bid_bitmap, 0xFF, sizeof(machine->bp_avail_bid_bitmap));
@@ -160,10 +159,13 @@ inline struct um_buffer *get_buffer(struct um *machine, int bid) {
 
 inline int should_commit_more_p(struct um *machine) {
   return (machine->bp_buffer_count < BP_BR_ENTRIES) &&
-         (machine->bp_total_commited < machine->bp_commit_threshold);
+         (machine->bp_total_commited < machine->bp_commit_level);
 }
 
 inline void bp_ensure_commit_level(struct um *machine) {
+  if (machine->bp_total_commited > (machine->bp_commit_level / 2))
+    return;
+
   int added = 0;
   while (should_commit_more_p(machine)) {
     if (likely(commit_buffer(machine, added))) added++;
@@ -178,11 +180,11 @@ inline void bp_ensure_commit_level(struct um *machine) {
 }
 
 inline void bp_handle_enobufs(struct um *machine) {
-  if (unlikely(machine->bp_commit_threshold >= BP_MAX_COMMIT_THRESHOLD))
+  if (unlikely(machine->bp_commit_level >= BP_MAX_COMMIT_LEVEL))
     rb_raise(eUMError, "Buffer starvation");
 
-  machine->bp_commit_threshold *= 2;
-  while (machine->bp_buffer_size < machine->bp_commit_threshold / 4)
+  machine->bp_commit_level *= 2;
+  while (machine->bp_buffer_size < machine->bp_commit_level / 4)
     machine->bp_buffer_size *= 2;
   bp_discard_buffer_freelist(machine);
 }

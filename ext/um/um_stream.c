@@ -50,7 +50,7 @@ void stream_multishot_op_start(struct um_stream *stream) {
     default:
       um_raise_internal_error("Invalid multishot op");
   }
-  stream->op->bp_commit_threshold = stream->machine->bp_commit_threshold;
+  stream->op->bp_commit_level = stream->machine->bp_commit_level;
 }
 
 void stream_multishot_op_stop(struct um_stream *stream) {
@@ -157,15 +157,26 @@ int stream_get_more_segments_bp(struct um_stream *stream) {
     um_op_multishot_results_clear(stream->machine, stream->op);
     if (unlikely(enobufs)) {
       int should_restart = stream->pending_len < (stream->machine->bp_buffer_size * 4);
+      // int same_threshold = stream->op->bp_commit_level == stream->machine->bp_commit_level;
+
+      // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
+      //   stream,
+      //   total_bytes, stream->pending_len, stream->machine->bp_commit_level,
+      //   stream->machine->bp_buffer_count,
+      //   same_threshold, should_restart
+      // );
 
       // If multiple stream ops are happening at the same time, they'll all get
       // ENOBUFS! We track the commit threshold in the op in order to prevent
       // running bp_handle_enobufs() more than once.
 
       if (should_restart) {
-        if (stream->op->bp_commit_threshold == stream->machine->bp_commit_threshold)
+        if (stream->op->bp_commit_level == stream->machine->bp_commit_level)
           bp_handle_enobufs(stream->machine);
-        stream_multishot_op_start(stream);
+  
+        um_op_release(stream->machine, stream->op);
+        stream->op = NULL;
+        // stream_multishot_op_start(stream);
       }
       else {
         um_op_release(stream->machine, stream->op);
@@ -215,6 +226,44 @@ int stream_get_more_segments(struct um_stream *stream) {
 
 ///////////////////////////////////////////////////////////////////////////////////////
 
+inline void stream_shift_head(struct um_stream *stream) {
+  struct um_segment *consumed = stream->head;
+  stream->head = consumed->next;
+  if (!stream->head) stream->tail = NULL;
+  um_segment_checkin(stream->machine, consumed);
+  stream->pos = 0;
+}
+
+inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
+  while (inc) {
+    size_t segment_len = stream->head->len - stream->pos;
+    size_t inc_len = (segment_len <= inc) ? segment_len : inc;
+    inc -= inc_len;
+    stream->pos += inc_len;
+    stream->pending_len -= inc_len;
+    if (stream->pos == stream->head->len) {
+      stream_shift_head(stream);
+      if (inc && safe_inc && !stream->head) {
+        if (!stream_get_more_segments(stream)) break;
+      }
+    }
+  }
+}
+
+inline void stream_copy(struct um_stream *stream, char *dest, size_t len) {
+  while (len) {
+    char *segment_ptr = stream->head->ptr + stream->pos;
+    size_t segment_len = stream->head->len - stream->pos;
+    size_t cpy_len = (segment_len <= len) ? segment_len : len;
+    memcpy(dest, segment_ptr, cpy_len);
+
+    len -= cpy_len;
+    stream->pos += cpy_len;
+    stream->pending_len -= cpy_len;
+    dest += cpy_len;
+    if (stream->pos == stream->head->len) stream_shift_head(stream);
+  }
+}
 
 VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
   VALUE str = Qnil;
@@ -228,69 +277,22 @@ VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t l
   }
   else
     str = rb_str_new(NULL, len);
-  char *str_ptr = RSTRING_PTR(str);
-  while (len) {
-    char *segment_ptr = stream->head->ptr + stream->pos;
-    size_t segment_len = stream->head->len - stream->pos;
-    size_t cpy_len = (segment_len <= len) ? segment_len : len;
-    memcpy(str_ptr, segment_ptr, cpy_len);
+  char *dest = RSTRING_PTR(str);
 
-    len -= cpy_len;
-    stream->pos += cpy_len;
-    stream->pending_len -= cpy_len;
-    str_ptr += cpy_len;
-    if (stream->pos == stream->head->len) {
-      struct um_segment *consumed = stream->head;
-      stream->head = consumed->next;
-      if (!stream->head) stream->tail = NULL;
-      um_segment_checkin(stream->machine, consumed);
-      stream->pos = 0;
-    }
-  }
-
-  while (inc) {
-    size_t segment_len = stream->head->len - stream->pos;
-    size_t inc_len = (segment_len <= inc) ? segment_len : inc;
-    inc -= inc_len;
-    stream->pos += inc_len;
-    stream->pending_len -= inc_len;
-    if (stream->pos == stream->head->len) {
-      struct um_segment *consumed = stream->head;
-      stream->head = consumed->next;
-      um_segment_checkin(stream->machine, consumed);
-      if (!stream->head) {
-        stream->tail = NULL;
-        if (inc && safe_inc) {
-          if (!stream_get_more_segments(stream)) break;
-        }
-      }
-      stream->pos = 0;
-    }
-  }
+  stream_copy(stream, dest, len);
+  stream_skip(stream, inc, safe_inc);
   return str;
   RB_GC_GUARD(str);
 }
 
-// inline void stream_advance(struct um_stream *stream, size_t inc) {
-//   while (inc) {
-//     size_t segment_len = stream->head->len - stream->pos;
-//     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
-//     inc -= inc_len;
-//     stream->pos += inc_len;
-//     if (stream->pos == stream->head->len) {
-//       struct um_segment *consumed = stream->head;
-//       stream->head = consumed->next;
-//       um_segment_checkin(stream->machine, consumed);
-//       if (!stream->head) {
-//         stream->tail = NULL;
-//         if (!stream_get_more_segments(stream)) return;
-//       }
-//       stream->pos = 0;
-//     }
-//   }
-// }
-
 VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
+  // if (stream->head) {
+  //   fprintf(stderr, "head: %p pos: %ld: %.*s\n",
+  //     stream->head, stream->pos,
+  //     (int)(stream->head->len - stream->pos), stream->head->ptr + stream->pos
+  //   );
+  // }
+
   if (unlikely(stream->eof && !stream->head)) return Qnil;
   if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
 

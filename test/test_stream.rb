@@ -46,7 +46,10 @@ class StreamTest < StreamBaseTest
     assert stream.eof?
 
     stream.clear
-    assert_equal [5, 0, 256, 16384 * 5, 16384 * 5 - 6], buffer_metrics
+
+    # initial buffer size: 6BKV, initial buffers commited: 16 (256KB)
+    # (plus an additional buffer commited after first usage)
+    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
     assert_equal 0, machine.metrics[:ops_pending]
   end
 
@@ -68,7 +71,7 @@ class StreamTest < StreamBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:segments_free]
 
-    assert_equal [5, 0, 256, 16384 * 5, 16384 * 5 - 6], buffer_metrics
+    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
   ensure
     machine.close(rfd) rescue nil
     machine.close(wfd) rescue nil
@@ -118,10 +121,11 @@ class StreamTest < StreamBaseTest
     buf = stream.get_string(msg.bytesize)
     assert_equal msg, buf
 
-    assert_equal 16, machine.metrics[:buffers_allocated]
-    assert_equal 11, machine.metrics[:buffers_free]
+    stream.clear
+    assert_equal 32, machine.metrics[:buffers_allocated]
+    assert_equal 18, machine.metrics[:buffers_free]
     assert_equal 256, machine.metrics[:segments_free]
-    assert_equal 65536 * 4, machine.metrics[:buffer_space_allocated]
+    assert_equal 65536 * 8, machine.metrics[:buffer_space_allocated]
 
   ensure
     machine.terminate(f)
@@ -136,7 +140,7 @@ class StreamTest < StreamBaseTest
 
     assert_equal 'foo', stream.get_line(0)
 
-    assert_equal [5, 0, 255, 16384 * 5, 16384 * 5 - 12], buffer_metrics
+    assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
     assert_equal 'bar', stream.get_line(0)
     assert_nil stream.get_line(0)
     assert_equal "baz", stream.get_string(-6)
@@ -152,11 +156,11 @@ class StreamTest < StreamBaseTest
     machine.close(@wfd)
 
     # three segments received
-    assert_equal [5, 0, 253, 16384 * 5, 16384 * 5 - 13], buffer_metrics
+    assert_equal [16, 0, 253, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_equal 'bar', stream.get_line(0)
-    assert_equal [5, 0, 255, 16384 * 5, 16384 * 5 - 13], buffer_metrics
+    assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_equal 'baz', stream.get_line(0)
-    assert_equal [5, 0, 256, 16384 * 5, 16384 * 5 - 13], buffer_metrics
+    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_nil stream.get_line(0)
   end
 
@@ -182,7 +186,7 @@ class StreamTest < StreamBaseTest
     assert_equal 'bizz', stream.get_line(5)
 
     assert_nil stream.get_line(8)
-    assert_equal [5, 0, 256, 16384 * 5, 16384 * 5 - 17], buffer_metrics
+    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
   def test_stream_get_string
@@ -465,6 +469,23 @@ class StreamDevRandomTest < UMBaseTest
   ensure
     stream.clear rescue nil
     machine.close(fd) rescue nil
+  end
+
+  def get_line_do(n, acc)
+    fd = @machine.open('/dev/random', UM::O_RDONLY)
+    stream = UM::Stream.new(@machine, fd)
+    n.times { acc << stream.get_line(0) }
+  end
+
+  def test_stream_dev_random_get_line_concurrent
+    acc = []
+    c = 1
+    n = 100000
+    ff = c.times.map {
+      machine.spin { get_line_do(n, acc) }
+    }
+    machine.await(ff)
+    assert_equal c * n, acc.size
   end
 
   def test_stream_dev_random_get_string
