@@ -540,15 +540,19 @@ VALUE um_timeout_complete(VALUE arg) {
   return Qnil;
 }
 
-VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
+VALUE um_timeout(struct um *machine, VALUE interval, VALUE obj) {
   static ID ID_new = 0;
-  if (unlikely(!ID_new)) ID_new = rb_intern("new");
+
+  if (TYPE(obj) == T_CLASS) {
+    if (unlikely(!ID_new)) ID_new = rb_intern("new");
+    obj = rb_funcall(obj, ID_new, 0);
+  }
 
   struct um_op *op = um_op_acquire(machine);
   um_prep_op(machine, op, OP_TIMEOUT, 2, 0);
   op->ts = um_double_to_timespec(NUM2DBL(interval));
   RB_OBJ_WRITE(machine->self, &op->fiber, rb_fiber_current());
-  RB_OBJ_WRITE(machine->self, &op->value, rb_funcall(class, ID_new, 0));
+  RB_OBJ_WRITE(machine->self, &op->value, obj);
   RB_OBJ_WRITE(machine->self, &op->async_op, Qnil);
 
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
@@ -556,6 +560,7 @@ VALUE um_timeout(struct um *machine, VALUE interval, VALUE class) {
 
   struct op_ctx ctx = { .machine = machine, .op = op };
   return rb_ensure(rb_yield, Qnil, um_timeout_complete, (VALUE)&ctx);
+  RB_GC_GUARD(obj);
 }
 
 /*******************************************************************************

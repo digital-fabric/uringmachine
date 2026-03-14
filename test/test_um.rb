@@ -292,6 +292,20 @@ class ScheduleTest < UMBaseTest
     assert_kind_of TOError, e
   end
 
+  def test_timeout_with_exception_instance
+    res = nil
+    e = TOError.new
+    begin
+      res = machine.timeout(0.01, e) {
+        machine.sleep(1)
+        :foo
+      }
+    rescue => res
+    end
+
+    assert_equal e, res
+  end
+
   def test_timeout_with_raising_block
     e = nil
     begin

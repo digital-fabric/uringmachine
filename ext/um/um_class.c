@@ -334,17 +334,17 @@ VALUE UM_schedule(VALUE self, VALUE fiber, VALUE value) {
 }
 
 /* Runs the given block, interrupting its execution if its runtime exceeds the
- * given timeout interval (in seconds).
+ * given timeout interval (in seconds), raising the specified exception.
  *
  * - https://www.man7.org/linux/man-pages//man3/io_uring_prep_timeoute.3.html
  *
  * @param interval [Number] timeout interval in seconds
- * @param exception_class [any] timeout exception class
+ * @param exception [any] timeout exception class or instance
  * @return [any] block's return value
  */
-VALUE UM_timeout(VALUE self, VALUE interval, VALUE exception_class) {
+VALUE UM_timeout(VALUE self, VALUE interval, VALUE exception) {
   struct um *machine = um_get_machine(self);
-  return um_timeout(machine, interval, exception_class);
+  return um_timeout(machine, interval, exception);
 }
 
 /* Puts the current fiber to sleep for the given time duration (in seconds),

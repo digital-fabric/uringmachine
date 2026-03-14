@@ -6,6 +6,7 @@ require 'securerandom'
 require 'socket'
 require 'net/http'
 require 'json'
+require 'timeout'
 
 class MethodCallAuditor
   attr_reader :calls
@@ -722,11 +723,7 @@ class FiberSchedulerTest < UMBaseTest
         sleep 1
       end
       res = true
-    rescue => e
-      puts '*' * 40
-      p e
-      p e.backtrace.join
-      res = e
+    rescue => res
     end
     @scheduler.join
     assert_kind_of Timeout::Error, res
