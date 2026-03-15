@@ -3505,3 +3505,55 @@ class SetChildSubreaperTest < Minitest::Test
     assert_equal grand_child_pid, res
   end
 end
+
+class StreamMethodTest < UMBaseTest
+  def setup
+    super
+    @rfd, @wfd = UM.pipe
+  end
+
+  def teardown
+    @stream = nil
+    machine.close(@rfd) rescue nil
+    machine.close(@wfd) rescue nil
+    super
+  end
+
+  def test_stream_method
+    machine.write(@wfd, "foobar")
+    machine.close(@wfd)
+
+    stream = machine.stream(@rfd)
+    assert_kind_of UM::Stream, stream
+
+    buf = stream.get_string(3)
+    assert_equal 'foo', buf
+
+    buf = stream.get_string(-6)
+    assert_equal 'bar', buf
+    assert stream.eof?
+
+    stream.clear
+  end
+
+  def test_stream_method_with_block
+    machine.write(@wfd, "foobar")
+    machine.close(@wfd)
+
+    bufs = []
+    stream_obj = nil
+    res = machine.stream(@rfd) do |s|
+      stream_obj = s
+
+      bufs << s.get_string(3)
+      bufs << s.get_string(-6)
+
+      :foo
+    end
+
+    assert_kind_of UM::Stream, stream_obj
+    assert stream_obj.eof?
+    assert_equal ['foo', 'bar'], bufs
+    assert_equal :foo, res
+  end
+end

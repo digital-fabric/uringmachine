@@ -194,6 +194,15 @@ class UringMachine
     close_async(fd)
   end
 
+  def stream(target, mode = nil)
+    stream = UM::Stream.new(self, target, mode)
+    return stream if !block_given?
+
+    res = yield(stream)
+    stream.clear
+    res
+  end
+
   private
 
   # @param block [Proc]

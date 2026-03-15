@@ -32,11 +32,13 @@ implementation that allows integration with the entire Ruby ecosystem.
 ## Features
 
 - Automatic fiber switching when performing blocking I/O operations.
-- Automatic cancellation using of ongoing operations with Ruby exceptions.
+- Automatic cancellation ongoing operations with Ruby exceptions.
 - General-purpose API for cancelling any operation on timeout.
 - Excellent performance characteristics for concurrent I/O-bound applications.
 - `Fiber::Scheduler` implementation to automatically integrate with the Ruby
   ecosystem in a transparent fashion.
+- Read streams with automatic buffer management.
+- Optimized I/O for encrypted SSL connections.
 
 ## Design
 
@@ -61,8 +63,8 @@ allow any library that performs I/O using standard-library classes such as `IO`,
 
 To install UringMachine, simply run `gem install uringmachine` or `bundle add
 uringmachine` in your project directory. Note: to use UringMachine, you'll need
-a Linux machine with a minimum kernel version of 6.7. Some features require
-newer kernel versions.
+a Linux machine with a minimum Linux kernel version of 6.7. Some features
+require newer kernel versions.
 
 To perform I/O using UringMachine, simply create an instance:
 
@@ -79,7 +81,7 @@ You can perform I/O by directly making method calls such as `write` or `read`
 ```ruby
 # Most UringMachine instance methods will need you to provide a file descriptor.
 # Here we print a message to STDOUT. Note the explicit line break:
-machine.write(STDOUT, "Hello, world!\n")
+machine.write(UM::STDOUT_FILENO, "Hello, world!\n")
 ```
 
 UringMachine provides an I/O interface that is to a large degree equivalent to
@@ -91,14 +93,14 @@ the Unix standard C interface:
 fd = machine.open('foo.txt', UM::O_RDONLY)
 buf = +''
 size = machine.read(fd, buf, 8192)
-machine.write(STDOUT, "File content: #{buf.inspect}")
+machine.write(UM::STDOUT_FILENO, "File content: #{buf.inspect}")
 machine.close(fd)
 
 # Or alternatively (with automatic file closing):
 machine.open('foo.txt', UM::O_RDONLY) do |fd|
   buf = +''
   size = machine.read(fd, buf, 8192)
-  machine.write(STDOUT, "File content: #{buf.inspect}")
+  machine.write(UM::STDOUT_FILENO, "File content: #{buf.inspect}")
 end
 ```
 
@@ -282,6 +284,104 @@ fiber = Fiber.schedule do
   # calling machine.sleep(0.05)
   sleep(0.05)
 end
+```
+
+## Read Streams
+
+A UringMachine stream is used to efficiently read from a socket or other file
+descriptor. Streams are ideal for implementing the read side of protocols, and
+provide an API that is useful for both line-based protocols and binary
+(frame-based) protocols.
+
+A stream is associated with a UringMachine instance and a target file descriptor
+(see also [stream modes](#stream-modes) below). Behind the scenes, streams take
+advantage of io_uring's registered buffers feature, and more recently, the
+introduction of [incremental buffer
+consumption](https://github.com/axboe/liburing/wiki/What's-new-with-io_uring-in-6.11-and-6.12#incremental-provided-buffer-consumption).
+
+When streams are used, UringMachine automatically manages the buffers it
+provides to the kernel, maximizing buffer reuse and minimizing allocations.
+UringMachine also responds to stress conditions (increased incoming traffic) by
+automatically provisioning additional buffers.
+
+To create a stream for a given fd, use `UM#stream`:
+
+```ruby
+stream = machine.stream(fd)
+
+# you can also provide a block that will be passed the stream instance:
+machine.stream(fd) { |s| do_something_with(s) }
+
+# you can also instantiate a stream directly:
+stream = UM::Stream.new(machine, fd)
+```
+
+The following API is used to interact with the stream:
+
+```ruby
+# Read until a newline character is encountered:
+line = stream.get_line(0)
+
+# Read line with a maximum length of 13 bytes:
+line = stream.get_line(13)
+
+# Read all data:
+buf = stream.get_string(0)
+
+# Read exactly 13 bytes:
+buf = stream.get_string(13)
+
+# Read up to 13 bytes:
+buf = stream.get_string(-13)
+
+# Skip 3 bytes:
+stream.skip(3)
+```
+
+Here's an example of a how a basic HTTP request parser might be implemented
+using a stream:
+
+```ruby
+def parse_http_request_headers(stream)
+  request_line = stream.get_line(0)
+  m = request_line.match(REQUEST_LINE_RE)
+  return nil if !m
+
+  headers = {
+    ':method'   => m[1],
+    ':path'     => m[2],
+    ':protocol' => m[3]
+  }
+
+  while true
+    line = stream.get_line(0)
+    break if !line || line.empty?
+
+    m = line.match(HEADER_RE)
+    headers[m[1].downcase] = m[2]
+  end
+  headers
+end
+```
+
+### Stream modes
+
+Stream modes allow streams to be transport agnostic. Currently streams support
+three modes:
+
+- `:bp_read` - use the buffer pool, read data using multishot read
+  (this is the default mode).
+- `:bp_recv` - use the buffer pool, read data using multishot recv.
+- `:ssl` - read from an `SSLSocket` object.
+
+The mode is specified as an additional argument to `Stream.new`:
+
+```ruby
+# stream using recv:
+stream = machine.stream(fd, :bp_recv)
+
+# stream on an SSL socket:
+stream = machine.stream(ssl, :ssl)
 ```
 
 ## Performance
