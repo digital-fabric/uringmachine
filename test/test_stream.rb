@@ -624,8 +624,8 @@ class StreamByteCountsTest < StreamBaseTest
     machine.write(@wfd, "abc\ndef")
     machine.snooze
     assert_equal 5, stream.consumed
-    assert_equal 1, stream.pending 
-    
+    assert_equal 1, stream.pending
+
     buf = stream.get_line(0)
     assert_equal 'rabc', buf
     assert_equal 10, stream.consumed
@@ -634,5 +634,5 @@ class StreamByteCountsTest < StreamBaseTest
     stream.clear
     assert_equal 10, stream.consumed
     assert_equal 0, stream.pending
-  end  
+  end
 end

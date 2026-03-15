@@ -1,3 +1,9 @@
+# 0.29.2 2026-03-15
+
+- Add `Stream#consumed`, `Stream#pending`
+- Add `UM#stream`
+- Add `Stream#skip`
+
 # 0.29.1 2026-03-14
 
 - Add support for exception instance in `#timeout`

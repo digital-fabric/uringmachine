@@ -112,7 +112,7 @@ static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mo
  * OpenSSL::SSL::SSLSocket. In case of an SSL socket, the mode should be :ssl.
  *
  * @param machine [UringMachine] UringMachine instance
- * @param target [integer, OpenSSL::SSL::SSLSocket] stream target: file descriptor or SSL socket 
+ * @param target [integer, OpenSSL::SSL::SSLSocket] stream target: file descriptor or SSL socket
  * @param mode [Symbol] optional stream mode: :bp_read, :bp_recv, :ssl
  * @return [void]
  */
