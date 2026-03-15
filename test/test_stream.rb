@@ -603,3 +603,36 @@ class StreamModeTest < UMBaseTest
     sock2&.close rescue nil
   end
 end
+
+class StreamByteCountsTest < StreamBaseTest
+  def test_stream_byte_counts
+    machine.write(@wfd, "foobar")
+
+    assert_equal 0, stream.consumed
+    assert_equal 0, stream.pending
+
+    buf = stream.get_string(2)
+    assert_equal 'fo', buf
+    assert_equal 2, stream.consumed
+    assert_equal 4, stream.pending
+
+    buf = stream.get_string(3)
+    assert_equal 'oba', buf
+    assert_equal 5, stream.consumed
+    assert_equal 1, stream.pending
+
+    machine.write(@wfd, "abc\ndef")
+    machine.snooze
+    assert_equal 5, stream.consumed
+    assert_equal 1, stream.pending 
+    
+    buf = stream.get_line(0)
+    assert_equal 'rabc', buf
+    assert_equal 10, stream.consumed
+    assert_equal 3, stream.pending
+
+    stream.clear
+    assert_equal 10, stream.consumed
+    assert_equal 0, stream.pending
+  end  
+end

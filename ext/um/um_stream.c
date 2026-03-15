@@ -9,7 +9,7 @@ inline void stream_add_segment(struct um_stream *stream, struct um_segment *segm
   }
   else
     stream->head = stream->tail = segment;
-  stream->pending_len += segment->len;
+  stream->pending_bytes += segment->len;
 }
 
 inline int stream_process_op_result(struct um_stream *stream, struct um_op_result *result) {
@@ -73,7 +73,7 @@ void um_stream_cleanup(struct um_stream *stream) {
     um_segment_checkin(stream->machine, stream->head);
     stream->head = next;
   }
-  stream->pending_len = 0;
+  stream->pending_bytes = 0;
 }
 
 // returns true if case of ENOBUFS error, sets more to true if more data forthcoming
@@ -124,7 +124,7 @@ void stream_clear(struct um_stream *stream) {
     um_segment_checkin(stream->machine, stream->head);
     stream->head = next;
   }
-  stream->pending_len = 0;
+  stream->pending_bytes = 0;
 
   if (stream->working_buffer) {
     bp_buffer_checkin(stream->machine, stream->working_buffer);
@@ -156,12 +156,12 @@ int stream_get_more_segments_bp(struct um_stream *stream) {
     enobufs = stream_process_segments(stream, &total_bytes, &more);
     um_op_multishot_results_clear(stream->machine, stream->op);
     if (unlikely(enobufs)) {
-      int should_restart = stream->pending_len < (stream->machine->bp_buffer_size * 4);
+      int should_restart = stream->pending_bytes < (stream->machine->bp_buffer_size * 4);
       // int same_threshold = stream->op->bp_commit_level == stream->machine->bp_commit_level;
 
       // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
       //   stream,
-      //   total_bytes, stream->pending_len, stream->machine->bp_commit_level,
+      //   total_bytes, stream->pending_bytes, stream->machine->bp_commit_level,
       //   stream->machine->bp_buffer_count,
       //   same_threshold, should_restart
       // );
@@ -243,7 +243,8 @@ inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
     inc -= inc_len;
     stream->pos += inc_len;
-    stream->pending_len -= inc_len;
+    stream->consumed_bytes += inc_len;
+    stream->pending_bytes -= inc_len;
     if (stream->pos == stream->head->len) {
       stream_shift_head(stream);
       if (inc && safe_inc && !stream->head) {
@@ -262,7 +263,8 @@ inline void stream_copy(struct um_stream *stream, char *dest, size_t len) {
 
     len -= cpy_len;
     stream->pos += cpy_len;
-    stream->pending_len -= cpy_len;
+    stream->consumed_bytes += cpy_len;
+    stream->pending_bytes -= cpy_len;
     dest += cpy_len;
     if (stream->pos == stream->head->len) stream_shift_head(stream);
   }
