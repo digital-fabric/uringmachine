@@ -194,6 +194,23 @@ class UringMachine
     close_async(fd)
   end
 
+  # call-seq:
+  #   machine.stream(fd, mode = nil) -> stream
+  #   machine.stream(fd, mode = nil) { |stream| }
+  #
+  # Creates a stream for reading from the given target fd or other object. The
+  # mode indicates the type of target and how it is read from:
+  # 
+  # - :bp_read - read from the given fd using the buffer pool (default mode)
+  # - :bp_recv - receive from the given socket fd using the buffer pool
+  # - :ssl - read from the given SSL connection
+  # 
+  # If a block is given, the block will be called with the stream object and the
+  # method will return the block's return value.
+  #
+  # @param target [Integer, OpenSSL::SSL::SSLSocket] fd or ssl connection
+  # @param mode [Symbol, nil] stream mode
+  # @return [UringMachine::Stream] stream object
   def stream(target, mode = nil)
     stream = UM::Stream.new(self, target, mode)
     return stream if !block_given?
@@ -201,6 +218,30 @@ class UringMachine
     res = yield(stream)
     stream.clear
     res
+  end
+
+  # Creates, binds and sets up a TCP socket for listening on the given host and
+  # port.
+  # 
+  # @param host [String] host IP address
+  # @param port [Integer] TCP port
+  # @return [Integer] socket fd
+  def tcp_listen(host, port)
+    fd = socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    bind(fd, host, port)
+    listen(fd, UM::SOMAXCONN)
+    fd
+  end
+
+  # Creates and connects a TCP socket to the given host and port.
+  # 
+  # @param host [String] host IP address
+  # @param port [Integer] TCP port
+  # @return [Integer] socket fd
+  def tcp_connect(host, port)
+    fd = socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    connect(fd, host, port)
+    fd
   end
 
   private

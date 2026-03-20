@@ -3557,3 +3557,63 @@ class StreamMethodTest < UMBaseTest
     assert_equal :foo, res
   end
 end
+
+class TCPHelperMethodsTest < UMBaseTest
+  def setup
+    super
+    @port = assign_port
+  end
+
+  def test_tcp_listen
+    server_fd = machine.tcp_listen('0.0.0.0', @port)
+    assert_kind_of Integer, server_fd
+
+    fd_c = machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
+    machine.connect(fd_c, '127.0.0.1', @port)
+
+    fd_s = machine.accept(server_fd)
+    assert_equal 3, machine.send(fd_s, 'foo', 3, 0)
+
+    buf = +''
+    machine.recv(fd_c, buf, 8192, 0)
+    assert_equal 'foo', buf
+  ensure
+    machine.close(fd_s) rescue nil
+    machine.close(fd_c) rescue nil
+    machine.close(server_fd) rescue nil
+  end
+
+  def test_tcp_listen_invalid_args
+    assert_raises(TypeError) { machine.tcp_listen('0.0.0.0', :foo) }
+    assert_raises(TypeError) { machine.tcp_listen(1234, 5678) }
+  end
+
+  def test_tcp_connect
+    server_fd = machine.tcp_listen('0.0.0.0', @port)
+    assert_kind_of Integer, server_fd
+
+    fd_c = machine.tcp_connect('127.0.0.1', @port)
+    assert_kind_of Integer, fd_c    
+
+    fd_s = machine.accept(server_fd)
+    assert_equal 3, machine.send(fd_s, 'foo', 3, 0)
+
+    buf = +''
+    machine.recv(fd_c, buf, 8192, 0)
+    assert_equal 'foo', buf
+  ensure
+    machine.close(fd_s) rescue nil
+    machine.close(fd_c) rescue nil
+    machine.close(server_fd) rescue nil
+  end
+
+  def test_tcp_connect_invalid_args
+    server_fd = machine.tcp_listen('0.0.0.0', @port)
+
+    assert_raises(Errno::ECONNREFUSED) { machine.tcp_connect('127.0.0.1', @port + 1) }
+    assert_raises(TypeError) { machine.tcp_connect('127.0.0.1', :foo) }
+    assert_raises(TypeError) { machine.tcp_connect(1234, 5678) }
+  ensure
+    machine.close(server_fd)
+  end
+end
