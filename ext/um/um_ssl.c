@@ -75,7 +75,7 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj)
   SSL_set0_wbio(ssl, bio);
 }
 
-int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen) {
+int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, size_t maxlen) {
   SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
 
   int ret = SSL_read(ssl, ptr, maxlen);
@@ -84,22 +84,23 @@ int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen) {
   return ret;
 }
 
-int um_ssl_read(struct um *machine, VALUE ssl_obj, VALUE buf, int maxlen) {
+int um_ssl_read(struct um *machine, VALUE ssl_obj, VALUE buf, size_t maxlen) {
   void *ptr = um_prepare_read_buffer(buf, maxlen, 0);
   int ret = um_ssl_read_raw(machine, ssl_obj, ptr, maxlen);
   um_update_read_buffer(buf, 0, ret);
   return ret;
 }
 
-int um_ssl_write(struct um *machine, VALUE ssl_obj, VALUE buf, int len) {
+int um_ssl_write(struct um *machine, VALUE ssl_obj, VALUE buf, size_t len) {
   SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
   const void *base;
   size_t size;
   um_get_buffer_bytes_for_writing(buf, &base, &size, true);
-  if ((len == (int)-1) || (len > (int)size)) len = (int)size;
+  if (!len || (len > size)) len = size;
+  if (len > INT_MAX) len = INT_MAX;
   if (unlikely(!len)) return INT2NUM(0);
 
-  int ret = SSL_write(ssl, base, len);
+  int ret = SSL_write(ssl, base, (int)len);
   if (ret <= 0) rb_raise(eUMError, "Failed to write");
 
   return ret;

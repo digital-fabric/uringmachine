@@ -161,7 +161,7 @@ struct um_op {
     struct iovec *iovecs; // used for vectorized write/send
     siginfo_t siginfo; // used for waitid
     int int_value; // used for getsockopt
-    size_t bp_commit_level; // buffer pool commit threshold
+    size_t bp_commit_level; // buffer pool commit level
   };
 };
 
@@ -454,9 +454,9 @@ void um_sidecar_signal_wait(struct um *machine);
 void um_sidecar_signal_wake(struct um *machine);
 
 void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
-int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, int maxlen);
-int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, int maxlen);
-int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, int len);
+int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, size_t maxlen);
+int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, size_t maxlen);
+int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, size_t len);
 
 void bp_setup(struct um *machine);
 void bp_teardown(struct um *machine);
