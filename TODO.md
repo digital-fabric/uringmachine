@@ -1,67 +1,10 @@
 ## immediate
 
-- Add support for returning a value on timeout
-
-  Since to do this safely we need to actually raise an exception that wraps the
-  value, rescue it and return the value, we might want a separate method that
-  wraps `#timeout`:
-
-  ```ruby
-  TimeoutValueError < StandardError
-
-  def timeout_with_value(interval, value, &block)
-    timeout_error = TimeoutValueError
-    timeout(interval, timeout_error, &block)
-  rescue TimeoutValueError => e
-    raise if e != timeout_error
-
-    value
-  end
-  ```
-
 - Add tests for support for Set in `machine#await`
 - Add tests for support for Set, Array in `machine#join`
 - Add `#read_file` for reading entire file
 - Add `#write_file` for writing entire file
 
-- (?) Fix all futex value (Queue, Mutex) to be properly aligned
-
-<<<<<<< HEAD
-=======
-## Buffer rings - automatic management
-
-- Take the buffer_pool branch, rewrite it
-- Allow multiple stream modes:
-  - :buffer_pool - uses buffer rings
-  - :ssl - read from an SSL connection (`SSLSocket`)
-  - :io - read from an `IO`
-
-The API will look something like:
-
-```ruby
-# The mode is selected automatically according to the given target
-
-stream = UM::Stream.new(machine, fd) # buffer_pool mode (read)
-stream = UM::Stream.new(machine, fd, :recv) # buffer_pool mode (recv)
-stream = UM::Stream.new(machine, ssl_sock) # SSLSocket mode
-stream = UM::Stream.new(machine, conn) # IO mode
-stream = UM::Stream.new(machine, str) # string mode
-stream = UM::Stream.new(machine, io_buf) # IO:Buffer mode
-```
-
-This can be very useful in testing of stuff such as protocol implementations:
-
-```ruby
-stream = UM::Stream.new(machine, "GET /foo HTTP/1.1\r\nHost: bar.com\r\n")
-```
-
-So basically the stream is tied to a machine, and that means it can only be used
-on the thread with which the machine is associated. It is not thread-safe. (This
-is incidentally true also for most of the UringMachine instance methods!)
-
-Continued discussion in docs/design/buffer_pool.md
-
->>>>>>> 04d9eb7 (Docs)
 ## Balancing I/O with the runqueue
 
 - in some cases where there are many entries in the runqueue, this can
@@ -89,6 +32,8 @@ Continued discussion in docs/design/buffer_pool.md
   debouncer = machine.debounce { }
   ```
 
+- happy eyeballs algo for TCP connect
+
 - read multiple files
 
   ```ruby
@@ -99,12 +44,31 @@ Continued discussion in docs/design/buffer_pool.md
   machine.read_files(*fns) #=> { fn1:, fn2:, fn3:, ...}
   ```
 
+- more generally, a DSL for expressing batch operations:
+
+  ```ruby
+  result = machine.batch do |b|
+    fns.each { b[it] = read_file(b, it) }
+  end
+  #=> { fn1 => data1, fn2 => data2, ... }
+
+  # we can also imagine performing operations in sequence using linking:
+  result = machine.batch {
+    m.
+  }
+    
+  end
+  ```
+
 ## polyvalent select
 
 - select on multiple queues (ala Go)
 - select on mixture of queues and fds
+- select on fibers:
+  - select fibers that are done
+  - select first done fiber
 
-## ops
+## ops still not implemented
 
 - splice / - tee
 - sendto
@@ -123,31 +87,7 @@ Continued discussion in docs/design/buffer_pool.md
 When doing a `call`, we need to provide a mailbox for the response. can this be
 automatic?
 
-## streams
-
-We're still missing:
-
-- limit on line length in `get_line`
-- ability to supply buffer to `get_line` and `get_string`
-- allow read to eof, maybe with `read_to_eof`
-
-For the sake of performance, simplicity and explicitness, we change the API as
-follows:
-
-```ruby
-stream.get_line(buf, limit)
-# the defaults:
-stream.get_line(nil, -1)
-
-stream.get_string(len, buf)
-# defaults:
-stream.get_string(len, nil)
-
-# and
-stream.read_to_eof(buf)
-# defaults:
-stream.read_to_eof(nil)
-```
+## 
 
 ## Syntax / pattern for launching/supervising multiple operations
 
@@ -166,6 +106,5 @@ machine.shift_select(*queues) #=> [result, queue]
   ```ruby
   # addrs: [['1.1.1.1', 80], ['2.2.2.2', 80]]
   #        ['1.1.1.1:80', '2.2.2.2:80']
-  tcp_connect_happy_eyeballs(*addrs)
+  tcp_connect_he(*addrs)
   ```
-
