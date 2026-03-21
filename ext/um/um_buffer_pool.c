@@ -18,7 +18,7 @@ inline struct um_buffer *buffer_alloc(struct um *machine) {
   return buffer;
 }
 
-inline struct um_buffer *bp_buffer_checkout(struct um *machine) {
+struct um_buffer *bp_buffer_checkout(struct um *machine) {
   struct um_buffer *buffer = machine->bp_buffer_freelist;
   if (buffer) {
     struct um_buffer *next = buffer->next;
@@ -50,13 +50,13 @@ inline void buffer_free(struct um *machine, struct um_buffer *buffer) {
   }
 }
 
-inline void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer) {
+void bp_buffer_checkin(struct um *machine, struct um_buffer *buffer) {
   assert(buffer->ref_count > 0);
   buffer->ref_count--;
   if (!buffer->ref_count) buffer_free(machine, buffer);
 }
 
-inline void bp_discard_buffer_freelist(struct um *machine) {
+void bp_discard_buffer_freelist(struct um *machine) {
   while (machine->bp_buffer_freelist) {
     struct um_buffer *buffer = machine->bp_buffer_freelist;
     struct um_buffer *next = buffer->next;
@@ -69,7 +69,7 @@ inline void bp_discard_buffer_freelist(struct um *machine) {
   }
 }
 
-inline void bp_setup(struct um *machine) {
+void bp_setup(struct um *machine) {
   int ret;
   machine->bp_br = io_uring_setup_buf_ring(&machine->ring, BP_BR_ENTRIES, BP_BGID, IOU_PBUF_RING_INC, &ret);
   if (unlikely(!machine->bp_br)) rb_syserr_fail(ret, strerror(ret));
@@ -85,7 +85,7 @@ inline void bp_setup(struct um *machine) {
   machine->bp_total_commited = 0;
 }
 
-inline void bp_teardown(struct um *machine) {
+void bp_teardown(struct um *machine) {
   bp_discard_buffer_freelist(machine);
   for (int i = 0; i < BP_BR_ENTRIES; i++) {
     struct um_buffer *buffer = machine->bp_commited_buffers[i];
@@ -162,7 +162,7 @@ inline int should_commit_more_p(struct um *machine) {
          (machine->bp_total_commited < machine->bp_commit_level);
 }
 
-inline void bp_ensure_commit_level(struct um *machine) {
+void bp_ensure_commit_level(struct um *machine) {
   if (machine->bp_total_commited > (machine->bp_commit_level / 2))
     return;
 
@@ -179,7 +179,7 @@ inline void bp_ensure_commit_level(struct um *machine) {
   // size.
 }
 
-inline void bp_handle_enobufs(struct um *machine) {
+void bp_handle_enobufs(struct um *machine) {
   if (unlikely(machine->bp_commit_level >= BP_MAX_COMMIT_LEVEL))
     rb_raise(eUMError, "Buffer starvation");
 
@@ -189,7 +189,7 @@ inline void bp_handle_enobufs(struct um *machine) {
   bp_discard_buffer_freelist(machine);
 }
 
-inline struct um_segment *um_segment_alloc(struct um *machine) {
+inline struct um_segment *segment_alloc(struct um *machine) {
   if (machine->segment_freelist) {
     struct um_segment *segment = machine->segment_freelist;
     machine->segment_freelist = segment->next;
@@ -208,14 +208,14 @@ inline struct um_segment *um_segment_alloc(struct um *machine) {
   return batch;
 }
 
-inline void um_segment_free(struct um *machine, struct um_segment *segment) {
+void um_segment_free(struct um *machine, struct um_segment *segment) {
   segment->next = machine->segment_freelist;
   machine->segment_freelist = segment;
   machine->metrics.segments_free++;
 }
 
-inline struct um_segment *bp_buffer_consume(struct um *machine, struct um_buffer *buffer, size_t len) {
-  struct um_segment *segment = um_segment_alloc(machine);
+struct um_segment *bp_buffer_consume(struct um *machine, struct um_buffer *buffer, size_t len) {
+  struct um_segment *segment = segment_alloc(machine);
   segment->ptr = buffer->buf + buffer->pos;
   segment->len = len;
   segment->buffer = buffer;

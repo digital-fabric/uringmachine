@@ -325,7 +325,6 @@ void um_op_list_compact(struct um *machine, struct um_op *head);
 void um_op_multishot_results_push(struct um *machine, struct um_op *op, __s32 res, __u32 flags);
 void um_op_multishot_results_clear(struct um *machine, struct um_op *op);
 
-struct um_segment *um_segment_alloc(struct um *machine);
 void um_segment_free(struct um *machine, struct um_segment *segment);
 
 void um_runqueue_push(struct um *machine, struct um_op *op);
