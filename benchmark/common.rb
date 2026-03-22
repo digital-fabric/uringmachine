@@ -9,6 +9,7 @@ gemfile do
   gem 'io-event'
   gem 'async'
   gem 'pg'
+  gem 'redis'
   gem 'gvltools'
   gem 'openssl'
   gem 'localhost'
