@@ -3610,10 +3610,55 @@ class TCPHelperMethodsTest < UMBaseTest
   def test_tcp_connect_invalid_args
     server_fd = machine.tcp_listen('0.0.0.0', @port)
 
-    assert_raises(Errno::ECONNREFUSED) { machine.tcp_connect('127.0.0.1', @port + 1) }
+    assert_raises(Errno::ECONNREFUSED) {
+      machine.tcp_connect('127.0.0.1', @port + 1)
+    }
     assert_raises(TypeError) { machine.tcp_connect('127.0.0.1', :foo) }
     assert_raises(TypeError) { machine.tcp_connect(1234, 5678) }
   ensure
     machine.close(server_fd)
+  end
+end
+
+class SpliceTest < UMBaseTest
+  def test_splice
+    i1, o1 = UM.pipe
+    i2, o2 = UM.pipe
+    len = nil
+
+    f = machine.spin do
+      len = machine.splice(i1, o2, 1000)
+    ensure
+      machine.close(o2)
+    end
+
+    machine.write(o1, 'foobar')
+    buf = +''
+    machine.read(i2, buf, 1000)
+
+    assert_equal 'foobar', buf
+    assert_equal 6, len
+  ensure
+    machine.terminate(f)
+    machine.join(f)
+    machine.close(i1) rescue nil
+    machine.close(o1) rescue nil
+    machine.close(i2) rescue nil
+    machine.close(o2) rescue nil
+  end
+
+  def test_splice_bad_args
+    assert_raises(Errno::EINVAL) { machine.splice(0, 1, 1000) }
+
+    i1, o1 = UM.pipe
+    i2, o2 = UM.pipe
+    machine.write(o1, 'foo')
+
+    assert_raises(Errno::EBADF) { machine.splice(i1, o2 + 1, 1000) }
+  ensure
+    machine.close(i1) rescue nil
+    machine.close(o1) rescue nil
+    machine.close(i2) rescue nil
+    machine.close(o2) rescue nil
   end
 end

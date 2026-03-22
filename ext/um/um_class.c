@@ -535,6 +535,25 @@ VALUE UM_statx(VALUE self, VALUE dirfd, VALUE path, VALUE flags, VALUE mask) {
 }
 
 /* call-seq:
+ *   machine.splice(in_fd, out_fd, nbytes) -> len
+ *
+ * Splices bytes from in_fd to out_fd. At least one of the given fds must be a
+ * pipe.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/splice.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_splice.3.html
+ *
+ * @param in_fd [Integer] fd to splice from
+ * @param out_fd [Integer] fd to splice to
+ * @param nbytes [Integer] number of bytes to splice
+ * @return [Integer] number of bytes spliced
+ */
+VALUE UM_splice(VALUE self, VALUE in_fd, VALUE out_fd, VALUE nbytes) {
+  struct um *machine = um_get_machine(self);
+  return um_splice(machine, NUM2INT(in_fd), NUM2INT(out_fd), NUM2UINT(nbytes));
+}
+
+/* call-seq:
  *   machine.close(fd) -> 0
  *
  * Closes the given file descriptor.
@@ -1480,6 +1499,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "writev", UM_writev, -1);
   rb_define_method(cUM, "write_async", UM_write_async, -1);
   rb_define_method(cUM, "statx", UM_statx, 4);
+  rb_define_method(cUM, "splice", UM_splice, 3);
 
   rb_define_method(cUM, "poll", UM_poll, 2);
   rb_define_method(cUM, "select", UM_select, 3);

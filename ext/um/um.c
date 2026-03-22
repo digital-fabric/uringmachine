@@ -1285,6 +1285,23 @@ VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned in
   return statx_to_hash(&stat);
 }
 
+VALUE um_splice(struct um *machine, int in_fd, int out_fd, uint nbytes) {
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_SPLICE, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_splice(sqe, in_fd, -1, out_fd, -1, nbytes, 0);
+
+  VALUE ret = um_yield(machine);
+
+  if (likely(um_verify_op_completion(machine, op, false))) ret = INT2NUM(op->result.res);
+  um_op_release(machine, op);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+
+  return ret;
+}
+
 /*******************************************************************************
                             multishot ops
 *******************************************************************************/
