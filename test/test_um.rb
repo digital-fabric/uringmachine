@@ -3641,10 +3641,7 @@ class SpliceTest < UMBaseTest
   ensure
     machine.terminate(f)
     machine.join(f)
-    machine.close(i1) rescue nil
-    machine.close(o1) rescue nil
-    machine.close(i2) rescue nil
-    machine.close(o2) rescue nil
+    [i1, o1, i2, o2].each { machine.close(it) rescue nil }
   end
 
   def test_splice_bad_args
@@ -3656,9 +3653,43 @@ class SpliceTest < UMBaseTest
 
     assert_raises(Errno::EBADF) { machine.splice(i1, o2 + 1, 1000) }
   ensure
-    machine.close(i1) rescue nil
-    machine.close(o1) rescue nil
-    machine.close(i2) rescue nil
-    machine.close(o2) rescue nil
+    [i1, o1, i2, o2].each { machine.close(it) rescue nil }
+  end
+end
+
+class TeeTest < UMBaseTest
+  def test_tee
+    i_src, o_src = UM.pipe
+    i_dest1, o_dest1 = UM.pipe
+    i_dest2, o_dest2 = UM.pipe
+
+    len1 = len2 = nil
+
+    f = machine.spin do
+      len1 = machine.tee(i_src, o_dest1, 1000)
+      len2 = machine.splice(i_src, o_dest2, 1000)
+    ensure
+      machine.close(o_dest1)
+      machine.close(o_dest2)
+    end
+
+    machine.write(o_src, 'foobar')
+    machine.close(o_src)
+    result1 = +''
+    machine.read(i_dest1, result1, 1000)
+    result2 = +''
+    machine.read(i_dest2, result2, 1000)
+
+    assert_equal 'foobar', result1
+    assert_equal 6, len1
+
+    assert_equal 'foobar', result2
+    assert_equal 6, len2    
+  ensure
+    machine.terminate(f)
+    machine.join(f)
+    [i_src, o_src, i_dest1, o_dest1, i_dest2, o_dest2].each {
+      machine.close(it) rescue nil
+    }
   end
 end
