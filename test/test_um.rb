@@ -3645,7 +3645,11 @@ class SpliceTest < UMBaseTest
   end
 
   def test_splice_bad_args
-    assert_raises(Errno::EINVAL) { machine.splice(0, 1, 1000) }
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    IO.write(fn, 'foo')
+    f1 = machine.open(fn, UM::O_RDWR)
+    f2 = machine.open(fn, UM::O_RDWR)
+    assert_raises(Errno::EINVAL) { machine.splice(f1, f2, 1000) }
 
     i1, o1 = UM.pipe
     i2, o2 = UM.pipe
@@ -3653,7 +3657,7 @@ class SpliceTest < UMBaseTest
 
     assert_raises(Errno::EBADF) { machine.splice(i1, o2 + 1, 1000) }
   ensure
-    [i1, o1, i2, o2].each { machine.close(it) rescue nil }
+    [f1, f2, i1, o1, i2, o2].each { machine.close(it) rescue nil }
   end
 end
 
