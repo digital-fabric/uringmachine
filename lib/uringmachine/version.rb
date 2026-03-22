@@ -1,5 +1,5 @@
 # frozen_string_literal: true
 
 class UringMachine
-  VERSION = '0.29.2'
+  VERSION = '0.30.0'
 end

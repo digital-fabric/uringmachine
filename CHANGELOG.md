@@ -1,3 +1,9 @@
+# 0.30.0 2026-03-23
+
+- Add `Stream#each`
+- Add `UM#splice`, `UM#tee`, `UM#fsync`
+- Add `UM#tcp_listen`, `UM#tcp_connect`
+
 # 0.29.2 2026-03-15
 
 - Add `Stream#consumed`, `Stream#pending`
