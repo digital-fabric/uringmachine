@@ -2,25 +2,25 @@
 
 ## Project Summary
 
-Io_uring is a relatively new Linux API, permitting the invocation of Linux
-system calls asynchronously. UringMachine is a gem that brings low-level access
-to the io_uring interface to Ruby programs, and permits not only asynchronous
-I/O on files and sockets, but also timeouts, futex wait/wake, statx etc, with
-support for fiber-based concurrency. This project will work to enhance
+Io_uring is a relatively new Linux API, permitting the asynchronous invocation
+of Linux system calls. UringMachine is a gem that brings low-level access to the
+io_uring interface to Ruby programs, and permits not only asynchronous I/O on
+files and sockets, but also timeouts, futex wait/wake, statx and other system
+calls, for use with fiber-based concurrency. This project aims to enhance
 UringMachine to include a fiber scheduler implementation for usage with the
 standard Ruby I/O classes, to have builtin support for SSL, to support more
 io_uring ops such as writev, splice, fsync, mkdir, fadvise, etc.
 
 I'd like to express my deep gratitude to Samuel Williams for his help and
-guidance all through this work.
+guidance throughout this project.
 
 ## About UringMachine
 
 UringMachine provides an API that closely follows the shape of various Linux
-system calls for I/O operations, such as `open`, `read`, `accept`, `setscockopt`
+system calls for I/O operations, such as `open`, `read`, `accept`, `setsockopt`
 etc. Behind the scenes, UringMachine uses io_uring to submit I/O operations and
 automatically switch between fibers when waiting for those operations to
-complete. Here's a simple example of an echo server:
+complete. Here's a simple example of an echo server using UringMachine:
 
 ```ruby
 require 'uringmachine'
@@ -60,7 +60,7 @@ rings](https://man.archlinux.org/man/io_uring_provided_buffers.7.en) (the
 convenience methods, such as `tcp_listen` which returns a TCP socket fd bound to
 the given address and ready for accepting incoming connections.
 
-Here's an echo server implementation using UringMachine's more advanced
+Here's the same echo server program but using UringMachine's more advanced
 features:
 
 ```ruby
@@ -109,7 +109,7 @@ scheduler.join
   `rb_process_status_new` internal Ruby C API
   (https://bugs.ruby-lang.org/issues/21704). This is needed in order to allow
   FiberScheduler implementations to instantiate `Process::Status` objects in the
-  `#process_wait` hook. This PR is still pending a decision by the Ruby core team.
+  `#process_wait` hook. This PR is still not merged.
 
 - [PR](https://github.com/ruby/ruby/pull/15385) to cleanup FiberScheduler and
   fiber state in a forked process (https://bugs.ruby-lang.org/issues/21717).
@@ -135,7 +135,7 @@ scheduler.join
 
 - I developed a [full
   implementation](https://github.com/digital-fabric/uringmachine/blob/main/lib/uringmachine/fiber_scheduler.rb)
-  of the `Fiber::Scheduler` interface using UringMachine, with methods for *all*
+  of the `Fiber::Scheduler` interface using UringMachine, with methods for all
   hooks:
 
   - `#scheduler_close`
@@ -173,7 +173,7 @@ scheduler.join
   gem](https://github.com/ruby/openssl/pull/1000) that adds support for using a
   custom BIO method for reading and writing on SSL connections.
 
-### Buffered reads Using io_uring Provided Buffers
+### Buffered Reads Using io_uring Provided Buffers
 
 - I developed the `Stream` API that uses io_uring [provided
   buffers](https://man.archlinux.org/man/io_uring_provided_buffers.7.en) to
@@ -181,7 +181,7 @@ scheduler.join
   while minimizing copying of data.
 - The [buffer
   pool](https://github.com/digital-fabric/uringmachine/blob/main/ext/um/um_buffer_pool.c):
-  UringMachine allocates and provides buffers for the kernel to use in multishot
+  UringMachine allocates and provides buffers for kernel usage in multishot
   read/recv operations. An adaptive algorithm ensures that the kernel always has
   enough buffer space for reading data. When a buffer is no longer used by the
   kernel or the stream, it is recycled and eventually provided back to the
@@ -242,7 +242,7 @@ scheduler.join
   ```
 
 - Added more low-level methods for performing I/O operations supported by
-  io_uring: splice, tee, fsync.
+  io_uring: `splice`, `tee`, `fsync`.
 
 ### Benchmarking
 
