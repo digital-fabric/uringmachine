@@ -50,6 +50,7 @@ enum um_op_kind {
   OP_STATX,
   OP_SPLICE,
   OP_TEE,
+  OP_FSYNC,
 
   OP_ACCEPT,
   OP_RECV,
@@ -394,6 +395,7 @@ VALUE um_waitid_status(struct um *machine, int idtype, int id, int options);
 VALUE um_statx(struct um *machine, int dirfd, VALUE path, int flags, unsigned int mask);
 VALUE um_splice(struct um *machine, int in_fd, int out_fd, uint nbytes);
 VALUE um_tee(struct um *machine, int in_fd, int out_fd, uint nbytes);
+VALUE um_fsync(struct um *machine, int fd);
 
 VALUE um_accept(struct um *machine, int fd);
 VALUE um_accept_each(struct um *machine, int fd);

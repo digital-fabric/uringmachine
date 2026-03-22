@@ -3693,3 +3693,20 @@ class TeeTest < UMBaseTest
     }
   end
 end
+
+class FsyncTest < UMBaseTest
+  def test_fsync
+    fn = "/tmp/um_#{SecureRandom.hex}"
+    fd = machine.open(fn, UM::O_CREAT | UM::O_WRONLY)
+
+    machine.write(fd, 'foo')
+    assert_equal 0, machine.fsync(fd)
+  ensure
+    machine.close(fd)
+    FileUtils.rm(fn) rescue nil
+  end
+
+  def test_fsync_bad_args
+    assert_raises(Errno::EINVAL) { machine.fsync(1) }
+  end
+end

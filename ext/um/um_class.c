@@ -559,8 +559,8 @@ VALUE UM_splice(VALUE self, VALUE in_fd, VALUE out_fd, VALUE nbytes) {
  * Duplicates bytes from in_fd to out_fd. At least one of the given fds must be
  * a pipe.
  *
- * - https://www.man7.org/linux/man-pages/man2/TEE.2.html
- * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_TEE.3.html
+ * - https://www.man7.org/linux/man-pages/man2/tee.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_tee.3.html
  *
  * @param in_fd [Integer] fd to copy from
  * @param out_fd [Integer] fd to copy to
@@ -570,6 +570,22 @@ VALUE UM_splice(VALUE self, VALUE in_fd, VALUE out_fd, VALUE nbytes) {
 VALUE UM_tee(VALUE self, VALUE in_fd, VALUE out_fd, VALUE nbytes) {
   struct um *machine = um_get_machine(self);
   return um_tee(machine, NUM2INT(in_fd), NUM2INT(out_fd), NUM2UINT(nbytes));
+}
+
+/* call-seq:
+ *   machine.fsync(fd) -> 0
+ *
+ * Flushes all modified file data to the storage device.
+ *
+ * - https://www.man7.org/linux/man-pages/man2/fsync.2.html
+ * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_fsync.3.html
+ *
+ * @param fd [Integer] fd
+ * @return [Integer] 0 if successful
+ */
+VALUE UM_fsync(VALUE self, VALUE fd) {
+  struct um *machine = um_get_machine(self);
+  return um_fsync(machine, NUM2INT(fd));
 }
 
 /* call-seq:
@@ -1520,6 +1536,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "statx", UM_statx, 4);
   rb_define_method(cUM, "splice", UM_splice, 3);
   rb_define_method(cUM, "tee", UM_tee, 3);
+  rb_define_method(cUM, "fsync", UM_fsync, 1);
 
   rb_define_method(cUM, "poll", UM_poll, 2);
   rb_define_method(cUM, "select", UM_select, 3);
