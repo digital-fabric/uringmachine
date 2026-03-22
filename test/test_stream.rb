@@ -251,6 +251,39 @@ class StreamTest < StreamBaseTest
     assert_equal 9, received.size
     assert_equal data, received.join
   end
+
+  def test_stream_each
+    bufs = []
+    f = machine.spin do
+      bufs << :ready
+      stream.each {
+        assert_kind_of IO::Buffer, it
+        bufs << it.get_string
+      }
+      bufs << :done
+    rescue => e
+      p e
+      p e.backtrace
+    end
+
+    machine.snooze
+    assert_equal [:ready], bufs
+
+    machine.write(@wfd, 'foo')
+    machine.snooze
+    assert_equal [:ready, 'foo'], bufs
+
+    machine.write(@wfd, 'barb')
+    machine.snooze
+    assert_equal [:ready, 'foo', 'barb'], bufs
+
+    machine.close(@wfd)
+    machine.snooze
+    assert_equal [:ready, 'foo', 'barb', :done], bufs
+  ensure
+    machine.terminate(f)
+    machine.join(f)
+  end
 end
 
 class StreamRespTest < StreamBaseTest

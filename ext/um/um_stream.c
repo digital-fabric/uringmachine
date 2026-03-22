@@ -1,5 +1,6 @@
-#include "um.h"
 #include <stdlib.h>
+#include <ruby/io/buffer.h>
+#include "um.h"
 
 inline void stream_add_segment(struct um_stream *stream, struct um_segment *segment) {
   segment->next = NULL;
@@ -234,6 +235,13 @@ inline void stream_shift_head(struct um_stream *stream) {
   stream->pos = 0;
 }
 
+inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
+  return rb_io_buffer_new(
+    segment->ptr + pos, segment->len - pos,
+    RB_IO_BUFFER_LOCKED|RB_IO_BUFFER_READONLY
+  );
+}
+
 inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
   if (unlikely(stream->eof && !stream->head)) return;
   if (safe_inc && !stream->tail && !stream_get_more_segments(stream)) return;
@@ -252,6 +260,30 @@ inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
       }
     }
   }
+}
+
+inline void stream_each(struct um_stream *stream) {
+  if (unlikely(stream->eof && !stream->head)) return;
+  if (!stream->tail && !stream_get_more_segments(stream)) return;
+
+  struct um_segment *current = stream->head;
+  size_t pos = stream->pos;
+
+  VALUE buffer = Qnil;
+  while (true) {
+    struct um_segment *next = current->next;
+    buffer = make_segment_io_buffer(current, pos);
+    rb_yield(buffer);
+    rb_io_buffer_free_locked(buffer);
+    stream_shift_head(stream);
+
+    if (!next) {
+      if (!stream_get_more_segments(stream)) return;
+    }
+    current = stream->head;
+    pos = 0;
+  }
+  RB_GC_GUARD(buffer);
 }
 
 inline void stream_copy(struct um_stream *stream, char *dest, size_t len) {

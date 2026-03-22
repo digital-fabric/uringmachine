@@ -442,6 +442,7 @@ void stream_clear(struct um_stream *stream);
 VALUE stream_get_line(struct um_stream *stream, VALUE buf, size_t maxlen);
 VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
 void stream_skip(struct um_stream *stream, size_t inc, int safe_inc);
+void stream_each(struct um_stream *stream);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);

@@ -195,6 +195,19 @@ VALUE Stream_skip(VALUE self, VALUE len) {
 }
 
 /* call-seq:
+ *   stream.each { |data| } -> stream
+ *
+ * Reads from the target, passing each chunk to the given block.
+ *
+ * @return [UringMachine::Stream] stream
+ */
+VALUE Stream_each(VALUE self) {
+  struct um_stream *stream = um_get_stream(self);
+  stream_each(stream);
+  return self;
+}
+
+/* call-seq:
  *   stream.resp_decode -> obj
  *
  * Decodes an object from a RESP (Redis protocol) message.
@@ -286,6 +299,7 @@ void Init_Stream(void) {
   rb_define_method(cStream, "get_line", Stream_get_line, 1);
   rb_define_method(cStream, "get_string", Stream_get_string, 1);
   rb_define_method(cStream, "skip", Stream_skip, 1);
+  rb_define_method(cStream, "each", Stream_each, 0);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
