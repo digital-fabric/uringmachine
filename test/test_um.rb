@@ -3593,7 +3593,7 @@ class TCPHelperMethodsTest < UMBaseTest
     assert_kind_of Integer, server_fd
 
     fd_c = machine.tcp_connect('127.0.0.1', @port)
-    assert_kind_of Integer, fd_c    
+    assert_kind_of Integer, fd_c
 
     fd_s = machine.accept(server_fd)
     assert_equal 3, machine.send(fd_s, 'foo', 3, 0)

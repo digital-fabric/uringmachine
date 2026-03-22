@@ -56,7 +56,7 @@
   result = machine.batch {
     m.
   }
-    
+
   end
   ```
 
@@ -87,7 +87,7 @@
 When doing a `call`, we need to provide a mailbox for the response. can this be
 automatic?
 
-## 
+##
 
 ## Syntax / pattern for launching/supervising multiple operations
 

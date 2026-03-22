@@ -200,11 +200,11 @@ class UringMachine
   #
   # Creates a stream for reading from the given target fd or other object. The
   # mode indicates the type of target and how it is read from:
-  # 
+  #
   # - :bp_read - read from the given fd using the buffer pool (default mode)
   # - :bp_recv - receive from the given socket fd using the buffer pool
   # - :ssl - read from the given SSL connection
-  # 
+  #
   # If a block is given, the block will be called with the stream object and the
   # method will return the block's return value.
   #
@@ -222,7 +222,7 @@ class UringMachine
 
   # Creates, binds and sets up a TCP socket for listening on the given host and
   # port.
-  # 
+  #
   # @param host [String] host IP address
   # @param port [Integer] TCP port
   # @return [Integer] socket fd
@@ -234,7 +234,7 @@ class UringMachine
   end
 
   # Creates and connects a TCP socket to the given host and port.
-  # 
+  #
   # @param host [String] host IP address
   # @param port [Integer] TCP port
   # @return [Integer] socket fd
