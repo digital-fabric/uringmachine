@@ -8,14 +8,14 @@
 static int um_bio_read(BIO *bio, char *buf, int blen)
 {
   struct um *machine = (struct um *)BIO_get_ex_data(bio, IDX_BIO_DATA_MACHINE);
-  long fd = (long)BIO_get_ex_data(bio, IDX_BIO_DATA_FD);
+  int fd = (int)(long)BIO_get_ex_data(bio, IDX_BIO_DATA_FD);
   return (int)um_read_raw(machine, fd, buf, blen);
 }
 
 static int um_bio_write(BIO *bio, const char *buf, int blen)
 {
   struct um *machine = (struct um *)BIO_get_ex_data(bio, IDX_BIO_DATA_MACHINE);
-  long fd = (long)BIO_get_ex_data(bio, IDX_BIO_DATA_FD);
+  int fd = (int)(long)BIO_get_ex_data(bio, IDX_BIO_DATA_FD);
   return (int)um_write_raw(machine, fd, buf, blen);
 }
 
