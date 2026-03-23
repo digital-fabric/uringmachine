@@ -244,6 +244,8 @@ scheduler.join
 - Added more low-level methods for performing I/O operations supported by
   io_uring: `splice`, `tee`, `fsync`.
 
+- Added RDoc [documentation](https://www.rubydoc.info/gems/uringmachine).
+
 ### Benchmarking
 
 - I did extensive benchmarking comparing different solutions for performing
