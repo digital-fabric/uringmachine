@@ -225,7 +225,7 @@ int stream_get_more_segments(struct um_stream *stream) {
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 inline void stream_shift_head(struct um_stream *stream) {
   struct um_segment *consumed = stream->head;
@@ -322,14 +322,11 @@ VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t l
   RB_GC_GUARD(str);
 }
 
-VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
-  // if (stream->head) {
-  //   fprintf(stderr, "head: %p pos: %ld: %.*s\n",
-  //     stream->head, stream->pos,
-  //     (int)(stream->head->len - stream->pos), stream->head->ptr + stream->pos
-  //   );
-  // }
+inline int trailing_cr_p(char *ptr, size_t len) {
+  return ptr[len - 1] == '\r';
+}
 
+VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
   if (unlikely(stream->eof && !stream->head)) return Qnil;
   if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
 
@@ -353,18 +350,12 @@ VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen)
       total_len += len;
 
       // search for \r
-      if (total_len) {
-        if (len) {
-          if  (start[len - 1] == '\r') {
-            total_len -= 1;
-            inc = 2;
-          }
-        }
-        else {
-          if (last && (((char *)last->ptr)[last->len - 1] == '\r')) {
-            total_len -= 1;
-            inc = 2;
-          }
+      if (total_len > 0) {
+        if ((len &&          trailing_cr_p(start, len)) ||
+            (!len && last && trailing_cr_p(last->ptr, last->len))
+        ) {
+          total_len -= 1;
+          inc = 2;
         }
       }
 
@@ -423,6 +414,65 @@ VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len,
     pos = 0;
   }
 }
+
+static inline char delim_to_char(VALUE delim) {
+  if (TYPE(delim) != T_STRING)
+    rb_raise(rb_eArgError, "Delimiter must be a string");
+
+  if (RSTRING_LEN(delim) != 1)
+    rb_raise(eUMError, "Delimiter must be a single byte string");
+
+  return *RSTRING_PTR(delim);
+}
+
+VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
+  char delim_char = delim_to_char(delim);
+
+  if (unlikely(stream->eof && !stream->head)) return Qnil;
+  if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
+
+  struct um_segment *current = stream->head;
+  size_t abs_maxlen = labs(maxlen);
+  size_t remaining_len = abs_maxlen;
+  size_t total_len = 0;
+  size_t pos = stream->pos;
+
+  while (true) {
+    size_t segment_len = current->len - pos;
+    size_t search_len = segment_len;
+    if (maxlen && (search_len > remaining_len)) search_len = remaining_len;
+    char *start = current->ptr + pos;
+    char *delim_ptr = memchr(start, delim_char, search_len);
+
+    if (delim_ptr) {
+      size_t len = delim_ptr - start;
+      total_len += len;
+      return stream_consume_string(stream, out_buffer, total_len, 1, false);
+    }
+    else {
+      // delimiter not found
+      total_len += segment_len;
+      remaining_len -= segment_len;
+
+      if (abs_maxlen && total_len >= abs_maxlen) {
+        if (maxlen < 0) return stream_consume_string(stream, out_buffer, abs_maxlen, 1, false);
+        return Qnil;
+      }
+    }
+
+    if (!current->next) {
+      if (!stream_get_more_segments(stream)) {
+        return Qnil;
+      }
+    }
+
+    current = current->next;
+    pos = 0;
+  }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 
 VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
   if (unlikely(stream->eof && !stream->head)) return Qnil;

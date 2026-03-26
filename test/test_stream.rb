@@ -221,6 +221,27 @@ class StreamTest < StreamBaseTest
     assert_nil stream.get_string(-3)
   end
 
+  def test_stream_get_to_delim
+    machine.write(@wfd, "abc,def,ghi")
+    machine.close(@wfd)
+
+    assert_nil stream.get_to_delim('!', 0) # not there
+    assert_nil stream.get_to_delim(',', 2) # too long
+    assert_equal 'abc', stream.get_to_delim(',', 0)
+    assert_equal 'def', stream.get_to_delim(',', 0)
+    assert_nil stream.get_to_delim(',', 0)
+    assert_equal 'ghi', stream.get_to_delim(',', -3)
+  end
+
+  def test_stream_get_to_delim_invalid_delim
+    machine.write(@wfd, "abc,def,ghi")
+
+    assert_raises(ArgumentError) { stream.get_to_delim(:foo, 0) }
+    assert_raises(UM::Error) { stream.get_to_delim('', 0) }
+    assert_raises(UM::Error) { stream.get_to_delim('ab', 0) }
+    assert_raises(UM::Error) { stream.get_to_delim('🙂', 0) }
+  end
+
   def test_stream_skip
     machine.write(@wfd, "foobarbaz")
 

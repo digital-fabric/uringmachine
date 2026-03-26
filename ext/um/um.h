@@ -439,8 +439,9 @@ VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
 void stream_teardown(struct um_stream *stream);
 void stream_clear(struct um_stream *stream);
-VALUE stream_get_line(struct um_stream *stream, VALUE buf, size_t maxlen);
+VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen);
 VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
+VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen);
 void stream_skip(struct um_stream *stream, size_t inc, int safe_inc);
 void stream_each(struct um_stream *stream);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
