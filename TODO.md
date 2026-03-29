@@ -2,8 +2,57 @@
 
 - Add tests for support for Set in `machine#await`
 - Add tests for support for Set, Array in `machine#join`
-- Add `#read_file` for reading entire file
-- Add `#write_file` for writing entire file
+- Add `UM#read_file` for reading entire file
+- Add `UM#write_file` for writing entire file
+- Rename stream methods: `:fd`, `:socket`, `:ssl`
+
+## Improving streams
+
+One wart of the stream API is that it's only for reading, so if we want to
+implement a protocol where we read and write to a target fd, we also need to
+keep the fd around or call `stream.target` every time we want to write to it,
+*and* we don't have a transport-agnostic write op.
+
+What if instead of `Stream` we had something called `Link`, which serves for
+both reading and writing:
+
+```ruby
+link = machine.link(fd)
+while l = link.read_line
+  link.write(l, '\n')
+end
+# or:
+buf = link.read(42)
+```
+
+RESP:
+
+```ruby
+link.resp_write(['foo', 'bar'])
+reply = link.resp_read
+```
+
+HTTP:
+
+```ruby
+r = link.http_read_request
+link.http_write_response({ ':status' => 200 }, 'foo')
+
+# or:
+link.http_write_request({ ':method' => 'GET', ':path' => '/foo' }, nil)
+```
+
+Plan of action:
+
+- Rename methods:
+  - rename `#get_line` to `#read_line`
+  - rename `#get_string` to `#read`
+  - rename `#get_to_delim` to `#read_to_delim`
+  - rename `#resp_decode` to `#resp_read`
+- Rename `Stream` to `Link`
+- Add methods:
+  - `#write(*bufs)`
+  - `#resp_write(obj)`
 
 ## Balancing I/O with the runqueue
 
