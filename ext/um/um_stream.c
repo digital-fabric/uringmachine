@@ -429,7 +429,7 @@ VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE deli
   char delim_char = delim_to_char(delim);
 
   if (unlikely(stream->eof && !stream->head)) return Qnil;
-  if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
+  if (unlikely(!stream->tail) && !stream_get_more_segments(stream)) return Qnil;
 
   struct um_segment *current = stream->head;
   size_t abs_maxlen = labs(maxlen);
@@ -451,20 +451,14 @@ VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE deli
     }
     else {
       // delimiter not found
-      total_len += segment_len;
-      remaining_len -= segment_len;
+      total_len += search_len;
+      remaining_len -= search_len;
 
-      if (abs_maxlen && total_len >= abs_maxlen) {
-        if (maxlen < 0) return stream_consume_string(stream, out_buffer, abs_maxlen, 1, false);
-        return Qnil;
-      }
+      if (abs_maxlen && total_len >= abs_maxlen)
+        return (maxlen > 0) ? Qnil : stream_consume_string(stream, out_buffer, abs_maxlen, 1, false);
     }
 
-    if (!current->next) {
-      if (!stream_get_more_segments(stream)) {
-        return Qnil;
-      }
-    }
+    if (!current->next && !stream_get_more_segments(stream)) return Qnil;
 
     current = current->next;
     pos = 0;
