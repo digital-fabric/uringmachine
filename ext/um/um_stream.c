@@ -425,7 +425,7 @@ static inline char delim_to_char(VALUE delim) {
   return *RSTRING_PTR(delim);
 }
 
-VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
+VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
   char delim_char = delim_to_char(delim);
 
   if (unlikely(stream->eof && !stream->head)) return Qnil;

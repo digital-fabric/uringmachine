@@ -181,7 +181,7 @@ VALUE Stream_read(VALUE self, VALUE len) {
 }
 
 /* call-seq:
- *   stream.get_to_delim(delim, limit) -> str
+ *   stream.read_to_delim(delim, limit) -> str
  *
  * Reads from the string until a the given delimiter is encountered. Returns the
  * line without the delimiter. If limit is 0, the length is not limited. If a
@@ -195,9 +195,9 @@ VALUE Stream_read(VALUE self, VALUE len) {
  * @param delim [String] delimiter (single byte) @param limit [integer] maximum
  * line length (0 means no limit) @return [String, nil] read data or nil
  */
-VALUE Stream_get_to_delim(VALUE self, VALUE delim, VALUE limit) {
+VALUE Stream_read_to_delim(VALUE self, VALUE delim, VALUE limit) {
   struct um_stream *stream = um_get_stream(self);
-  return stream_get_to_delim(stream, Qnil, delim, NUM2LONG(limit));
+  return stream_read_to_delim(stream, Qnil, delim, NUM2LONG(limit));
 }
 
 /* call-seq:
@@ -318,7 +318,7 @@ void Init_Stream(void) {
 
   rb_define_method(cStream, "read_line", Stream_read_line, 1);
   rb_define_method(cStream, "read", Stream_read, 1);
-  rb_define_method(cStream, "get_to_delim", Stream_get_to_delim, 2);
+  rb_define_method(cStream, "read_to_delim", Stream_read_to_delim, 2);
   rb_define_method(cStream, "skip", Stream_skip, 1);
   rb_define_method(cStream, "each", Stream_each, 0);
 
