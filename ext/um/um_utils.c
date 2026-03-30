@@ -159,7 +159,7 @@ int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count) {
   return bg_id;
 }
 
-inline VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags) {
+inline VALUE um_read_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags) {
   if (!result) return Qnil;
 
   unsigned buf_idx = flags >> IORING_CQE_BUFFER_SHIFT;

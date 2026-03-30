@@ -1478,7 +1478,7 @@ int read_recv_each_multishot_process_result(struct op_ctx *ctx, struct um_op_res
     return false;
 
   *total += result->res;
-  VALUE buf = um_get_string_from_buffer_ring(ctx->machine, ctx->bgid, result->res, result->flags);
+  VALUE buf = um_read_from_buffer_ring(ctx->machine, ctx->bgid, result->res, result->flags);
   rb_yield(buf);
   RB_GC_GUARD(buf);
 

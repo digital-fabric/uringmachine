@@ -381,7 +381,7 @@ VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen
   }
 }
 
-VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
+VALUE stream_read(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
   if (unlikely(stream->eof && !stream->head)) return Qnil;
   if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
 
@@ -495,8 +495,8 @@ VALUE resp_read_line(struct um_stream *stream, VALUE out_buffer) {
   }
 }
 
-inline VALUE resp_get_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
-  return stream_get_string(stream, out_buffer, len, 2, true);
+inline VALUE resp_read(struct um_stream *stream, ulong len, VALUE out_buffer) {
+  return stream_read(stream, out_buffer, len, 2, true);
 }
 
 inline ulong resp_parse_length_field(const char *ptr, int len) {
@@ -539,11 +539,11 @@ static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
 }
 
 static inline VALUE resp_decode_string(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  return resp_get_string(stream, len, out_buffer);
+  return resp_read(stream, len, out_buffer);
 }
 
 static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  VALUE with_enc = resp_get_string(stream, len, out_buffer);
+  VALUE with_enc = resp_read(stream, len, out_buffer);
   char *ptr = RSTRING_PTR(with_enc);
   len = RSTRING_LEN(with_enc);
   if ((len < 4) || (ptr[3] != ':')) return Qnil;

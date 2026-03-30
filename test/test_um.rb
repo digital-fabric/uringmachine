@@ -3526,10 +3526,10 @@ class StreamMethodTest < UMBaseTest
     stream = machine.stream(@rfd)
     assert_kind_of UM::Stream, stream
 
-    buf = stream.get_string(3)
+    buf = stream.read(3)
     assert_equal 'foo', buf
 
-    buf = stream.get_string(-6)
+    buf = stream.read(-6)
     assert_equal 'bar', buf
     assert stream.eof?
 
@@ -3545,8 +3545,8 @@ class StreamMethodTest < UMBaseTest
     res = machine.stream(@rfd) do |s|
       stream_obj = s
 
-      bufs << s.get_string(3)
-      bufs << s.get_string(-6)
+      bufs << s.read(3)
+      bufs << s.read(-6)
 
       :foo
     end

@@ -30,7 +30,7 @@
 
 # 0.28.2 2026-02-20
 
-- Fix `Stream#get_string`
+- Fix `Stream#read`
 
 # 0.28.1 2026-02-20
 
@@ -170,8 +170,8 @@
 # 2025-06-03 Version 0.12
 
 - Add buffer, maxlen params to `Stream#read_line`
-- Add buffer param to `Stream#get_string`
-- Remove `Stream#resp_read_line`, `Stream#resp_get_string` methods
+- Add buffer param to `Stream#read`
+- Remove `Stream#resp_read_line`, `Stream#resp_read` methods
 
 # 2025-06-02 Version 0.11.1
 

@@ -352,7 +352,7 @@ int um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *siz
 void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs);
 void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result);
 int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
-VALUE um_get_string_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
+VALUE um_read_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
 void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
 struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *total_len);
 void um_advance_iovecs_for_writing(struct iovec **ptr, int *len, size_t adv);
@@ -440,7 +440,7 @@ VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 void stream_teardown(struct um_stream *stream);
 void stream_clear(struct um_stream *stream);
 VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen);
-VALUE stream_get_string(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
+VALUE stream_read(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
 VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen);
 void stream_skip(struct um_stream *stream, size_t inc, int safe_inc);
 void stream_each(struct um_stream *stream);

@@ -166,7 +166,7 @@ VALUE Stream_read_line(VALUE self, VALUE limit) {
 }
 
 /* call-seq:
- *   stream.get_string(len) -> str
+ *   stream.read(len) -> str
  *
  * Reads len bytes from the stream. If len is 0, reads all available bytes. If
  * len is negative, reads up to -len available bytes. If len is positive and eof
@@ -175,9 +175,9 @@ VALUE Stream_read_line(VALUE self, VALUE limit) {
  * @param len [integer] number of bytes to read
  * @return [String, nil] read data or nil
  */
-VALUE Stream_get_string(VALUE self, VALUE len) {
+VALUE Stream_read(VALUE self, VALUE len) {
   struct um_stream *stream = um_get_stream(self);
-  return stream_get_string(stream, Qnil, NUM2LONG(len), 0, false);
+  return stream_read(stream, Qnil, NUM2LONG(len), 0, false);
 }
 
 /* call-seq:
@@ -317,7 +317,7 @@ void Init_Stream(void) {
   rb_define_method(cStream, "mode", Stream_mode, 0);
 
   rb_define_method(cStream, "read_line", Stream_read_line, 1);
-  rb_define_method(cStream, "get_string", Stream_get_string, 1);
+  rb_define_method(cStream, "read", Stream_read, 1);
   rb_define_method(cStream, "get_to_delim", Stream_get_to_delim, 2);
   rb_define_method(cStream, "skip", Stream_skip, 1);
   rb_define_method(cStream, "each", Stream_each, 0);

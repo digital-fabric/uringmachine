@@ -326,13 +326,13 @@ line = stream.read_line(0)
 line = stream.read_line(13)
 
 # Read all data:
-buf = stream.get_string(0)
+buf = stream.read(0)
 
 # Read exactly 13 bytes:
-buf = stream.get_string(13)
+buf = stream.read(13)
 
 # Read up to 13 bytes:
-buf = stream.get_string(-13)
+buf = stream.read(-13)
 
 # Skip 3 bytes:
 stream.skip(3)

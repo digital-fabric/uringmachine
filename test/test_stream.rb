@@ -38,10 +38,10 @@ class StreamTest < StreamBaseTest
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
-    buf = stream.get_string(3)
+    buf = stream.read(3)
     assert_equal 'foo', buf
 
-    buf = stream.get_string(-6)
+    buf = stream.read(-6)
     assert_equal 'bar', buf
     assert stream.eof?
 
@@ -60,7 +60,7 @@ class StreamTest < StreamBaseTest
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(wfd, "foobar")
 
-    buf = stream.get_string(3)
+    buf = stream.read(3)
     assert_equal 'foo', buf
 
     assert_equal 1, machine.metrics[:ops_pending]
@@ -89,7 +89,7 @@ class StreamTest < StreamBaseTest
       machine.shutdown(s1, UM::SHUT_WR)
     end
 
-    buf = stream.get_string(msg.bytesize)
+    buf = stream.read(msg.bytesize)
     assert_equal msg, buf
   ensure
     machine.terminate(f)
@@ -109,16 +109,16 @@ class StreamTest < StreamBaseTest
       machine.shutdown(s1, UM::SHUT_WR)
     end
 
-    buf = stream.get_string(msg.bytesize)
+    buf = stream.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = stream.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = stream.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = stream.read(msg.bytesize)
     assert_equal msg, buf
 
     stream.clear
@@ -142,7 +142,7 @@ class StreamTest < StreamBaseTest
     assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
     assert_equal 'bar', stream.read_line(0)
     assert_nil stream.read_line(0)
-    assert_equal "baz", stream.get_string(-6)
+    assert_equal "baz", stream.read(-6)
   end
 
   def test_stream_read_line_segmented
@@ -188,37 +188,37 @@ class StreamTest < StreamBaseTest
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
-  def test_stream_get_string
+  def test_stream_read
     machine.write(@wfd, "foobarbazblahzzz")
     machine.close(@wfd)
 
-    assert_equal 'foobar', stream.get_string(6)
-    assert_equal 'baz', stream.get_string(3)
-    assert_equal 'blah', stream.get_string(4)
-    assert_nil stream.get_string(4)
+    assert_equal 'foobar', stream.read(6)
+    assert_equal 'baz', stream.read(3)
+    assert_equal 'blah', stream.read(4)
+    assert_nil stream.read(4)
   end
 
-  def test_stream_get_string_zero_len
+  def test_stream_read_zero_len
     machine.write(@wfd, "foobar")
 
-    assert_equal 'foobar', stream.get_string(0)
+    assert_equal 'foobar', stream.read(0)
 
     machine.write(@wfd, "bazblah")
     machine.close(@wfd)
-    assert_equal 'bazblah', stream.get_string(0)
-    assert_nil stream.get_string(0)
+    assert_equal 'bazblah', stream.read(0)
+    assert_nil stream.read(0)
   end
 
-  def test_stream_get_string_negative_len
+  def test_stream_read_negative_len
     machine.write(@wfd, "foobar")
 
-    assert_equal 'foo', stream.get_string(-3)
-    assert_equal 'bar', stream.get_string(-6)
+    assert_equal 'foo', stream.read(-3)
+    assert_equal 'bar', stream.read(-6)
 
     machine.write(@wfd, "bazblah")
     machine.close(@wfd)
-    assert_equal 'bazblah', stream.get_string(-12)
-    assert_nil stream.get_string(-3)
+    assert_equal 'bazblah', stream.read(-12)
+    assert_nil stream.read(-3)
   end
 
   def test_stream_get_to_delim
@@ -246,10 +246,10 @@ class StreamTest < StreamBaseTest
     machine.write(@wfd, "foobarbaz")
 
     stream.skip(2)
-    assert_equal 'obar', stream.get_string(4)
+    assert_equal 'obar', stream.read(4)
 
     stream.skip(1)
-    assert_equal 'az', stream.get_string(0)
+    assert_equal 'az', stream.read(0)
   end
 
   def test_stream_big_data
@@ -261,7 +261,7 @@ class StreamTest < StreamBaseTest
 
     received = []
     loop {
-      msg = stream.get_string(-60_000)
+      msg = stream.read(-60_000)
       break if !msg
 
       received << msg
@@ -551,7 +551,7 @@ class StreamDevRandomTest < UMBaseTest
     assert_equal c * n, acc.size
   end
 
-  def test_stream_dev_random_get_string
+  def test_stream_dev_random_read
     fd = machine.open('/dev/random', UM::O_RDONLY)
     stream = UM::Stream.new(machine, fd)
 
@@ -560,7 +560,7 @@ class StreamDevRandomTest < UMBaseTest
     count = 0
     # lines = []
     n.times {
-      l = stream.get_string(size)
+      l = stream.read(size)
       refute_nil l
       assert_equal size, l.bytesize
 
@@ -591,7 +591,7 @@ class StreamModeTest < UMBaseTest
     stream = UM::Stream.new(machine, r, :bp_recv)
     assert_equal :bp_recv, stream.mode
     # assert :bp_recv, stream.mode
-    assert_raises(Errno::ENOTSOCK) { stream.get_string(0) }
+    assert_raises(Errno::ENOTSOCK) { stream.read(0) }
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
@@ -604,7 +604,7 @@ class StreamModeTest < UMBaseTest
 
     stream = UM::Stream.new(machine, r, :bp_recv)
     assert_equal :bp_recv, stream.mode
-    buf = stream.get_string(0)
+    buf = stream.read(0)
     assert_equal 'foobar', buf
   ensure
     machine.close(r) rescue nil
@@ -641,12 +641,12 @@ class StreamModeTest < UMBaseTest
     buf = "buh"
     @machine.ssl_write(s1, buf, buf.bytesize)
 
-    assert_equal "baz", stream.get_string(0)
-    assert_equal "buh", stream.get_string(0)
+    assert_equal "baz", stream.read(0)
+    assert_equal "buh", stream.read(0)
 
     s1.close
 
-    assert_nil stream.get_string(0)
+    assert_nil stream.read(0)
   rescue => e
     p e
     p e.backtrace
@@ -665,12 +665,12 @@ class StreamByteCountsTest < StreamBaseTest
     assert_equal 0, stream.consumed
     assert_equal 0, stream.pending
 
-    buf = stream.get_string(2)
+    buf = stream.read(2)
     assert_equal 'fo', buf
     assert_equal 2, stream.consumed
     assert_equal 4, stream.pending
 
-    buf = stream.get_string(3)
+    buf = stream.read(3)
     assert_equal 'oba', buf
     assert_equal 5, stream.consumed
     assert_equal 1, stream.pending

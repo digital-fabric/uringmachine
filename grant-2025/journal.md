@@ -121,7 +121,7 @@ Ruby I/O layer. Some interesting warts in the Ruby `IO` implementation:
   ```ruby
   def io_write(io, buffer, length, offset)
     reset_nonblock(io)
-    @machine.write(io.fileno, buffer.get_string)
+    @machine.write(io.fileno, buffer.read)
   rescue Errno::EINTR
     retry
   end
