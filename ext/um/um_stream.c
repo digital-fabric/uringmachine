@@ -262,7 +262,7 @@ inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
   }
 }
 
-inline void stream_each(struct um_stream *stream) {
+inline void stream_read_each(struct um_stream *stream) {
   if (unlikely(stream->eof && !stream->head)) return;
   if (!stream->tail && !stream_get_more_segments(stream)) return;
 

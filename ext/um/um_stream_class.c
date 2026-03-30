@@ -215,15 +215,15 @@ VALUE Stream_skip(VALUE self, VALUE len) {
 }
 
 /* call-seq:
- *   stream.each { |data| } -> stream
+ *   stream.read_each { |data| } -> stream
  *
  * Reads from the target, passing each chunk to the given block.
  *
  * @return [UringMachine::Stream] stream
  */
-VALUE Stream_each(VALUE self) {
+VALUE Stream_read_each(VALUE self) {
   struct um_stream *stream = um_get_stream(self);
-  stream_each(stream);
+  stream_read_each(stream);
   return self;
 }
 
@@ -320,7 +320,7 @@ void Init_Stream(void) {
   rb_define_method(cStream, "read", Stream_read, 1);
   rb_define_method(cStream, "read_to_delim", Stream_read_to_delim, 2);
   rb_define_method(cStream, "skip", Stream_skip, 1);
-  rb_define_method(cStream, "each", Stream_each, 0);
+  rb_define_method(cStream, "each", Stream_read_each, 0);
 
   rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);

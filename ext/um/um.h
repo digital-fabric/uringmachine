@@ -443,7 +443,7 @@ VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen
 VALUE stream_read(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
 VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen);
 void stream_skip(struct um_stream *stream, size_t inc, int safe_inc);
-void stream_each(struct um_stream *stream);
+void stream_read_each(struct um_stream *stream);
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);

@@ -273,7 +273,7 @@ class StreamTest < StreamBaseTest
     assert_equal data, received.join
   end
 
-  def test_stream_each
+  def test_stream_read_each
     bufs = []
     f = machine.spin do
       bufs << :ready

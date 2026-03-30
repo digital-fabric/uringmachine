@@ -45,9 +45,10 @@ conn.http_write_request({ ':method' => 'GET', ':path' => '/foo' }, nil)
 Plan of action:
 
 - Rename methods:
-  - [ ] rename `#read_line` to `#read_line`
-  - [ ] rename `#read` to `#read`
-  - [ ] rename `#read_to_delim` to `#read_to_delim`
+  - [v] rename `#read_line` to `#read_line`
+  - [v] rename `#read` to `#read`
+  - [v] rename `#read_to_delim` to `#read_to_delim`
+  - [ ] rename `#each` to `#read_each`
   - [ ] rename `#resp_decode` to `#resp_read`
 - Rename `Stream` to `Connection`
 - Add methods:
