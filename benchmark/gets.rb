@@ -34,16 +34,16 @@ def um_read
   end
 end
 
-@fd_stream = @machine.open('/dev/random', UM::O_RDONLY)
-@stream = UM::Stream.new(@machine, @fd_stream)
-def um_stream_read_line
-  @stream.read_line(0)
+@fd_connection = @machine.open('/dev/random', UM::O_RDONLY)
+@conn = UM::Connection.new(@machine, @fd_connection)
+def um_connection_read_line
+  @conn.read_line(0)
 end
 
 Benchmark.ips do |x|
-  x.report('IO#gets')     { io_gets }
-  x.report('UM#read+buf') { um_read }
-  x.report('UM::Stream')  { um_stream_read_line }
+  x.report('IO#gets')         { io_gets }
+  x.report('UM#read+buf')     { um_read }
+  x.report('UM::Connection')  { um_connection_read_line }
 
   x.compare!(order: :baseline)
 end

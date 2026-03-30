@@ -66,9 +66,9 @@ $machine.listen(server_fd, UM::SOMAXCONN)
 puts 'Listening on port 1234'
 
 def handle_connection(fd)
-  stream = UM::Stream.new($machine, fd)
+  conn = UM::Connection.new($machine, fd)
 
-  while (l = stream.gets)
+  while (l = conn.gets)
     $machine.write(fd, "You said: #{l}")
   end
 rescue Exception => e

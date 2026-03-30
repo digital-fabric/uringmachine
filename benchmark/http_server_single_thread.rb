@@ -12,8 +12,8 @@ require 'uringmachine'
 RE_REQUEST_LINE = /^([a-z]+)\s+([^\s]+)\s+(http\/[0-9\.]{1,3})/i
 RE_HEADER_LINE = /^([a-z0-9\-]+)\:\s+(.+)/i
 
-def stream_get_request_line(stream, buf)
-  line = stream.read_line(buf, 0)
+def connection_get_request_line(conn, buf)
+  line = conn.read_line(0)
   m = line&.match(RE_REQUEST_LINE)
   return nil if !m
 
@@ -26,12 +26,12 @@ end
 
 class InvalidHeadersError < StandardError; end
 
-def get_headers(stream, buf)
-  headers = stream_get_request_line(stream, buf)
+def get_headers(conn, buf)
+  headers = connection_get_request_line(conn, buf)
   return nil if !headers
 
   while true
-    line = stream.read_line(buf, 0)
+    line = conn.read_line(0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -52,11 +52,11 @@ end
 
 def handle_connection(machine, fd)
   machine.setsockopt(fd, UM::IPPROTO_TCP, UM::TCP_NODELAY, true)
-  stream = UM::Stream.new(machine, fd)
+  conn = UM::Connection.new(machine, fd)
   buf = String.new(capacity: 65536)
 
   while true
-    headers = get_headers(stream, buf)
+    headers = get_headers(conn, buf)
     break if !headers
 
     send_response(machine, fd)

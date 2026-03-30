@@ -83,40 +83,40 @@ ensure
   stop_server
 end
 
-@total_stream = 0
-def um_stream_do
+@total_connection = 0
+def um_connection_do
   # fd = @machine.open('/dev/random', UM::O_RDONLY)
   fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
   @machine.connect(fd, '127.0.0.1', 1234)
-  stream = UM::Stream.new(@machine, fd)
-  N.times { @total_stream += stream.read_line(0)&.bytesize || 0 }
+  conn = UM::Connection.new(@machine, fd)
+  N.times { @total_connection += conn.read_line(0)&.bytesize || 0 }
 rescue => e
   p e
   p e.backtrace
 ensure
-  stream.clear
+  conn.clear
   @machine.close(fd)
 end
 
-def um_stream
+def um_connection
   start_server
   ff = C.times.map {
     @machine.snooze
-    @machine.spin { um_stream_do }
+    @machine.spin { um_connection_do }
   }
   @machine.await(ff)
-  pp total: @total_stream
+  pp total: @total_connection
 ensure
   stop_server
 end
 
 p(C:, N:)
-um_stream
+um_connection
 pp @machine.metrics
 exit
 
 Benchmark.bm do
   it.report('Thread/IO#gets')    { io_gets }
   it.report('Fiber/UM#read+buf') { um_read }
-  it.report('Fiber/UM::Stream')  { um_stream }
+  it.report('Fiber/UM::Stream')  { um_connection }
 end

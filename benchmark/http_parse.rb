@@ -129,15 +129,15 @@ ensure
   ($machine.close(wfd) rescue nil) if wfd
 end
 
-def stream_parse_headers(fd)
-  stream = UM::Stream.new($machine, fd)
+def connection_parse_headers(fd)
+  conn = UM::Connection.new($machine, fd)
 
   buf = String.new(capacity: 65536)
-  headers = stream_get_request_line(stream, buf)
+  headers = connection_get_request_line(conn, buf)
   return nil if !headers
 
   while true
-    line = stream.read_line(0)
+    line = conn.read_line(0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -149,8 +149,8 @@ def stream_parse_headers(fd)
   headers
 end
 
-def stream_get_request_line(stream, buf)
-  line = stream.read_line(0)
+def connection_get_request_line(conn, buf)
+  line = conn.read_line(0)
 
   m = line.match(RE_REQUEST_LINE)
   return nil if !m
@@ -162,12 +162,12 @@ def stream_get_request_line(stream, buf)
   }
 end
 
-def parse_http_stream
+def parse_http_connection
   rfd, wfd = UM.pipe
   queue = UM::Queue.new
 
   $machine.spin do
-    headers = stream_parse_headers(rfd)
+    headers = connection_parse_headers(rfd)
     $machine.push(queue, headers)
   rescue Exception => e
     p e
@@ -188,7 +188,7 @@ def compare_allocs
   p(
     alloc_http_parser:  alloc_count { x.times { parse_http_parser } },
     alloc_stringio:     alloc_count { x.times { parse_http_stringio } },
-    alloc_stream:       alloc_count { x.times { parse_http_stream } }
+    alloc_connection:   alloc_count { x.times { parse_http_connection } }
   )
 ensure
   GC.enable
@@ -213,8 +213,8 @@ def benchmark
     x.config(:time => 5, :warmup => 3)
 
     x.report("http_parser") { parse_http_parser }
-    x.report("stringio") { parse_http_stringio }
-    x.report("stream") { parse_http_stream }
+    x.report("stringio")    { parse_http_stringio }
+    x.report("connection")  { parse_http_connection }
 
     x.compare!
   end

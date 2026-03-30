@@ -2,88 +2,88 @@
 #include <ruby/io/buffer.h>
 #include "um.h"
 
-inline void stream_add_segment(struct um_stream *stream, struct um_segment *segment) {
+inline void connection_add_segment(struct um_connection *conn, struct um_segment *segment) {
   segment->next = NULL;
-  if (stream->tail) {
-    stream->tail->next = segment;
-    stream->tail = segment;
+  if (conn->tail) {
+    conn->tail->next = segment;
+    conn->tail = segment;
   }
   else
-    stream->head = stream->tail = segment;
-  stream->pending_bytes += segment->len;
+    conn->head = conn->tail = segment;
+  conn->pending_bytes += segment->len;
 }
 
-inline int stream_process_op_result(struct um_stream *stream, struct um_op_result *result) {
+inline int connection_process_op_result(struct um_connection *conn, struct um_op_result *result) {
   if (likely(result->res > 0)) {
     if (likely(result->segment)) {
-      stream_add_segment(stream, result->segment);
+      connection_add_segment(conn, result->segment);
       result->segment = NULL;
     }
   }
   else
-    stream->eof = 1;
+    conn->eof = 1;
 
   return result->res;
 }
 
-#define STREAM_OP_FLAGS (OP_F_MULTISHOT | OP_F_BUFFER_POOL)
+#define CONNECTION_OP_FLAGS (OP_F_MULTISHOT | OP_F_BUFFER_POOL)
 
-void stream_multishot_op_start(struct um_stream *stream) {
-  if (!stream->op)
-    stream->op = um_op_acquire(stream->machine);
+void connection_multishot_op_start(struct um_connection *conn) {
+  if (!conn->op)
+    conn->op = um_op_acquire(conn->machine);
   struct io_uring_sqe *sqe;
 
-  bp_ensure_commit_level(stream->machine);
+  bp_ensure_commit_level(conn->machine);
 
-  switch (stream->mode) {
-    case STREAM_FD:
-      um_prep_op(stream->machine, stream->op, OP_READ_MULTISHOT, 2, STREAM_OP_FLAGS);
-      sqe = um_get_sqe(stream->machine, stream->op);
-      io_uring_prep_read_multishot(sqe, stream->fd, 0, -1, BP_BGID);
+  switch (conn->mode) {
+    case CONNECTION_FD:
+      um_prep_op(conn->machine, conn->op, OP_READ_MULTISHOT, 2, CONNECTION_OP_FLAGS);
+      sqe = um_get_sqe(conn->machine, conn->op);
+      io_uring_prep_read_multishot(sqe, conn->fd, 0, -1, BP_BGID);
       break;
-    case STREAM_SOCKET:
-      um_prep_op(stream->machine, stream->op, OP_RECV_MULTISHOT, 2, STREAM_OP_FLAGS);
-      sqe = um_get_sqe(stream->machine, stream->op);
-      io_uring_prep_recv_multishot(sqe, stream->fd, NULL, 0, 0);
+    case CONNECTION_SOCKET:
+      um_prep_op(conn->machine, conn->op, OP_RECV_MULTISHOT, 2, CONNECTION_OP_FLAGS);
+      sqe = um_get_sqe(conn->machine, conn->op);
+      io_uring_prep_recv_multishot(sqe, conn->fd, NULL, 0, 0);
 	    sqe->buf_group = BP_BGID;
 	    sqe->flags |= IOSQE_BUFFER_SELECT;
       break;
     default:
       um_raise_internal_error("Invalid multishot op");
   }
-  stream->op->bp_commit_level = stream->machine->bp_commit_level;
+  conn->op->bp_commit_level = conn->machine->bp_commit_level;
 }
 
-void stream_multishot_op_stop(struct um_stream *stream) {
-  assert(!stream->op);
+void connection_multishot_op_stop(struct um_connection *conn) {
+  assert(!conn->op);
 
-  if (!(stream->op->flags & OP_F_CQE_DONE)) {
-    stream->op->flags |= OP_F_ASYNC;
-    um_cancel_op(stream->machine, stream->op);
+  if (!(conn->op->flags & OP_F_CQE_DONE)) {
+    conn->op->flags |= OP_F_ASYNC;
+    um_cancel_op(conn->machine, conn->op);
   }
   else
-    um_op_release(stream->machine, stream->op);
-  stream->op = NULL;
+    um_op_release(conn->machine, conn->op);
+  conn->op = NULL;
 }
 
-void um_stream_cleanup(struct um_stream *stream) {
-  if (stream->op) stream_multishot_op_stop(stream);
+void um_connection_cleanup(struct um_connection *conn) {
+  if (conn->op) connection_multishot_op_stop(conn);
 
-  while (stream->head) {
-    struct um_segment *next = stream->head->next;
-    um_segment_checkin(stream->machine, stream->head);
-    stream->head = next;
+  while (conn->head) {
+    struct um_segment *next = conn->head->next;
+    um_segment_checkin(conn->machine, conn->head);
+    conn->head = next;
   }
-  stream->pending_bytes = 0;
+  conn->pending_bytes = 0;
 }
 
 // returns true if case of ENOBUFS error, sets more to true if more data forthcoming
-inline int stream_process_segments(
-  struct um_stream *stream, size_t *total_bytes, int *more) {
+inline int connection_process_segments(
+  struct um_connection *conn, size_t *total_bytes, int *more) {
 
   *more = 0;
-  struct um_op_result *result = &stream->op->result;
-  stream->op->flags &= ~OP_F_CQE_SEEN;
+  struct um_op_result *result = &conn->op->result;
+  conn->op->flags &= ~OP_F_CQE_SEEN;
   while (result) {
     if (unlikely(result->res == -ENOBUFS)) {
       *more = 0;
@@ -97,142 +97,142 @@ inline int stream_process_segments(
 
     *more = (result->flags & IORING_CQE_F_MORE);
     *total_bytes += result->res;
-    stream_process_op_result(stream, result);
+    connection_process_op_result(conn, result);
     result = result->next;
   }
   return false;
 }
 
-void stream_clear(struct um_stream *stream) {
-  if (stream->op && stream->machine->ring_initialized) {
-    if (OP_CQE_SEEN_P(stream->op)) {
+void connection_clear(struct um_connection *conn) {
+  if (conn->op && conn->machine->ring_initialized) {
+    if (OP_CQE_SEEN_P(conn->op)) {
       size_t total_bytes = 0;
       int more = false;
-      stream_process_segments(stream, &total_bytes, &more);
-      um_op_multishot_results_clear(stream->machine, stream->op);
+      connection_process_segments(conn, &total_bytes, &more);
+      um_op_multishot_results_clear(conn->machine, conn->op);
     }
 
-    if (OP_CQE_DONE_P(stream->op))
-      um_op_release(stream->machine, stream->op);
+    if (OP_CQE_DONE_P(conn->op))
+      um_op_release(conn->machine, conn->op);
     else
-      um_cancel_op_and_discard_cqe(stream->machine, stream->op);
+      um_cancel_op_and_discard_cqe(conn->machine, conn->op);
 
-    stream->op = NULL;
+    conn->op = NULL;
   }
 
-  while (stream->head) {
-    struct um_segment *next = stream->head->next;
-    um_segment_checkin(stream->machine, stream->head);
-    stream->head = next;
+  while (conn->head) {
+    struct um_segment *next = conn->head->next;
+    um_segment_checkin(conn->machine, conn->head);
+    conn->head = next;
   }
-  stream->pending_bytes = 0;
+  conn->pending_bytes = 0;
 
-  if (stream->working_buffer) {
-    bp_buffer_checkin(stream->machine, stream->working_buffer);
-    stream->working_buffer = NULL;
+  if (conn->working_buffer) {
+    bp_buffer_checkin(conn->machine, conn->working_buffer);
+    conn->working_buffer = NULL;
   }
 }
 
-inline void stream_await_segments(struct um_stream *stream) {
-  if (unlikely(!stream->op)) stream_multishot_op_start(stream);
+inline void connection_await_segments(struct um_connection *conn) {
+  if (unlikely(!conn->op)) connection_multishot_op_start(conn);
 
-  if (!OP_CQE_SEEN_P(stream->op)) {
-    stream->op->flags &= ~OP_F_ASYNC;
-    VALUE ret = um_yield(stream->machine);
-    stream->op->flags |= OP_F_ASYNC;
-    if (!OP_CQE_SEEN_P(stream->op)) RAISE_IF_EXCEPTION(ret);
+  if (!OP_CQE_SEEN_P(conn->op)) {
+    conn->op->flags &= ~OP_F_ASYNC;
+    VALUE ret = um_yield(conn->machine);
+    conn->op->flags |= OP_F_ASYNC;
+    if (!OP_CQE_SEEN_P(conn->op)) RAISE_IF_EXCEPTION(ret);
     RB_GC_GUARD(ret);
   }
 }
 
-int stream_get_more_segments_bp(struct um_stream *stream) {
+int connection_get_more_segments_bp(struct um_connection *conn) {
   size_t total_bytes = 0;
   int more = false;
   int enobufs = false;
 
   while (1) {
-    if (unlikely(stream->eof)) return 0;
+    if (unlikely(conn->eof)) return 0;
 
-    stream_await_segments(stream);
-    enobufs = stream_process_segments(stream, &total_bytes, &more);
-    um_op_multishot_results_clear(stream->machine, stream->op);
+    connection_await_segments(conn);
+    enobufs = connection_process_segments(conn, &total_bytes, &more);
+    um_op_multishot_results_clear(conn->machine, conn->op);
     if (unlikely(enobufs)) {
-      int should_restart = stream->pending_bytes < (stream->machine->bp_buffer_size * 4);
-      // int same_threshold = stream->op->bp_commit_level == stream->machine->bp_commit_level;
+      int should_restart = conn->pending_bytes < (conn->machine->bp_buffer_size * 4);
+      // int same_threshold = conn->op->bp_commit_level == conn->machine->bp_commit_level;
 
       // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
-      //   stream,
-      //   total_bytes, stream->pending_bytes, stream->machine->bp_commit_level,
-      //   stream->machine->bp_buffer_count,
+      //   conn,
+      //   total_bytes, conn->pending_bytes, conn->machine->bp_commit_level,
+      //   conn->machine->bp_buffer_count,
       //   same_threshold, should_restart
       // );
 
-      // If multiple stream ops are happening at the same time, they'll all get
-      // ENOBUFS! We track the commit threshold in the op in order to prevent
-      // running bp_handle_enobufs() more than once.
+      // If multiple connection ops are happening at the same time, they'll all
+      // get ENOBUFS! We track the commit threshold in the op in order to
+      // prevent running bp_handle_enobufs() more than once.
 
       if (should_restart) {
-        if (stream->op->bp_commit_level == stream->machine->bp_commit_level)
-          bp_handle_enobufs(stream->machine);
+        if (conn->op->bp_commit_level == conn->machine->bp_commit_level)
+          bp_handle_enobufs(conn->machine);
 
-        um_op_release(stream->machine, stream->op);
-        stream->op = NULL;
-        // stream_multishot_op_start(stream);
+        um_op_release(conn->machine, conn->op);
+        conn->op = NULL;
+        // connection_multishot_op_start(conn);
       }
       else {
-        um_op_release(stream->machine, stream->op);
-        stream->op = NULL;
+        um_op_release(conn->machine, conn->op);
+        conn->op = NULL;
       }
 
       if (total_bytes) return total_bytes;
     }
     else {
       if (more)
-        stream->op->flags &= ~OP_F_CQE_SEEN;
-      if (total_bytes || stream->eof) return total_bytes;
+        conn->op->flags &= ~OP_F_CQE_SEEN;
+      if (total_bytes || conn->eof) return total_bytes;
     }
   }
 }
 
-int stream_get_more_segments_ssl(struct um_stream *stream) {
-  if (!stream->working_buffer)
-    stream->working_buffer = bp_buffer_checkout(stream->machine);
+int connection_get_more_segments_ssl(struct um_connection *conn) {
+  if (!conn->working_buffer)
+    conn->working_buffer = bp_buffer_checkout(conn->machine);
 
-  char *ptr = stream->working_buffer->buf + stream->working_buffer->pos;
-  size_t maxlen = stream->working_buffer->len - stream->working_buffer->pos;
-  int res = um_ssl_read_raw(stream->machine, stream->target, ptr, maxlen);
+  char *ptr = conn->working_buffer->buf + conn->working_buffer->pos;
+  size_t maxlen = conn->working_buffer->len - conn->working_buffer->pos;
+  int res = um_ssl_read_raw(conn->machine, conn->target, ptr, maxlen);
   if (res == 0) return 0;
   if (res < 0) rb_raise(eUMError, "Failed to read segment");
 
-  struct um_segment *segment = bp_buffer_consume(stream->machine, stream->working_buffer, res);
+  struct um_segment *segment = bp_buffer_consume(conn->machine, conn->working_buffer, res);
   if ((size_t)res == maxlen) {
-    bp_buffer_checkin(stream->machine, stream->working_buffer);
-    stream->working_buffer = NULL;
+    bp_buffer_checkin(conn->machine, conn->working_buffer);
+    conn->working_buffer = NULL;
   }
-  stream_add_segment(stream, segment);
+  connection_add_segment(conn, segment);
   return 1;
 }
 
-int stream_get_more_segments(struct um_stream *stream) {
-  switch (stream->mode) {
-    case STREAM_FD:
-    case STREAM_SOCKET:
-      return stream_get_more_segments_bp(stream);
-    case STREAM_SSL:
-      return stream_get_more_segments_ssl(stream);
+int connection_get_more_segments(struct um_connection *conn) {
+  switch (conn->mode) {
+    case CONNECTION_FD:
+    case CONNECTION_SOCKET:
+      return connection_get_more_segments_bp(conn);
+    case CONNECTION_SSL:
+      return connection_get_more_segments_ssl(conn);
     default:
-      rb_raise(eUMError, "Invalid stream mode");
+      rb_raise(eUMError, "Invalid connection mode");
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-inline void stream_shift_head(struct um_stream *stream) {
-  struct um_segment *consumed = stream->head;
-  stream->head = consumed->next;
-  if (!stream->head) stream->tail = NULL;
-  um_segment_checkin(stream->machine, consumed);
-  stream->pos = 0;
+inline void connection_shift_head(struct um_connection *conn) {
+  struct um_segment *consumed = conn->head;
+  conn->head = consumed->next;
+  if (!conn->head) conn->tail = NULL;
+  um_segment_checkin(conn->machine, consumed);
+  conn->pos = 0;
 }
 
 inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
@@ -242,32 +242,32 @@ inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
   );
 }
 
-inline void stream_skip(struct um_stream *stream, size_t inc, int safe_inc) {
-  if (unlikely(stream->eof && !stream->head)) return;
-  if (safe_inc && !stream->tail && !stream_get_more_segments(stream)) return;
+inline void connection_skip(struct um_connection *conn, size_t inc, int safe_inc) {
+  if (unlikely(conn->eof && !conn->head)) return;
+  if (safe_inc && !conn->tail && !connection_get_more_segments(conn)) return;
 
   while (inc) {
-    size_t segment_len = stream->head->len - stream->pos;
+    size_t segment_len = conn->head->len - conn->pos;
     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
     inc -= inc_len;
-    stream->pos += inc_len;
-    stream->consumed_bytes += inc_len;
-    stream->pending_bytes -= inc_len;
-    if (stream->pos == stream->head->len) {
-      stream_shift_head(stream);
-      if (inc && safe_inc && !stream->head) {
-        if (!stream_get_more_segments(stream)) break;
+    conn->pos += inc_len;
+    conn->consumed_bytes += inc_len;
+    conn->pending_bytes -= inc_len;
+    if (conn->pos == conn->head->len) {
+      connection_shift_head(conn);
+      if (inc && safe_inc && !conn->head) {
+        if (!connection_get_more_segments(conn)) break;
       }
     }
   }
 }
 
-inline void stream_read_each(struct um_stream *stream) {
-  if (unlikely(stream->eof && !stream->head)) return;
-  if (!stream->tail && !stream_get_more_segments(stream)) return;
+inline void connection_read_each(struct um_connection *conn) {
+  if (unlikely(conn->eof && !conn->head)) return;
+  if (!conn->tail && !connection_get_more_segments(conn)) return;
 
-  struct um_segment *current = stream->head;
-  size_t pos = stream->pos;
+  struct um_segment *current = conn->head;
+  size_t pos = conn->pos;
 
   VALUE buffer = Qnil;
   while (true) {
@@ -275,34 +275,34 @@ inline void stream_read_each(struct um_stream *stream) {
     buffer = make_segment_io_buffer(current, pos);
     rb_yield(buffer);
     rb_io_buffer_free_locked(buffer);
-    stream_shift_head(stream);
+    connection_shift_head(conn);
 
     if (!next) {
-      if (!stream_get_more_segments(stream)) return;
+      if (!connection_get_more_segments(conn)) return;
     }
-    current = stream->head;
+    current = conn->head;
     pos = 0;
   }
   RB_GC_GUARD(buffer);
 }
 
-inline void stream_copy(struct um_stream *stream, char *dest, size_t len) {
+inline void connection_copy(struct um_connection *conn, char *dest, size_t len) {
   while (len) {
-    char *segment_ptr = stream->head->ptr + stream->pos;
-    size_t segment_len = stream->head->len - stream->pos;
+    char *segment_ptr = conn->head->ptr + conn->pos;
+    size_t segment_len = conn->head->len - conn->pos;
     size_t cpy_len = (segment_len <= len) ? segment_len : len;
     memcpy(dest, segment_ptr, cpy_len);
 
     len -= cpy_len;
-    stream->pos += cpy_len;
-    stream->consumed_bytes += cpy_len;
-    stream->pending_bytes -= cpy_len;
+    conn->pos += cpy_len;
+    conn->consumed_bytes += cpy_len;
+    conn->pending_bytes -= cpy_len;
     dest += cpy_len;
-    if (stream->pos == stream->head->len) stream_shift_head(stream);
+    if (conn->pos == conn->head->len) connection_shift_head(conn);
   }
 }
 
-VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
+VALUE connection_consume_string(struct um_connection *conn, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
   VALUE str = Qnil;
   if (!NIL_P(out_buffer)) {
     str = out_buffer;
@@ -316,8 +316,8 @@ VALUE stream_consume_string(struct um_stream *stream, VALUE out_buffer, size_t l
     str = rb_str_new(NULL, len);
   char *dest = RSTRING_PTR(str);
 
-  stream_copy(stream, dest, len);
-  stream_skip(stream, inc, safe_inc);
+  connection_copy(conn, dest, len);
+  connection_skip(conn, inc, safe_inc);
   return str;
   RB_GC_GUARD(str);
 }
@@ -326,16 +326,16 @@ inline int trailing_cr_p(char *ptr, size_t len) {
   return ptr[len - 1] == '\r';
 }
 
-VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
-  if (unlikely(stream->eof && !stream->head)) return Qnil;
-  if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
+VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t maxlen) {
+  if (unlikely(conn->eof && !conn->head)) return Qnil;
+  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
 
   struct um_segment *last = NULL;
-  struct um_segment *current = stream->head;
+  struct um_segment *current = conn->head;
   size_t remaining_len = maxlen;
   size_t total_len = 0;
   size_t inc = 1;
-  size_t pos = stream->pos;
+  size_t pos = conn->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -359,7 +359,7 @@ VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen
         }
       }
 
-      return stream_consume_string(stream, out_buffer, total_len, inc, false);
+      return connection_consume_string(conn, out_buffer, total_len, inc, false);
     }
     else {
       // not found, early return if segment len exceeds maxlen
@@ -370,7 +370,7 @@ VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen
     }
 
     if (!current->next) {
-      if (!stream_get_more_segments(stream)) {
+      if (!connection_get_more_segments(conn)) {
         return Qnil;
       }
     }
@@ -381,15 +381,15 @@ VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen
   }
 }
 
-VALUE stream_read(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
-  if (unlikely(stream->eof && !stream->head)) return Qnil;
-  if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
+VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
+  if (unlikely(conn->eof && !conn->head)) return Qnil;
+  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
 
-  struct um_segment *current = stream->head;
+  struct um_segment *current = conn->head;
   size_t abs_len = labs(len);
   size_t remaining_len = abs_len;
   size_t total_len = 0;
-  size_t pos = stream->pos;
+  size_t pos = conn->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -400,14 +400,14 @@ VALUE stream_read(struct um_stream *stream, VALUE out_buffer, ssize_t len, size_
     if (abs_len) {
       remaining_len -= segment_len;
       if (!remaining_len)
-        return stream_consume_string(stream, out_buffer, total_len, inc, safe_inc);
+        return connection_consume_string(conn, out_buffer, total_len, inc, safe_inc);
     }
 
     if (!current->next) {
       if (len <= 0)
-        return stream_consume_string(stream, out_buffer, total_len, inc, safe_inc);
+        return connection_consume_string(conn, out_buffer, total_len, inc, safe_inc);
 
-      if (!stream_get_more_segments(stream))
+      if (!connection_get_more_segments(conn))
         return Qnil;
     }
     current = current->next;
@@ -425,17 +425,17 @@ static inline char delim_to_char(VALUE delim) {
   return *RSTRING_PTR(delim);
 }
 
-VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
+VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
   char delim_char = delim_to_char(delim);
 
-  if (unlikely(stream->eof && !stream->head)) return Qnil;
-  if (unlikely(!stream->tail) && !stream_get_more_segments(stream)) return Qnil;
+  if (unlikely(conn->eof && !conn->head)) return Qnil;
+  if (unlikely(!conn->tail) && !connection_get_more_segments(conn)) return Qnil;
 
-  struct um_segment *current = stream->head;
+  struct um_segment *current = conn->head;
   size_t abs_maxlen = labs(maxlen);
   size_t remaining_len = abs_maxlen;
   size_t total_len = 0;
-  size_t pos = stream->pos;
+  size_t pos = conn->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -447,7 +447,7 @@ VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE del
     if (delim_ptr) {
       size_t len = delim_ptr - start;
       total_len += len;
-      return stream_consume_string(stream, out_buffer, total_len, 1, false);
+      return connection_consume_string(conn, out_buffer, total_len, 1, false);
     }
     else {
       // delimiter not found
@@ -455,10 +455,10 @@ VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE del
       remaining_len -= search_len;
 
       if (abs_maxlen && total_len >= abs_maxlen)
-        return (maxlen > 0) ? Qnil : stream_consume_string(stream, out_buffer, abs_maxlen, 1, false);
+        return (maxlen > 0) ? Qnil : connection_consume_string(conn, out_buffer, abs_maxlen, 1, false);
     }
 
-    if (!current->next && !stream_get_more_segments(stream)) return Qnil;
+    if (!current->next && !connection_get_more_segments(conn)) return Qnil;
 
     current = current->next;
     pos = 0;
@@ -468,13 +468,13 @@ VALUE stream_read_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE del
 
 ////////////////////////////////////////////////////////////////////////////////
 
-VALUE resp_read_line(struct um_stream *stream, VALUE out_buffer) {
-  if (unlikely(stream->eof && !stream->head)) return Qnil;
-  if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
+VALUE resp_read_line(struct um_connection *conn, VALUE out_buffer) {
+  if (unlikely(conn->eof && !conn->head)) return Qnil;
+  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
 
-  struct um_segment *current = stream->head;
+  struct um_segment *current = conn->head;
   size_t total_len = 0;
-  size_t pos = stream->pos;
+  size_t pos = conn->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -483,20 +483,20 @@ VALUE resp_read_line(struct um_stream *stream, VALUE out_buffer) {
     if (lf_ptr) {
       size_t len = lf_ptr - start;
       total_len += len;
-      return stream_consume_string(stream, out_buffer, total_len, 2, true);
+      return connection_consume_string(conn, out_buffer, total_len, 2, true);
     }
     else
       total_len += segment_len;
 
     if (!current->next)
-      if (!stream_get_more_segments(stream)) return Qnil;
+      if (!connection_get_more_segments(conn)) return Qnil;
 
     current = current->next;
   }
 }
 
-inline VALUE resp_read_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
-  return stream_read(stream, out_buffer, len, 2, true);
+inline VALUE resp_read_string(struct um_connection *conn, ulong len, VALUE out_buffer) {
+  return connection_read(conn, out_buffer, len, 2, true);
 }
 
 inline ulong resp_parse_length_field(const char *ptr, int len) {
@@ -506,12 +506,12 @@ inline ulong resp_parse_length_field(const char *ptr, int len) {
   return acc;
 }
 
-VALUE resp_decode_hash(struct um_stream *stream, VALUE out_buffer, ulong len) {
+VALUE resp_decode_hash(struct um_connection *conn, VALUE out_buffer, ulong len) {
   VALUE hash = rb_hash_new();
 
   for (ulong i = 0; i < len; i++) {
-    VALUE key = resp_read(stream, out_buffer);
-    VALUE value = resp_read(stream, out_buffer);
+    VALUE key = resp_read(conn, out_buffer);
+    VALUE value = resp_read(conn, out_buffer);
     rb_hash_aset(hash, key, value);
     RB_GC_GUARD(key);
     RB_GC_GUARD(value);
@@ -521,11 +521,11 @@ VALUE resp_decode_hash(struct um_stream *stream, VALUE out_buffer, ulong len) {
   return hash;
 }
 
-VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
+VALUE resp_decode_array(struct um_connection *conn, VALUE out_buffer, ulong len) {
   VALUE array = rb_ary_new2(len);
 
   for (ulong i = 0; i < len; i++) {
-    VALUE value = resp_read(stream, out_buffer);
+    VALUE value = resp_read(conn, out_buffer);
     rb_ary_push(array, value);
     RB_GC_GUARD(value);
   }
@@ -538,12 +538,12 @@ static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
   return rb_str_new(ptr + 1, len - 1);
 }
 
-static inline VALUE resp_decode_string(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  return resp_read_string(stream, len, out_buffer);
+static inline VALUE resp_decode_string(struct um_connection *conn, VALUE out_buffer, ulong len) {
+  return resp_read_string(conn, len, out_buffer);
 }
 
-static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  VALUE with_enc = resp_read_string(stream, len, out_buffer);
+static inline VALUE resp_decode_string_with_encoding(struct um_connection *conn, VALUE out_buffer, ulong len) {
+  VALUE with_enc = resp_read_string(conn, len, out_buffer);
   char *ptr = RSTRING_PTR(with_enc);
   len = RSTRING_LEN(with_enc);
   if ((len < 4) || (ptr[3] != ':')) return Qnil;
@@ -566,23 +566,23 @@ static inline VALUE resp_decode_simple_error(char *ptr, ulong len) {
   if (!ID_new) ID_new = rb_intern("new");
 
   VALUE msg = rb_str_new(ptr + 1, len - 1);
-  VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
+  VALUE err = rb_funcall(eConnectionRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
 
-static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer, ulong len) {
+static inline VALUE resp_decode_error(struct um_connection *conn, VALUE out_buffer, ulong len) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = resp_decode_string(stream, out_buffer, len);
-  VALUE err = rb_funcall(eStreamRESPError, ID_new, 1, msg);
+  VALUE msg = resp_decode_string(conn, out_buffer, len);
+  VALUE err = rb_funcall(eConnectionRESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
 
-VALUE resp_read(struct um_stream *stream, VALUE out_buffer) {
-  VALUE msg = resp_read_line(stream, out_buffer);
+VALUE resp_read(struct um_connection *conn, VALUE out_buffer) {
+  VALUE msg = resp_read_line(conn, out_buffer);
   if (msg == Qnil) return Qnil;
 
   char *ptr = RSTRING_PTR(msg);
@@ -594,22 +594,22 @@ VALUE resp_read(struct um_stream *stream, VALUE out_buffer) {
     case '%': // hash
     case '|': // attributes hash
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_hash(stream, out_buffer, data_len);
+      return resp_decode_hash(conn, out_buffer, data_len);
 
     case '*': // array
     case '~': // set
     case '>': // pub/sub push
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_array(stream, out_buffer, data_len);
+      return resp_decode_array(conn, out_buffer, data_len);
 
     case '+': // simple string
       return resp_decode_simple_string(ptr, len);
     case '$': // string
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string(stream, out_buffer, data_len);
+      return resp_decode_string(conn, out_buffer, data_len);
     case '=': // string with encoding
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string_with_encoding(stream, out_buffer, data_len);
+      return resp_decode_string_with_encoding(conn, out_buffer, data_len);
 
     case '_': // null
       return Qnil;
@@ -627,7 +627,7 @@ VALUE resp_read(struct um_stream *stream, VALUE out_buffer) {
       return resp_decode_simple_error(ptr, len);
     case '!': // error
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_error(stream, out_buffer, data_len);
+      return resp_decode_error(conn, out_buffer, data_len);
     default:
       um_raise_internal_error("Invalid character encountered");
   }
