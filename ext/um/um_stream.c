@@ -495,7 +495,7 @@ VALUE resp_read_line(struct um_stream *stream, VALUE out_buffer) {
   }
 }
 
-inline VALUE resp_read(struct um_stream *stream, ulong len, VALUE out_buffer) {
+inline VALUE resp_read_string(struct um_stream *stream, ulong len, VALUE out_buffer) {
   return stream_read(stream, out_buffer, len, 2, true);
 }
 
@@ -510,8 +510,8 @@ VALUE resp_decode_hash(struct um_stream *stream, VALUE out_buffer, ulong len) {
   VALUE hash = rb_hash_new();
 
   for (ulong i = 0; i < len; i++) {
-    VALUE key = resp_decode(stream, out_buffer);
-    VALUE value = resp_decode(stream, out_buffer);
+    VALUE key = resp_read(stream, out_buffer);
+    VALUE value = resp_read(stream, out_buffer);
     rb_hash_aset(hash, key, value);
     RB_GC_GUARD(key);
     RB_GC_GUARD(value);
@@ -525,7 +525,7 @@ VALUE resp_decode_array(struct um_stream *stream, VALUE out_buffer, ulong len) {
   VALUE array = rb_ary_new2(len);
 
   for (ulong i = 0; i < len; i++) {
-    VALUE value = resp_decode(stream, out_buffer);
+    VALUE value = resp_read(stream, out_buffer);
     rb_ary_push(array, value);
     RB_GC_GUARD(value);
   }
@@ -539,11 +539,11 @@ static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
 }
 
 static inline VALUE resp_decode_string(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  return resp_read(stream, len, out_buffer);
+  return resp_read_string(stream, len, out_buffer);
 }
 
 static inline VALUE resp_decode_string_with_encoding(struct um_stream *stream, VALUE out_buffer, ulong len) {
-  VALUE with_enc = resp_read(stream, len, out_buffer);
+  VALUE with_enc = resp_read_string(stream, len, out_buffer);
   char *ptr = RSTRING_PTR(with_enc);
   len = RSTRING_LEN(with_enc);
   if ((len < 4) || (ptr[3] != ':')) return Qnil;
@@ -581,7 +581,7 @@ static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer
   return err;
 }
 
-VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
+VALUE resp_read(struct um_stream *stream, VALUE out_buffer) {
   VALUE msg = resp_read_line(stream, out_buffer);
   if (msg == Qnil) return Qnil;
 

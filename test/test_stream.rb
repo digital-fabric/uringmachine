@@ -308,70 +308,70 @@ class StreamTest < StreamBaseTest
 end
 
 class StreamRespTest < StreamBaseTest
-  def test_stream_resp_decode
+  def test_stream_resp_read
     machine.write(@wfd, "+foo bar\r\n")
-    assert_equal "foo bar", stream.resp_decode
+    assert_equal "foo bar", stream.resp_read
 
     machine.write(@wfd, "+baz\r\n")
-    assert_equal "baz", stream.resp_decode
+    assert_equal "baz", stream.resp_read
 
     machine.write(@wfd, "-foobar\r\n")
-    o = stream.resp_decode
+    o = stream.resp_read
     assert_kind_of UM::Stream::RESPError, o
     assert_equal "foobar", o.message
 
     machine.write(@wfd, "!3\r\nbaz\r\n")
-    o = stream.resp_decode
+    o = stream.resp_read
     assert_kind_of UM::Stream::RESPError, o
     assert_equal "baz", o.message
 
     machine.write(@wfd, ":123\r\n")
-    assert_equal 123, stream.resp_decode
+    assert_equal 123, stream.resp_read
 
     machine.write(@wfd, ":-123\r\n")
-    assert_equal(-123, stream.resp_decode)
+    assert_equal(-123, stream.resp_read)
 
     machine.write(@wfd, ",123.321\r\n")
-    assert_equal 123.321, stream.resp_decode
+    assert_equal 123.321, stream.resp_read
 
     machine.write(@wfd, "_\r\n")
-    assert_nil stream.resp_decode
+    assert_nil stream.resp_read
 
     machine.write(@wfd, "#t\r\n")
-    assert_equal true, stream.resp_decode
+    assert_equal true, stream.resp_read
 
     machine.write(@wfd, "#f\r\n")
-    assert_equal false, stream.resp_decode
+    assert_equal false, stream.resp_read
 
     machine.write(@wfd, "$6\r\nfoobar\r\n")
-    assert_equal "foobar", stream.resp_decode
+    assert_equal "foobar", stream.resp_read
 
     machine.write(@wfd, "$3\r\nbaz\r\n")
-    assert_equal "baz", stream.resp_decode
+    assert_equal "baz", stream.resp_read
 
     machine.write(@wfd, "=10\r\ntxt:foobar\r\n")
-    assert_equal "foobar", stream.resp_decode
+    assert_equal "foobar", stream.resp_read
 
     machine.write(@wfd, "*3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], stream.resp_read
 
     machine.write(@wfd, "~3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], stream.resp_read
 
     machine.write(@wfd, ">3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], stream.resp_read
 
     machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n:43\r\n")
-    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_read)
 
     machine.write(@wfd, "|2\r\n+a\r\n:42\r\n+b\r\n:43\r\n")
-    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_read)
 
     machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n*3\r\n+foo\r\n+bar\r\n+baz\r\n")
-    assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, stream.resp_read)
   end
 
-  def test_stream_resp_decode_segmented
+  def test_stream_resp_read_segmented
     machine.write(@wfd, "\n")
     assert_equal "", stream.read_line(0)
 
@@ -379,11 +379,11 @@ class StreamRespTest < StreamBaseTest
     machine.write(@wfd, " ")
     machine.write(@wfd, "bar\r")
     machine.write(@wfd, "\n")
-    assert_equal "foo bar", stream.resp_decode
+    assert_equal "foo bar", stream.resp_read
     machine.write(@wfd, "$6\r")
     machine.write(@wfd, "\nbazbug")
     machine.write(@wfd, "\r\n")
-    assert_equal "bazbug", stream.resp_decode
+    assert_equal "bazbug", stream.resp_read
   end
 
   def test_stream_resp_encode

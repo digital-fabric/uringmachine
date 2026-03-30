@@ -234,10 +234,10 @@ VALUE Stream_read_each(VALUE self) {
  *
  * @return [any] decoded object
  */
-VALUE Stream_resp_decode(VALUE self) {
+VALUE Stream_resp_read(VALUE self) {
   struct um_stream *stream = um_get_stream(self);
   VALUE out_buffer = rb_utf8_str_new_literal("");
-  VALUE obj = resp_decode(stream, out_buffer);
+  VALUE obj = resp_read(stream, out_buffer);
   RB_GC_GUARD(out_buffer);
   return obj;
 }
@@ -322,7 +322,7 @@ void Init_Stream(void) {
   rb_define_method(cStream, "skip", Stream_skip, 1);
   rb_define_method(cStream, "each", Stream_read_each, 0);
 
-  rb_define_method(cStream, "resp_decode", Stream_resp_decode, 0);
+  rb_define_method(cStream, "resp_read", Stream_resp_read, 0);
   rb_define_singleton_method(cStream, "resp_encode", Stream_resp_encode, 2);
 
   rb_define_method(cStream, "eof?", Stream_eof_p, 0);
