@@ -320,10 +320,10 @@ The following API is used to interact with the stream:
 
 ```ruby
 # Read until a newline character is encountered:
-line = stream.get_line(0)
+line = stream.read_line(0)
 
 # Read line with a maximum length of 13 bytes:
-line = stream.get_line(13)
+line = stream.read_line(13)
 
 # Read all data:
 buf = stream.get_string(0)
@@ -343,7 +343,7 @@ using a stream:
 
 ```ruby
 def parse_http_request_headers(stream)
-  request_line = stream.get_line(0)
+  request_line = stream.read_line(0)
   m = request_line.match(REQUEST_LINE_RE)
   return nil if !m
 
@@ -354,7 +354,7 @@ def parse_http_request_headers(stream)
   }
 
   while true
-    line = stream.get_line(0)
+    line = stream.read_line(0)
     break if !line || line.empty?
 
     m = line.match(HEADER_RE)

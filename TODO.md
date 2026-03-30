@@ -17,39 +17,39 @@ What if instead of `Stream` we had something called `Link`, which serves for
 both reading and writing:
 
 ```ruby
-link = machine.link(fd)
-while l = link.read_line
-  link.write(l, '\n')
+conn = machine.connection(fd)
+while l = conn.read_line
+  conn.write(l, '\n')
 end
 # or:
-buf = link.read(42)
+buf = conn.read(42)
 ```
 
 RESP:
 
 ```ruby
-link.resp_write(['foo', 'bar'])
-reply = link.resp_read
+conn.resp_write(['foo', 'bar'])
+reply = conn.resp_read
 ```
 
 HTTP:
 
 ```ruby
-r = link.http_read_request
-link.http_write_response({ ':status' => 200 }, 'foo')
+r = conn.http_read_request
+conn.http_write_response({ ':status' => 200 }, 'foo')
 
 # or:
-link.http_write_request({ ':method' => 'GET', ':path' => '/foo' }, nil)
+conn.http_write_request({ ':method' => 'GET', ':path' => '/foo' }, nil)
 ```
 
 Plan of action:
 
 - Rename methods:
-  - rename `#get_line` to `#read_line`
+  - rename `#read_line` to `#read_line`
   - rename `#get_string` to `#read`
   - rename `#get_to_delim` to `#read_to_delim`
   - rename `#resp_decode` to `#resp_read`
-- Rename `Stream` to `Link`
+- Rename `Stream` to `Connection`
 - Add methods:
   - `#write(*bufs)`
   - `#resp_write(obj)`

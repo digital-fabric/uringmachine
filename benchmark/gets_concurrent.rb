@@ -89,7 +89,7 @@ def um_stream_do
   fd = @machine.socket(UM::AF_INET, UM::SOCK_STREAM, 0, 0)
   @machine.connect(fd, '127.0.0.1', 1234)
   stream = UM::Stream.new(@machine, fd)
-  N.times { @total_stream += stream.get_line(0)&.bytesize || 0 }
+  N.times { @total_stream += stream.read_line(0)&.bytesize || 0 }
 rescue => e
   p e
   p e.backtrace

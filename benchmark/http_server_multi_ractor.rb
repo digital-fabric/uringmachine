@@ -13,7 +13,7 @@ RE_REQUEST_LINE = /^([a-z]+)\s+([^\s]+)\s+(http\/[0-9\.]{1,3})/i
 RE_HEADER_LINE = /^([a-z0-9\-]+)\:\s+(.+)/i
 
 def stream_get_request_line(stream, buf)
-  line = stream.get_line(buf, 0)
+  line = stream.read_line(buf, 0)
   m = line&.match(RE_REQUEST_LINE)
   return nil if !m
 
@@ -31,7 +31,7 @@ def get_headers(stream, buf)
   return nil if !headers
 
   while true
-    line = stream.get_line(buf, 0)
+    line = stream.read_line(buf, 0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)

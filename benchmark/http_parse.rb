@@ -65,7 +65,7 @@ require 'stringio'
 RE_REQUEST_LINE = /^([a-z]+)\s+([^\s]+)\s+(http\/1\.1)/i
 RE_HEADER_LINE = /^([a-z0-9\-]+)\:\s+(.+)/i
 
-def get_line(fd, sio, buffer)
+def read_line(fd, sio, buffer)
   while true
     line = sio.gets(chomp: true)
     return line if line
@@ -76,7 +76,7 @@ def get_line(fd, sio, buffer)
 end
 
 def get_request_line(fd, sio, buffer)
-  line = get_line(fd, sio, buffer)
+  line = read_line(fd, sio, buffer)
 
   m = line.match(RE_REQUEST_LINE)
   return nil if !m
@@ -96,7 +96,7 @@ def parse_headers(fd)
   return nil if !headers
 
   while true
-    line = get_line(fd, sio, buffer)
+    line = read_line(fd, sio, buffer)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -137,7 +137,7 @@ def stream_parse_headers(fd)
   return nil if !headers
 
   while true
-    line = stream.get_line(0)
+    line = stream.read_line(0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -150,7 +150,7 @@ def stream_parse_headers(fd)
 end
 
 def stream_get_request_line(stream, buf)
-  line = stream.get_line(0)
+  line = stream.read_line(0)
 
   m = line.match(RE_REQUEST_LINE)
   return nil if !m

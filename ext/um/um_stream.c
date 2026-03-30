@@ -326,7 +326,7 @@ inline int trailing_cr_p(char *ptr, size_t len) {
   return ptr[len - 1] == '\r';
 }
 
-VALUE stream_get_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
+VALUE stream_read_line(struct um_stream *stream, VALUE out_buffer, size_t maxlen) {
   if (unlikely(stream->eof && !stream->head)) return Qnil;
   if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
 
@@ -468,7 +468,7 @@ VALUE stream_get_to_delim(struct um_stream *stream, VALUE out_buffer, VALUE deli
 
 ////////////////////////////////////////////////////////////////////////////////
 
-VALUE resp_get_line(struct um_stream *stream, VALUE out_buffer) {
+VALUE resp_read_line(struct um_stream *stream, VALUE out_buffer) {
   if (unlikely(stream->eof && !stream->head)) return Qnil;
   if (!stream->tail && !stream_get_more_segments(stream)) return Qnil;
 
@@ -582,7 +582,7 @@ static inline VALUE resp_decode_error(struct um_stream *stream, VALUE out_buffer
 }
 
 VALUE resp_decode(struct um_stream *stream, VALUE out_buffer) {
-  VALUE msg = resp_get_line(stream, out_buffer);
+  VALUE msg = resp_read_line(stream, out_buffer);
   if (msg == Qnil) return Qnil;
 
   char *ptr = RSTRING_PTR(msg);

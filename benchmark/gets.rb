@@ -36,14 +36,14 @@ end
 
 @fd_stream = @machine.open('/dev/random', UM::O_RDONLY)
 @stream = UM::Stream.new(@machine, @fd_stream)
-def um_stream_get_line
-  @stream.get_line(0)
+def um_stream_read_line
+  @stream.read_line(0)
 end
 
 Benchmark.ips do |x|
   x.report('IO#gets')     { io_gets }
   x.report('UM#read+buf') { um_read }
-  x.report('UM::Stream')  { um_stream_get_line }
+  x.report('UM::Stream')  { um_stream_read_line }
 
   x.compare!(order: :baseline)
 end

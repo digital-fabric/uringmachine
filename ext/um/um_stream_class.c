@@ -151,7 +151,7 @@ VALUE Stream_mode(VALUE self) {
 }
 
 /* call-seq:
- *   stream.get_line(limit) -> str
+ *   stream.read_line(limit) -> str
  *
  * Reads from the string until a newline character is encountered. Returns the
  * line without the newline delimiter. If limit is 0, the line length is not
@@ -160,9 +160,9 @@ VALUE Stream_mode(VALUE self) {
  * @param limit [integer] maximum line length (0 means no limit)
  * @return [String, nil] read data or nil
  */
-VALUE Stream_get_line(VALUE self, VALUE limit) {
+VALUE Stream_read_line(VALUE self, VALUE limit) {
   struct um_stream *stream = um_get_stream(self);
-  return stream_get_line(stream, Qnil, NUM2ULONG(limit));
+  return stream_read_line(stream, Qnil, NUM2ULONG(limit));
 }
 
 /* call-seq:
@@ -316,7 +316,7 @@ void Init_Stream(void) {
   rb_define_method(cStream, "initialize", Stream_initialize, -1);
   rb_define_method(cStream, "mode", Stream_mode, 0);
 
-  rb_define_method(cStream, "get_line", Stream_get_line, 1);
+  rb_define_method(cStream, "read_line", Stream_read_line, 1);
   rb_define_method(cStream, "get_string", Stream_get_string, 1);
   rb_define_method(cStream, "get_to_delim", Stream_get_to_delim, 2);
   rb_define_method(cStream, "skip", Stream_skip, 1);

@@ -169,9 +169,9 @@
 
 # 2025-06-03 Version 0.12
 
-- Add buffer, maxlen params to `Stream#get_line`
+- Add buffer, maxlen params to `Stream#read_line`
 - Add buffer param to `Stream#get_string`
-- Remove `Stream#resp_get_line`, `Stream#resp_get_string` methods
+- Remove `Stream#resp_read_line`, `Stream#resp_get_string` methods
 
 # 2025-06-02 Version 0.11.1
 

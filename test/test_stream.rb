@@ -131,23 +131,23 @@ class StreamTest < StreamBaseTest
     machine.join(f)
   end
 
-  def test_stream_get_line
+  def test_stream_read_line
     machine.write(@wfd, "foo\nbar\r\nbaz")
     machine.close(@wfd)
 
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
 
-    assert_equal 'foo', stream.get_line(0)
+    assert_equal 'foo', stream.read_line(0)
 
     assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
-    assert_equal 'bar', stream.get_line(0)
-    assert_nil stream.get_line(0)
+    assert_equal 'bar', stream.read_line(0)
+    assert_nil stream.read_line(0)
     assert_equal "baz", stream.get_string(-6)
   end
 
-  def test_stream_get_line_segmented
+  def test_stream_read_line_segmented
     machine.write(@wfd, "foo\n")
-    assert_equal 'foo', stream.get_line(0)
+    assert_equal 'foo', stream.read_line(0)
 
     machine.write(@wfd, "bar")
     machine.write(@wfd, "\r\n")
@@ -156,19 +156,19 @@ class StreamTest < StreamBaseTest
 
     # three segments received
     assert_equal [16, 0, 253, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_equal 'bar', stream.get_line(0)
+    assert_equal 'bar', stream.read_line(0)
     assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_equal 'baz', stream.get_line(0)
+    assert_equal 'baz', stream.read_line(0)
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_nil stream.get_line(0)
+    assert_nil stream.read_line(0)
   end
 
-  def test_stream_get_line_maxlen
+  def test_stream_read_line_maxlen
     machine.write(@wfd, "foobar\r\n")
 
-    assert_nil stream.get_line(3)
+    assert_nil stream.read_line(3)
       # verify that stream pos has not changed
-    assert_equal 'foobar', stream.get_line(0)
+    assert_equal 'foobar', stream.read_line(0)
 
     machine.write(@wfd, "baz")
     machine.write(@wfd, "\n")
@@ -176,15 +176,15 @@ class StreamTest < StreamBaseTest
     machine.write(@wfd, "\n")
     machine.close(@wfd)
 
-    assert_nil stream.get_line(2)
-    assert_nil stream.get_line(3)
-    assert_equal 'baz', stream.get_line(4)
+    assert_nil stream.read_line(2)
+    assert_nil stream.read_line(3)
+    assert_equal 'baz', stream.read_line(4)
 
-    assert_nil stream.get_line(3)
-    assert_nil stream.get_line(4)
-    assert_equal 'bizz', stream.get_line(5)
+    assert_nil stream.read_line(3)
+    assert_nil stream.read_line(4)
+    assert_equal 'bizz', stream.read_line(5)
 
-    assert_nil stream.get_line(8)
+    assert_nil stream.read_line(8)
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
@@ -373,7 +373,7 @@ class StreamRespTest < StreamBaseTest
 
   def test_stream_resp_decode_segmented
     machine.write(@wfd, "\n")
-    assert_equal "", stream.get_line(0)
+    assert_equal "", stream.read_line(0)
 
     machine.write(@wfd, "+foo")
     machine.write(@wfd, " ")
@@ -423,7 +423,7 @@ class StreamStressTest < UMBaseTest
   def start_connection_fiber(fd)
     machine.spin do
       stream = UM::Stream.new(machine, fd)
-      while (msg = stream.get_line(0))
+      while (msg = stream.read_line(0))
         @received << msg
       end
       machine.sendv(fd, @response_headers, @response_body)
@@ -518,14 +518,14 @@ class StreamStressTest < UMBaseTest
 end
 
 class StreamDevRandomTest < UMBaseTest
-  def test_stream_dev_random_get_line
+  def test_stream_dev_random_read_line
     fd = machine.open('/dev/random', UM::O_RDONLY)
     stream = UM::Stream.new(machine, fd)
 
     n = 100000
     lines = []
     n.times {
-      lines << stream.get_line(0)
+      lines << stream.read_line(0)
     }
 
     assert_equal n, lines.size
@@ -534,18 +534,18 @@ class StreamDevRandomTest < UMBaseTest
     machine.close(fd) rescue nil
   end
 
-  def get_line_do(n, acc)
+  def read_line_do(n, acc)
     fd = @machine.open('/dev/random', UM::O_RDONLY)
     stream = UM::Stream.new(@machine, fd)
-    n.times { acc << stream.get_line(0) }
+    n.times { acc << stream.read_line(0) }
   end
 
-  def test_stream_dev_random_get_line_concurrent
+  def test_stream_dev_random_read_line_concurrent
     acc = []
     c = 1
     n = 100000
     ff = c.times.map {
-      machine.spin { get_line_do(n, acc) }
+      machine.spin { read_line_do(n, acc) }
     }
     machine.await(ff)
     assert_equal c * n, acc.size
@@ -636,7 +636,7 @@ class StreamModeTest < UMBaseTest
     buf = +''
 
     stream = UM::Stream.new(machine, s2, :ssl)
-    assert_equal "foobar", stream.get_line(0)
+    assert_equal "foobar", stream.read_line(0)
 
     buf = "buh"
     @machine.ssl_write(s1, buf, buf.bytesize)
@@ -680,7 +680,7 @@ class StreamByteCountsTest < StreamBaseTest
     assert_equal 5, stream.consumed
     assert_equal 1, stream.pending
 
-    buf = stream.get_line(0)
+    buf = stream.read_line(0)
     assert_equal 'rabc', buf
     assert_equal 10, stream.consumed
     assert_equal 3, stream.pending

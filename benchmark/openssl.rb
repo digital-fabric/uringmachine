@@ -93,7 +93,7 @@ end
 
 def do_io_stream(ssl, um, stream)
   um.ssl_write(ssl, @msg_newline, 0)
-  stream.get_line(0)
+  stream.read_line(0)
 end
 
 Benchmark.ips do |x|
