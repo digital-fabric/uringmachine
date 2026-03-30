@@ -81,8 +81,8 @@ enum um_op_kind {
 };
 
 enum um_stream_mode {
-  STREAM_BP_READ,
-  STREAM_BP_RECV,
+  STREAM_FD,
+  STREAM_SOCKET,
   STREAM_SSL,
   STREAM_STRING,
   STREAM_IO_BUFFER

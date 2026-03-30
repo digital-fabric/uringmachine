@@ -577,33 +577,46 @@ class StreamModeTest < UMBaseTest
   def test_stream_default_mode
     r, w = UM.pipe
     stream = UM::Stream.new(machine, r)
-    assert_equal :bp_read, stream.mode
+    assert_equal :fd, stream.mode
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
   end
 
-  def test_stream_recv_mode_non_socket
+  def test_stream_default_mode_ssl
+    authority = Localhost::Authority.fetch
+    @server_ctx = authority.server_context
+    sock1, sock2 = UNIXSocket.pair
+
+    s1 = OpenSSL::SSL::SSLSocket.new(sock1, @server_ctx)
+    stream = UM::Stream.new(machine, s1)
+    assert_equal :ssl, stream.mode
+  ensure
+    sock1&.close rescue nil
+    sock2&.close rescue nil
+  end
+
+  def test_stream_socket_mode_non_socket
     r, w = UM.pipe
     machine.write(w, 'foobar')
     machine.close(w)
 
-    stream = UM::Stream.new(machine, r, :bp_recv)
-    assert_equal :bp_recv, stream.mode
-    # assert :bp_recv, stream.mode
+    stream = UM::Stream.new(machine, r, :socket)
+    assert_equal :socket, stream.mode
+    # assert :socket, stream.mode
     assert_raises(Errno::ENOTSOCK) { stream.read(0) }
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
   end
 
-  def test_stream_recv_mode_socket
+  def test_stream_socket_mode_socket
     r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     machine.write(w, 'foobar')
     machine.close(w)
 
-    stream = UM::Stream.new(machine, r, :bp_recv)
-    assert_equal :bp_recv, stream.mode
+    stream = UM::Stream.new(machine, r, :socket)
+    assert_equal :socket, stream.mode
     buf = stream.read(0)
     assert_equal 'foobar', buf
   ensure

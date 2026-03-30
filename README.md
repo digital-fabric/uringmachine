@@ -369,16 +369,16 @@ end
 Stream modes allow streams to be transport agnostic. Currently streams support
 three modes:
 
-- `:bp_read` - use the buffer pool, read data using multishot read
+- `:fd` - use the buffer pool, read data using multishot read
   (this is the default mode).
-- `:bp_recv` - use the buffer pool, read data using multishot recv.
+- `:socket` - use the buffer pool, read data using multishot recv.
 - `:ssl` - read from an `SSLSocket` object.
 
 The mode is specified as an additional argument to `Stream.new`:
 
 ```ruby
 # stream using recv:
-stream = machine.stream(fd, :bp_recv)
+stream = machine.stream(fd, :socket)
 
 # stream on an SSL socket:
 stream = machine.stream(ssl, :ssl)

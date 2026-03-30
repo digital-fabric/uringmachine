@@ -36,12 +36,12 @@ void stream_multishot_op_start(struct um_stream *stream) {
   bp_ensure_commit_level(stream->machine);
 
   switch (stream->mode) {
-    case STREAM_BP_READ:
+    case STREAM_FD:
       um_prep_op(stream->machine, stream->op, OP_READ_MULTISHOT, 2, STREAM_OP_FLAGS);
       sqe = um_get_sqe(stream->machine, stream->op);
       io_uring_prep_read_multishot(sqe, stream->fd, 0, -1, BP_BGID);
       break;
-    case STREAM_BP_RECV:
+    case STREAM_SOCKET:
       um_prep_op(stream->machine, stream->op, OP_RECV_MULTISHOT, 2, STREAM_OP_FLAGS);
       sqe = um_get_sqe(stream->machine, stream->op);
       io_uring_prep_recv_multishot(sqe, stream->fd, NULL, 0, 0);
@@ -215,8 +215,8 @@ int stream_get_more_segments_ssl(struct um_stream *stream) {
 
 int stream_get_more_segments(struct um_stream *stream) {
   switch (stream->mode) {
-    case STREAM_BP_READ:
-    case STREAM_BP_RECV:
+    case STREAM_FD:
+    case STREAM_SOCKET:
       return stream_get_more_segments_bp(stream);
     case STREAM_SSL:
       return stream_get_more_segments_ssl(stream);

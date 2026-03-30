@@ -49,7 +49,11 @@ Plan of action:
   - [v] rename `#read` to `#read`
   - [v] rename `#read_to_delim` to `#read_to_delim`
   - [v] rename `#each` to `#read_each`
-  - [ ] rename `#resp_decode` to `#resp_read`
+  - [v] rename `#resp_decode` to `#resp_read`
+- Rename modes:
+  - [v] :fd to :fd
+  - [v] :socket to :socket
+  - [v] auto detect SSL
 - Rename `Stream` to `Connection`
 - Add methods:
   - `#write(*bufs)`

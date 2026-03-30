@@ -201,8 +201,8 @@ class UringMachine
   # Creates a stream for reading from the given target fd or other object. The
   # mode indicates the type of target and how it is read from:
   #
-  # - :bp_read - read from the given fd using the buffer pool (default mode)
-  # - :bp_recv - receive from the given socket fd using the buffer pool
+  # - :fd - read from the given fd using the buffer pool (default mode)
+  # - :socket - receive from the given socket fd using the buffer pool
   # - :ssl - read from the given SSL connection
   #
   # If a block is given, the block will be called with the stream object and the

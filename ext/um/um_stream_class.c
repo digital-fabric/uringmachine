@@ -3,8 +3,8 @@
 VALUE cStream;
 VALUE eStreamRESPError;
 
-VALUE SYM_bp_read;
-VALUE SYM_bp_recv;
+VALUE SYM_fd;
+VALUE SYM_socket;
 VALUE SYM_ssl;
 
 inline int stream_has_target_obj_p(struct um_stream *stream) {
@@ -83,21 +83,36 @@ static inline struct um_stream *um_get_stream(VALUE self) {
   return stream;
 }
 
+static inline void stream_set_target(struct um_stream *stream, VALUE target, enum um_stream_mode mode) {
+  stream->mode = mode;
+  switch (mode) {
+    case STREAM_FD:
+    case STREAM_SOCKET:
+      stream->fd = NUM2INT(target);
+      return;
+    case STREAM_SSL:
+      stream->target = target;
+      um_ssl_set_bio(stream->machine, target);
+      return;
+    default:
+      rb_raise(eUMError, "Invalid stream mode");
+  }
+}
+
 static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mode) {
   stream->working_buffer = NULL;
-  if (mode == SYM_bp_read || mode == Qnil) {
-    stream->mode = STREAM_BP_READ;
-    stream->fd = NUM2INT(target);
+  if (NIL_P(mode)) {
+    if (TYPE(target) == T_DATA)
+      stream_set_target(stream, target, STREAM_SSL);
+    else
+      stream_set_target(stream, target, STREAM_FD);
   }
-  else if (mode == SYM_bp_recv) {
-    stream->mode = STREAM_BP_RECV;
-    stream->fd = NUM2INT(target);
-  }
-  else if (mode == SYM_ssl) {
-    stream->mode = STREAM_SSL;
-    stream->target = target;
-    um_ssl_set_bio(stream->machine, target);
-  }
+  else if (mode == SYM_fd)
+    stream_set_target(stream, target, STREAM_FD);
+  else if (mode == SYM_socket)
+    stream_set_target(stream, target, STREAM_SOCKET);
+  else if (mode == SYM_ssl)
+    stream_set_target(stream, target, STREAM_SSL);
   else
     rb_raise(eUMError, "Invalid stream mode");
 }
@@ -113,7 +128,7 @@ static inline void stream_setup(struct um_stream *stream, VALUE target, VALUE mo
  *
  * @param machine [UringMachine] UringMachine instance
  * @param target [integer, OpenSSL::SSL::SSLSocket] stream target: file descriptor or SSL socket
- * @param mode [Symbol] optional stream mode: :bp_read, :bp_recv, :ssl
+ * @param mode [Symbol] optional stream mode: :fd, :socket, :ssl
  * @return [void]
  */
 VALUE Stream_initialize(int argc, VALUE *argv, VALUE self) {
@@ -142,8 +157,8 @@ VALUE Stream_initialize(int argc, VALUE *argv, VALUE self) {
 VALUE Stream_mode(VALUE self) {
   struct um_stream *stream = um_get_stream(self);
   switch (stream->mode) {
-    case STREAM_BP_READ:  return SYM_bp_read;
-    case STREAM_BP_RECV:  return SYM_bp_recv;
+    case STREAM_FD:  return SYM_fd;
+    case STREAM_SOCKET:  return SYM_socket;
     case STREAM_SSL:      return SYM_ssl;
     default:              return Qnil;
   }
@@ -332,7 +347,7 @@ void Init_Stream(void) {
 
   eStreamRESPError = rb_define_class_under(cStream, "RESPError", rb_eStandardError);
 
-  SYM_bp_read = ID2SYM(rb_intern("bp_read"));
-  SYM_bp_recv = ID2SYM(rb_intern("bp_recv"));
+  SYM_fd = ID2SYM(rb_intern("fd"));
+  SYM_socket = ID2SYM(rb_intern("socket"));
   SYM_ssl     = ID2SYM(rb_intern("ssl"));
 }
