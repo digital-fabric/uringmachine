@@ -3506,53 +3506,53 @@ class SetChildSubreaperTest < Minitest::Test
   end
 end
 
-class StreamMethodTest < UMBaseTest
+class ConnectionMethodTest < UMBaseTest
   def setup
     super
     @rfd, @wfd = UM.pipe
   end
 
   def teardown
-    @stream = nil
+    @conn = nil
     machine.close(@rfd) rescue nil
     machine.close(@wfd) rescue nil
     super
   end
 
-  def test_stream_method
+  def test_connection_method
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
-    stream = machine.stream(@rfd)
-    assert_kind_of UM::Stream, stream
+    conn = machine.connection(@rfd)
+    assert_kind_of UM::Connection, conn
 
-    buf = stream.get_string(3)
+    buf = conn.read(3)
     assert_equal 'foo', buf
 
-    buf = stream.get_string(-6)
+    buf = conn.read(-6)
     assert_equal 'bar', buf
-    assert stream.eof?
+    assert conn.eof?
 
-    stream.clear
+    conn.clear
   end
 
-  def test_stream_method_with_block
+  def test_connection_method_with_block
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
     bufs = []
-    stream_obj = nil
-    res = machine.stream(@rfd) do |s|
-      stream_obj = s
+    conn_obj = nil
+    res = machine.connection(@rfd) do |s|
+      conn_obj = s
 
-      bufs << s.get_string(3)
-      bufs << s.get_string(-6)
+      bufs << s.read(3)
+      bufs << s.read(-6)
 
       :foo
     end
 
-    assert_kind_of UM::Stream, stream_obj
-    assert stream_obj.eof?
+    assert_kind_of UM::Connection, conn_obj
+    assert conn_obj.eof?
     assert_equal ['foo', 'bar'], bufs
     assert_equal :foo, res
   end
@@ -3688,7 +3688,7 @@ class TeeTest < UMBaseTest
     assert_equal 6, len1
 
     assert_equal 'foobar', result2
-    assert_equal 6, len2    
+    assert_equal 6, len2
   ensure
     machine.terminate(f)
     machine.join(f)

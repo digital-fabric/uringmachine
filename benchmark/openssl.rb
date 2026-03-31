@@ -76,12 +76,12 @@ end
 @um.ssl_set_bio(@ssl_um)
 @ssl_um.connect
 
-@ssl_stream = OpenSSL::SSL::SSLSocket.open("127.0.0.1", port)
-@ssl_stream.sync_close = true
-@um.ssl_set_bio(@ssl_stream)
-@ssl_stream.connect
+@ssl_conn = OpenSSL::SSL::SSLSocket.open("127.0.0.1", port)
+@ssl_conn.sync_close = true
+@um.ssl_set_bio(@ssl_conn)
+@ssl_conn.connect
 
-@stream = @um.stream(@ssl_stream, :ssl)
+@conn = @um.connection(@ssl_conn, :ssl)
 
 @msg = 'abc' * 1000
 @msg_newline = @msg + "\n"
@@ -91,15 +91,15 @@ def do_io(ssl)
   ssl.gets
 end
 
-def do_io_stream(ssl, um, stream)
+def do_io_connection(ssl, um, conn)
   um.ssl_write(ssl, @msg_newline, 0)
-  stream.get_line(0)
+  conn.read_line(0)
 end
 
 Benchmark.ips do |x|
   x.report('stock') { do_io(@ssl_stock) }
   x.report('UM BIO') { do_io(@ssl_um) }
-  x.report('UM Stream') { do_io_stream(@ssl_stream, @um, @stream) }
+  x.report('UM Stream') { do_io_connection(@ssl_conn, @um, @conn) }
 
   x.compare!(order: :baseline)
 end

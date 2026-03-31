@@ -78,7 +78,7 @@ buffers, to using managed buffers from the buffer pool.
   ```ruby
   machine.stream_recv(fd) do |stream|
     loop do
-      line = stream.get_line(max: 60)
+      line = stream.read_line(max: 60)
       if (size = parse_size(line))
         data = stream.read(size)
         process_data(data)

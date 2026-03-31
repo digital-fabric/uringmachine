@@ -37,7 +37,7 @@ implementation that allows integration with the entire Ruby ecosystem.
 - Excellent performance characteristics for concurrent I/O-bound applications.
 - `Fiber::Scheduler` implementation to automatically integrate with the Ruby
   ecosystem in a transparent fashion.
-- Read streams with automatic buffer management.
+- [Connection](#connections) class with automatic buffer management for reading.
 - Optimized I/O for encrypted SSL connections.
 
 ## Design
@@ -286,64 +286,70 @@ fiber = Fiber.schedule do
 end
 ```
 
-## Read Streams
+## Connections
 
-A UringMachine stream is used to efficiently read from a socket or other file
-descriptor. Streams are ideal for implementing the read side of protocols, and
-provide an API that is useful for both line-based protocols and binary
-(frame-based) protocols.
+`UringMachine::Connection` is a class designed for efficiently read from and
+write to a socket or other file descriptor. Connections are ideal for
+implementing the read side of protocols, and provide an API that is useful for
+both line-based protocols and binary (frame-based) protocols.
 
-A stream is associated with a UringMachine instance and a target file descriptor
-(see also [stream modes](#stream-modes) below). Behind the scenes, streams take
-advantage of io_uring's registered buffers feature, and more recently, the
-introduction of [incremental buffer
+A connection is associated with a UringMachine instance and a target file
+descriptor (or SSL socket, see also [connection modes](#connection-modes)
+below). Behind the scenes, connections take advantage of io_uring's registered
+buffers feature, and more recently, the introduction of [incremental buffer
 consumption](https://github.com/axboe/liburing/wiki/What's-new-with-io_uring-in-6.11-and-6.12#incremental-provided-buffer-consumption).
 
-When streams are used, UringMachine automatically manages the buffers it
+When connections are used, UringMachine automatically manages the buffers it
 provides to the kernel, maximizing buffer reuse and minimizing allocations.
 UringMachine also responds to stress conditions (increased incoming traffic) by
 automatically provisioning additional buffers.
 
-To create a stream for a given fd, use `UM#stream`:
+To create a connection for a given fd, use `UM#connection`:
 
 ```ruby
-stream = machine.stream(fd)
+conn = machine.connection(fd)
 
-# you can also provide a block that will be passed the stream instance:
-machine.stream(fd) { |s| do_something_with(s) }
+# you can also provide a block that will be passed the connection instance:
+machine.connection(fd) { |c| do_something_with(c) }
 
-# you can also instantiate a stream directly:
-stream = UM::Stream.new(machine, fd)
+# you can also instantiate a connection directly:
+conn = UM::Connection.new(machine, fd)
 ```
 
-The following API is used to interact with the stream:
+The following API is used to interact with the connection:
 
 ```ruby
 # Read until a newline character is encountered:
-line = stream.get_line(0)
+line = conn.read_line(0)
 
 # Read line with a maximum length of 13 bytes:
-line = stream.get_line(13)
+line = conn.read_line(13)
 
 # Read all data:
-buf = stream.get_string(0)
+buf = conn.read(0)
 
 # Read exactly 13 bytes:
-buf = stream.get_string(13)
+buf = conn.read(13)
 
 # Read up to 13 bytes:
-buf = stream.get_string(-13)
+buf = conn.read(-13)
+
+# Read continuously until EOF
+conn.read_each { |data| ... }
 
 # Skip 3 bytes:
-stream.skip(3)
+conn.skip(3)
+
+# Write
+conn.write('foo', 'bar', 'baz')
 ```
 
 Here's an example of a how a basic HTTP request parser might be implemented
-using a stream:
+using a connection:
 
 ```ruby
-def parse_http_request_headers(stream)
-  request_line = stream.get_line(0)
+def parse_http_request_headers(conn)
+  request_line = conn.read_line(0)
   m = request_line.match(REQUEST_LINE_RE)
   return nil if !m
 
@@ -354,7 +360,7 @@ def parse_http_request_headers(stream)
   }
 
   while true
-    line = stream.get_line(0)
+    line = conn.read_line(0)
     break if !line || line.empty?
 
     m = line.match(HEADER_RE)
@@ -364,24 +370,26 @@ def parse_http_request_headers(stream)
 end
 ```
 
-### Stream modes
+### Connection modes
 
-Stream modes allow streams to be transport agnostic. Currently streams support
-three modes:
+Connection modes allow connections to be transport agnostic. Currently
+connections support three modes:
 
-- `:bp_read` - use the buffer pool, read data using multishot read
+- `:fd` - use the buffer pool, read data using multishot read
   (this is the default mode).
-- `:bp_recv` - use the buffer pool, read data using multishot recv.
+- `:socket` - use the buffer pool, read data using multishot recv.
 - `:ssl` - read from an `SSLSocket` object.
 
-The mode is specified as an additional argument to `Stream.new`:
+The mode is specified as an additional argument to `Connection.new`:
 
 ```ruby
-# stream using recv:
-stream = machine.stream(fd, :bp_recv)
+# using recv/send:
+conn = machine.connection(fd, :socket)
 
-# stream on an SSL socket:
-stream = machine.stream(ssl, :ssl)
+# SSL I/O:
+conn = machine.connection(ssl, :ssl)
+# or simply:
+conn = machine.connection(ssl)
 ```
 
 ## Performance

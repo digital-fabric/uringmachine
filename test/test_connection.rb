@@ -5,24 +5,24 @@ require 'securerandom'
 require 'openssl'
 require 'localhost/authority'
 
-class StreamBaseTest < UMBaseTest
-  attr_reader :stream
+class ConnectionBaseTest < UMBaseTest
+  attr_reader :conn
 
   def setup
     super
     @rfd, @wfd = UM.pipe
-    @stream = UM::Stream.new(@machine, @rfd)
+    @conn = UM::Connection.new(@machine, @rfd)
   end
 
   def teardown
-    @stream = nil
+    @conn = nil
     machine.close(@rfd) rescue nil
     machine.close(@wfd) rescue nil
     super
   end
 end
 
-class StreamTest < StreamBaseTest
+class ConnectionTest < ConnectionBaseTest
   def buffer_metrics
     machine.metrics.fetch_values(
       :buffers_allocated,
@@ -33,19 +33,19 @@ class StreamTest < StreamBaseTest
     )
   end
 
-  def test_stream_basic_usage
+  def test_connection_basic_usage
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
-    buf = stream.get_string(3)
+    buf = conn.read(3)
     assert_equal 'foo', buf
 
-    buf = stream.get_string(-6)
+    buf = conn.read(-6)
     assert_equal 'bar', buf
-    assert stream.eof?
+    assert conn.eof?
 
-    stream.clear
+    conn.clear
 
     # initial buffer size: 6BKV, initial buffers commited: 16 (256KB)
     # (plus an additional buffer commited after first usage)
@@ -53,20 +53,20 @@ class StreamTest < StreamBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
   end
 
-  def test_stream_clear
+  def test_connection_clear
     rfd, wfd = UM.pipe
-    stream = UM::Stream.new(machine, rfd)
+    conn = UM::Connection.new(machine, rfd)
 
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(wfd, "foobar")
 
-    buf = stream.get_string(3)
+    buf = conn.read(3)
     assert_equal 'foo', buf
 
     assert_equal 1, machine.metrics[:ops_pending]
     assert_equal 255, machine.metrics[:segments_free]
 
-    stream.clear
+    conn.clear
     machine.snooze
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:segments_free]
@@ -77,9 +77,9 @@ class StreamTest < StreamBaseTest
     machine.close(wfd) rescue nil
   end
 
-  def test_stream_big_read
+  def test_connection_big_read
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    stream = UM::Stream.new(machine, s2)
+    conn = UM::Connection.new(machine, s2)
 
     msg = '1234567' * 20000
 
@@ -89,16 +89,16 @@ class StreamTest < StreamBaseTest
       machine.shutdown(s1, UM::SHUT_WR)
     end
 
-    buf = stream.get_string(msg.bytesize)
+    buf = conn.read(msg.bytesize)
     assert_equal msg, buf
   ensure
     machine.terminate(f)
     machine.join(f)
   end
 
-  def test_stream_buffer_reuse
+  def test_connection_buffer_reuse
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    stream = UM::Stream.new(machine, s2)
+    conn = UM::Connection.new(machine, s2)
 
     msg = '1234567' * 20000
 
@@ -109,19 +109,19 @@ class StreamTest < StreamBaseTest
       machine.shutdown(s1, UM::SHUT_WR)
     end
 
-    buf = stream.get_string(msg.bytesize)
+    buf = conn.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = conn.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = conn.read(msg.bytesize)
     assert_equal msg, buf
 
-    buf = stream.get_string(msg.bytesize)
+    buf = conn.read(msg.bytesize)
     assert_equal msg, buf
 
-    stream.clear
+    conn.clear
     # numbers may vary with different kernel versions
     assert_in_range 24..32, machine.metrics[:buffers_allocated]
     assert_in_range 10..18, machine.metrics[:buffers_free]
@@ -131,23 +131,23 @@ class StreamTest < StreamBaseTest
     machine.join(f)
   end
 
-  def test_stream_get_line
+  def test_connection_read_line
     machine.write(@wfd, "foo\nbar\r\nbaz")
     machine.close(@wfd)
 
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
 
-    assert_equal 'foo', stream.get_line(0)
+    assert_equal 'foo', conn.read_line(0)
 
     assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
-    assert_equal 'bar', stream.get_line(0)
-    assert_nil stream.get_line(0)
-    assert_equal "baz", stream.get_string(-6)
+    assert_equal 'bar', conn.read_line(0)
+    assert_nil conn.read_line(0)
+    assert_equal "baz", conn.read(-6)
   end
 
-  def test_stream_get_line_segmented
+  def test_connection_read_line_segmented
     machine.write(@wfd, "foo\n")
-    assert_equal 'foo', stream.get_line(0)
+    assert_equal 'foo', conn.read_line(0)
 
     machine.write(@wfd, "bar")
     machine.write(@wfd, "\r\n")
@@ -156,19 +156,19 @@ class StreamTest < StreamBaseTest
 
     # three segments received
     assert_equal [16, 0, 253, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_equal 'bar', stream.get_line(0)
+    assert_equal 'bar', conn.read_line(0)
     assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_equal 'baz', stream.get_line(0)
+    assert_equal 'baz', conn.read_line(0)
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 13], buffer_metrics
-    assert_nil stream.get_line(0)
+    assert_nil conn.read_line(0)
   end
 
-  def test_stream_get_line_maxlen
+  def test_connection_read_line_maxlen
     machine.write(@wfd, "foobar\r\n")
 
-    assert_nil stream.get_line(3)
-      # verify that stream pos has not changed
-    assert_equal 'foobar', stream.get_line(0)
+    assert_nil conn.read_line(3)
+      # verify that connecvtion pos has not changed
+    assert_equal 'foobar', conn.read_line(0)
 
     machine.write(@wfd, "baz")
     machine.write(@wfd, "\n")
@@ -176,83 +176,83 @@ class StreamTest < StreamBaseTest
     machine.write(@wfd, "\n")
     machine.close(@wfd)
 
-    assert_nil stream.get_line(2)
-    assert_nil stream.get_line(3)
-    assert_equal 'baz', stream.get_line(4)
+    assert_nil conn.read_line(2)
+    assert_nil conn.read_line(3)
+    assert_equal 'baz', conn.read_line(4)
 
-    assert_nil stream.get_line(3)
-    assert_nil stream.get_line(4)
-    assert_equal 'bizz', stream.get_line(5)
+    assert_nil conn.read_line(3)
+    assert_nil conn.read_line(4)
+    assert_equal 'bizz', conn.read_line(5)
 
-    assert_nil stream.get_line(8)
+    assert_nil conn.read_line(8)
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
-  def test_stream_get_string
+  def test_connection_read
     machine.write(@wfd, "foobarbazblahzzz")
     machine.close(@wfd)
 
-    assert_equal 'foobar', stream.get_string(6)
-    assert_equal 'baz', stream.get_string(3)
-    assert_equal 'blah', stream.get_string(4)
-    assert_nil stream.get_string(4)
+    assert_equal 'foobar', conn.read(6)
+    assert_equal 'baz', conn.read(3)
+    assert_equal 'blah', conn.read(4)
+    assert_nil conn.read(4)
   end
 
-  def test_stream_get_string_zero_len
+  def test_connection_read_zero_len
     machine.write(@wfd, "foobar")
 
-    assert_equal 'foobar', stream.get_string(0)
+    assert_equal 'foobar', conn.read(0)
 
     machine.write(@wfd, "bazblah")
     machine.close(@wfd)
-    assert_equal 'bazblah', stream.get_string(0)
-    assert_nil stream.get_string(0)
+    assert_equal 'bazblah', conn.read(0)
+    assert_nil conn.read(0)
   end
 
-  def test_stream_get_string_negative_len
+  def test_connection_read_negative_len
     machine.write(@wfd, "foobar")
 
-    assert_equal 'foo', stream.get_string(-3)
-    assert_equal 'bar', stream.get_string(-6)
+    assert_equal 'foo', conn.read(-3)
+    assert_equal 'bar', conn.read(-6)
 
     machine.write(@wfd, "bazblah")
     machine.close(@wfd)
-    assert_equal 'bazblah', stream.get_string(-12)
-    assert_nil stream.get_string(-3)
+    assert_equal 'bazblah', conn.read(-12)
+    assert_nil conn.read(-3)
   end
 
-  def test_stream_get_to_delim
+  def test_connection_read_to_delim
     machine.write(@wfd, "abc,def,ghi")
     machine.close(@wfd)
 
-    assert_nil stream.get_to_delim('!', 0) # not there
-    assert_nil stream.get_to_delim(',', 2) # too long
-    assert_equal 'abc', stream.get_to_delim(',', 0)
-    assert_equal 'def', stream.get_to_delim(',', 0)
-    assert_nil stream.get_to_delim(',', 0)
-    assert_equal 'ghi', stream.get_to_delim(',', -3)
+    assert_nil conn.read_to_delim('!', 0) # not there
+    assert_nil conn.read_to_delim(',', 2) # too long
+    assert_equal 'abc', conn.read_to_delim(',', 0)
+    assert_equal 'def', conn.read_to_delim(',', 0)
+    assert_nil conn.read_to_delim(',', 0)
+    assert_equal 'ghi', conn.read_to_delim(',', -3)
   end
 
-  def test_stream_get_to_delim_invalid_delim
+  def test_connection_read_to_delim_invalid_delim
     machine.write(@wfd, "abc,def,ghi")
 
-    assert_raises(ArgumentError) { stream.get_to_delim(:foo, 0) }
-    assert_raises(UM::Error) { stream.get_to_delim('', 0) }
-    assert_raises(UM::Error) { stream.get_to_delim('ab', 0) }
-    assert_raises(UM::Error) { stream.get_to_delim('🙂', 0) }
+    assert_raises(ArgumentError) { conn.read_to_delim(:foo, 0) }
+    assert_raises(UM::Error) { conn.read_to_delim('', 0) }
+    assert_raises(UM::Error) { conn.read_to_delim('ab', 0) }
+    assert_raises(UM::Error) { conn.read_to_delim('🙂', 0) }
   end
 
-  def test_stream_skip
+  def test_connection_skip
     machine.write(@wfd, "foobarbaz")
 
-    stream.skip(2)
-    assert_equal 'obar', stream.get_string(4)
+    conn.skip(2)
+    assert_equal 'obar', conn.read(4)
 
-    stream.skip(1)
-    assert_equal 'az', stream.get_string(0)
+    conn.skip(1)
+    assert_equal 'az', conn.read(0)
   end
 
-  def test_stream_big_data
+  def test_connection_big_data
     data = SecureRandom.random_bytes(300_000)
     fiber = machine.spin {
       machine.writev(@wfd, data)
@@ -261,7 +261,7 @@ class StreamTest < StreamBaseTest
 
     received = []
     loop {
-      msg = stream.get_string(-60_000)
+      msg = conn.read(-60_000)
       break if !msg
 
       received << msg
@@ -273,11 +273,11 @@ class StreamTest < StreamBaseTest
     assert_equal data, received.join
   end
 
-  def test_stream_each
+  def test_connection_read_each
     bufs = []
     f = machine.spin do
       bufs << :ready
-      stream.each {
+      conn.read_each {
         assert_kind_of IO::Buffer, it
         bufs << it.get_string
       }
@@ -307,87 +307,190 @@ class StreamTest < StreamBaseTest
   end
 end
 
-class StreamRespTest < StreamBaseTest
-  def test_stream_resp_decode
+class ConnectionWriteTest < UMBaseTest
+  attr_reader :conn
+
+  def setup
+    super
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    @conn = UM::Connection.new(@machine, @s1)
+  end
+
+  def teardown
+    @conn = nil
+    machine.close(@s1) rescue nil
+    machine.close(@s2) rescue nil
+    super
+  end
+
+  def test_connection_write_single_buf
+    assert_equal 3, conn.write('foo')
+
+    buf = +''
+    machine.read(@s2, buf, 100)
+    assert_equal 'foo', buf
+  end
+
+  def test_connection_write_multi_buf
+    assert_equal 6, conn.write('foo', 'bar')
+
+    buf = +''
+    machine.read(@s2, buf, 100)
+    assert_equal 'foobar', buf
+  end
+
+  def test_connection_write_socket_mode
+    conn = machine.connection(@s2, :socket)
+
+    assert_equal 6, conn.write('foo', 'bar')
+
+    buf = +''
+    machine.read(@s1, buf, 100)
+    assert_equal 'foobar', buf
+  end
+
+  def test_connection_write_ssl_mode
+    ssl1 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s1), Localhost::Authority.fetch.server_context)
+    ssl1.sync_close = true
+    ssl2 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s2), OpenSSL::SSL::SSLContext.new)
+    ssl2.sync_close = true
+
+    machine.ssl_set_bio(ssl1)
+    machine.ssl_set_bio(ssl2)
+
+    f = machine.spin { ssl1.accept rescue nil }
+
+    ssl2.connect
+    refute_equal 0, @machine.metrics[:total_ops]
+
+    conn1 = machine.connection(ssl1)
+    conn2 = machine.connection(ssl2)
+
+    assert_equal 10, conn1.write('foobar', "\n", 'baz')
+
+    assert_equal "foobar\nbaz", conn2.read(10)
+  ensure
+    ssl1.close rescue nil
+    ss2.close rescue nil
+    if f
+      machine.terminate(f)
+      machine.join(f)
+    end
+  end
+end
+
+class ConnectionRespTest < ConnectionBaseTest
+  def test_connection_resp_read
     machine.write(@wfd, "+foo bar\r\n")
-    assert_equal "foo bar", stream.resp_decode
+    assert_equal "foo bar", conn.resp_read
 
     machine.write(@wfd, "+baz\r\n")
-    assert_equal "baz", stream.resp_decode
+    assert_equal "baz", conn.resp_read
 
     machine.write(@wfd, "-foobar\r\n")
-    o = stream.resp_decode
-    assert_kind_of UM::Stream::RESPError, o
+    o = conn.resp_read
+    assert_kind_of UM::Connection::RESPError, o
     assert_equal "foobar", o.message
 
     machine.write(@wfd, "!3\r\nbaz\r\n")
-    o = stream.resp_decode
-    assert_kind_of UM::Stream::RESPError, o
+    o = conn.resp_read
+    assert_kind_of UM::Connection::RESPError, o
     assert_equal "baz", o.message
 
     machine.write(@wfd, ":123\r\n")
-    assert_equal 123, stream.resp_decode
+    assert_equal 123, conn.resp_read
 
     machine.write(@wfd, ":-123\r\n")
-    assert_equal(-123, stream.resp_decode)
+    assert_equal(-123, conn.resp_read)
 
     machine.write(@wfd, ",123.321\r\n")
-    assert_equal 123.321, stream.resp_decode
+    assert_equal 123.321, conn.resp_read
 
     machine.write(@wfd, "_\r\n")
-    assert_nil stream.resp_decode
+    assert_nil conn.resp_read
 
     machine.write(@wfd, "#t\r\n")
-    assert_equal true, stream.resp_decode
+    assert_equal true, conn.resp_read
 
     machine.write(@wfd, "#f\r\n")
-    assert_equal false, stream.resp_decode
+    assert_equal false, conn.resp_read
 
     machine.write(@wfd, "$6\r\nfoobar\r\n")
-    assert_equal "foobar", stream.resp_decode
+    assert_equal "foobar", conn.resp_read
 
     machine.write(@wfd, "$3\r\nbaz\r\n")
-    assert_equal "baz", stream.resp_decode
+    assert_equal "baz", conn.resp_read
 
     machine.write(@wfd, "=10\r\ntxt:foobar\r\n")
-    assert_equal "foobar", stream.resp_decode
+    assert_equal "foobar", conn.resp_read
 
     machine.write(@wfd, "*3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], conn.resp_read
 
     machine.write(@wfd, "~3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], conn.resp_read
 
     machine.write(@wfd, ">3\r\n+foo\r\n:42\r\n$3\r\nbar\r\n")
-    assert_equal ['foo', 42, 'bar'], stream.resp_decode
+    assert_equal ['foo', 42, 'bar'], conn.resp_read
 
     machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n:43\r\n")
-    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => 43 }, conn.resp_read)
 
     machine.write(@wfd, "|2\r\n+a\r\n:42\r\n+b\r\n:43\r\n")
-    assert_equal({ 'a' => 42, 'b' => 43 }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => 43 }, conn.resp_read)
 
     machine.write(@wfd, "%2\r\n+a\r\n:42\r\n+b\r\n*3\r\n+foo\r\n+bar\r\n+baz\r\n")
-    assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, stream.resp_decode)
+    assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, conn.resp_read)
   end
 
-  def test_stream_resp_decode_segmented
+  def test_connection_resp_read_segmented
     machine.write(@wfd, "\n")
-    assert_equal "", stream.get_line(0)
+    assert_equal "", conn.read_line(0)
 
     machine.write(@wfd, "+foo")
     machine.write(@wfd, " ")
     machine.write(@wfd, "bar\r")
     machine.write(@wfd, "\n")
-    assert_equal "foo bar", stream.resp_decode
+    assert_equal "foo bar", conn.resp_read
     machine.write(@wfd, "$6\r")
     machine.write(@wfd, "\nbazbug")
     machine.write(@wfd, "\r\n")
-    assert_equal "bazbug", stream.resp_decode
+    assert_equal "bazbug", conn.resp_read
   end
 
-  def test_stream_resp_encode
-    s = UM::Stream
+  def test_connection_resp_write
+    writer = machine.connection(@wfd)
+
+    writer.resp_write(nil);
+    assert_equal "_\r\n", conn.read(-100)
+
+    writer.resp_write(true);
+    assert_equal "#t\r\n", conn.read(-100)
+
+    writer.resp_write(false);
+    assert_equal "#f\r\n", conn.read(-100)
+
+    writer.resp_write(42);
+    assert_equal ":42\r\n", conn.read(-100)
+
+    writer.resp_write(42.1)
+    assert_equal ",42.1\r\n", conn.read(-100)
+
+    writer.resp_write('foobar')
+    assert_equal "$6\r\nfoobar\r\n", conn.read(-100)
+
+    writer.resp_write('פובאר')
+    assert_equal (+"$10\r\nפובאר\r\n").force_encoding('ASCII-8BIT'), conn.read(-100)
+
+    writer.resp_write(['foo', 'bar'])
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", conn.read(-100)
+
+    writer.resp_write({ 'foo' => 'bar', 'baz' => 42 })
+    assert_equal "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n:42\r\n", conn.read(-100)
+  end
+
+  def test_connection_resp_encode
+    s = UM::Connection
     assert_equal "_\r\n",             s.resp_encode(+'', nil)
     assert_equal "#t\r\n",            s.resp_encode(+'', true)
     assert_equal "#f\r\n",            s.resp_encode(+'', false)
@@ -404,7 +507,7 @@ class StreamRespTest < StreamBaseTest
   end
 end
 
-class StreamStressTest < UMBaseTest
+class ConnectionStressTest < UMBaseTest
   def setup
     super
 
@@ -422,8 +525,8 @@ class StreamStressTest < UMBaseTest
 
   def start_connection_fiber(fd)
     machine.spin do
-      stream = UM::Stream.new(machine, fd)
-      while (msg = stream.get_line(0))
+      conn = UM::Connection.new(machine, fd)
+      while (msg = conn.read_line(0))
         @received << msg
       end
       machine.sendv(fd, @response_headers, @response_body)
@@ -434,7 +537,7 @@ class StreamStressTest < UMBaseTest
     end
   end
 
-  def test_stream_server_big_lines
+  def test_connection_server_big_lines
     server_fibers = []
     server_fibers << machine.spin do
       machine.accept_each(@listen_fd) { |fd|
@@ -477,7 +580,7 @@ class StreamStressTest < UMBaseTest
     assert_equal msg * client_count, @received.map { it + "\n" }.join
   end
 
-  def test_stream_server_http
+  def test_connection_server_http
     server_fibers = []
     server_fibers << machine.spin do
       machine.accept_each(@listen_fd) { |fd|
@@ -517,50 +620,50 @@ class StreamStressTest < UMBaseTest
   end
 end
 
-class StreamDevRandomTest < UMBaseTest
-  def test_stream_dev_random_get_line
+class ConnectionDevRandomTest < UMBaseTest
+  def test_connection_dev_random_read_line
     fd = machine.open('/dev/random', UM::O_RDONLY)
-    stream = UM::Stream.new(machine, fd)
+    conn = UM::Connection.new(machine, fd)
 
     n = 100000
     lines = []
     n.times {
-      lines << stream.get_line(0)
+      lines << conn.read_line(0)
     }
 
     assert_equal n, lines.size
   ensure
-    stream.clear rescue nil
+    conn.clear rescue nil
     machine.close(fd) rescue nil
   end
 
-  def get_line_do(n, acc)
+  def read_line_do(n, acc)
     fd = @machine.open('/dev/random', UM::O_RDONLY)
-    stream = UM::Stream.new(@machine, fd)
-    n.times { acc << stream.get_line(0) }
+    conn = UM::Connection.new(@machine, fd)
+    n.times { acc << conn.read_line(0) }
   end
 
-  def test_stream_dev_random_get_line_concurrent
+  def test_connection_dev_random_read_line_concurrent
     acc = []
     c = 1
     n = 100000
     ff = c.times.map {
-      machine.spin { get_line_do(n, acc) }
+      machine.spin { read_line_do(n, acc) }
     }
     machine.await(ff)
     assert_equal c * n, acc.size
   end
 
-  def test_stream_dev_random_get_string
+  def test_connection_dev_random_read
     fd = machine.open('/dev/random', UM::O_RDONLY)
-    stream = UM::Stream.new(machine, fd)
+    conn = UM::Connection.new(machine, fd)
 
     n = 256
     size = 65536 * 8
     count = 0
     # lines = []
     n.times {
-      l = stream.get_string(size)
+      l = conn.read(size)
       refute_nil l
       assert_equal size, l.bytesize
 
@@ -569,49 +672,62 @@ class StreamDevRandomTest < UMBaseTest
 
     assert_equal n, count
   ensure
-    stream.clear rescue nil
+    conn.clear rescue nil
   end
 end
 
-class StreamModeTest < UMBaseTest
-  def test_stream_default_mode
+class ConnectionModeTest < UMBaseTest
+  def test_connection_default_mode
     r, w = UM.pipe
-    stream = UM::Stream.new(machine, r)
-    assert_equal :bp_read, stream.mode
+    conn = UM::Connection.new(machine, r)
+    assert_equal :fd, conn.mode
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
   end
 
-  def test_stream_recv_mode_non_socket
+  def test_connection_default_mode_ssl
+    authority = Localhost::Authority.fetch
+    @server_ctx = authority.server_context
+    sock1, sock2 = UNIXSocket.pair
+
+    s1 = OpenSSL::SSL::SSLSocket.new(sock1, @server_ctx)
+    conn = UM::Connection.new(machine, s1)
+    assert_equal :ssl, conn.mode
+  ensure
+    sock1&.close rescue nil
+    sock2&.close rescue nil
+  end
+
+  def test_connection_socket_mode_non_socket
     r, w = UM.pipe
     machine.write(w, 'foobar')
     machine.close(w)
 
-    stream = UM::Stream.new(machine, r, :bp_recv)
-    assert_equal :bp_recv, stream.mode
-    # assert :bp_recv, stream.mode
-    assert_raises(Errno::ENOTSOCK) { stream.get_string(0) }
+    conn = UM::Connection.new(machine, r, :socket)
+    assert_equal :socket, conn.mode
+    # assert :socket, conn.mode
+    assert_raises(Errno::ENOTSOCK) { conn.read(0) }
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
   end
 
-  def test_stream_recv_mode_socket
+  def test_connection_socket_mode_socket
     r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     machine.write(w, 'foobar')
     machine.close(w)
 
-    stream = UM::Stream.new(machine, r, :bp_recv)
-    assert_equal :bp_recv, stream.mode
-    buf = stream.get_string(0)
+    conn = UM::Connection.new(machine, r, :socket)
+    assert_equal :socket, conn.mode
+    buf = conn.read(0)
     assert_equal 'foobar', buf
   ensure
     machine.close(r) rescue nil
     machine.close(w) rescue nil
   end
 
-  def test_stream_ssl_mode
+  def test_connection_ssl_mode
     authority = Localhost::Authority.fetch
     @server_ctx = authority.server_context
     sock1, sock2 = UNIXSocket.pair
@@ -635,18 +751,18 @@ class StreamModeTest < UMBaseTest
     assert_equal 10, @machine.ssl_write(s1, buf, buf.bytesize)
     buf = +''
 
-    stream = UM::Stream.new(machine, s2, :ssl)
-    assert_equal "foobar", stream.get_line(0)
+    conn = UM::Connection.new(machine, s2, :ssl)
+    assert_equal "foobar", conn.read_line(0)
 
     buf = "buh"
     @machine.ssl_write(s1, buf, buf.bytesize)
 
-    assert_equal "baz", stream.get_string(0)
-    assert_equal "buh", stream.get_string(0)
+    assert_equal "baz", conn.read(0)
+    assert_equal "buh", conn.read(0)
 
     s1.close
 
-    assert_nil stream.get_string(0)
+    assert_nil conn.read(0)
   rescue => e
     p e
     p e.backtrace
@@ -658,35 +774,35 @@ class StreamModeTest < UMBaseTest
   end
 end
 
-class StreamByteCountsTest < StreamBaseTest
-  def test_stream_byte_counts
+class ConnectionByteCountsTest < ConnectionBaseTest
+  def test_connection_byte_counts
     machine.write(@wfd, "foobar")
 
-    assert_equal 0, stream.consumed
-    assert_equal 0, stream.pending
+    assert_equal 0, conn.consumed
+    assert_equal 0, conn.pending
 
-    buf = stream.get_string(2)
+    buf = conn.read(2)
     assert_equal 'fo', buf
-    assert_equal 2, stream.consumed
-    assert_equal 4, stream.pending
+    assert_equal 2, conn.consumed
+    assert_equal 4, conn.pending
 
-    buf = stream.get_string(3)
+    buf = conn.read(3)
     assert_equal 'oba', buf
-    assert_equal 5, stream.consumed
-    assert_equal 1, stream.pending
+    assert_equal 5, conn.consumed
+    assert_equal 1, conn.pending
 
     machine.write(@wfd, "abc\ndef")
     machine.snooze
-    assert_equal 5, stream.consumed
-    assert_equal 1, stream.pending
+    assert_equal 5, conn.consumed
+    assert_equal 1, conn.pending
 
-    buf = stream.get_line(0)
+    buf = conn.read_line(0)
     assert_equal 'rabc', buf
-    assert_equal 10, stream.consumed
-    assert_equal 3, stream.pending
+    assert_equal 10, conn.consumed
+    assert_equal 3, conn.pending
 
-    stream.clear
-    assert_equal 10, stream.consumed
-    assert_equal 0, stream.pending
+    conn.clear
+    assert_equal 10, conn.consumed
+    assert_equal 0, conn.pending
   end
 end

@@ -195,28 +195,28 @@ class UringMachine
   end
 
   # call-seq:
-  #   machine.stream(fd, mode = nil) -> stream
-  #   machine.stream(fd, mode = nil) { |stream| }
+  #   machine.connection(fd, mode = nil) -> conn
+  #   machine.connection(fd, mode = nil) { |conn| }
   #
-  # Creates a stream for reading from the given target fd or other object. The
-  # mode indicates the type of target and how it is read from:
+  # Creates a connection for reading from the given target fd or other object.
+  # The mode indicates the type of target and how it is read from:
   #
-  # - :bp_read - read from the given fd using the buffer pool (default mode)
-  # - :bp_recv - receive from the given socket fd using the buffer pool
+  # - :fd - read from the given fd using the buffer pool (default mode)
+  # - :socket - receive from the given socket fd using the buffer pool
   # - :ssl - read from the given SSL connection
   #
-  # If a block is given, the block will be called with the stream object and the
-  # method will return the block's return value.
+  # If a block is given, the block will be called with the connection object and
+  # the method will return the block's return value.
   #
   # @param target [Integer, OpenSSL::SSL::SSLSocket] fd or ssl connection
-  # @param mode [Symbol, nil] stream mode
-  # @return [UringMachine::Stream] stream object
-  def stream(target, mode = nil)
-    stream = UM::Stream.new(self, target, mode)
-    return stream if !block_given?
+  # @param mode [Symbol, nil] connection mode
+  # @return [UringMachine::Stream] connection object
+  def connection(target, mode = nil)
+    conn = UM::Connection.new(self, target, mode)
+    return conn if !block_given?
 
-    res = yield(stream)
-    stream.clear
+    res = yield(conn)
+    conn.clear
     res
   end
 
