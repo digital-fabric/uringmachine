@@ -444,6 +444,7 @@ VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len,
 VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VALUE delim, ssize_t maxlen);
 void connection_skip(struct um_connection *conn, size_t inc, int safe_inc);
 void connection_read_each(struct um_connection *conn);
+VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv);
 VALUE resp_read(struct um_connection *conn, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);
@@ -464,6 +465,7 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
 int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, size_t maxlen);
 int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, size_t maxlen);
 int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, size_t len);
+int um_ssl_writev(struct um *machine, VALUE ssl, int argc, VALUE *argv);
 
 void bp_setup(struct um *machine);
 void bp_teardown(struct um *machine);

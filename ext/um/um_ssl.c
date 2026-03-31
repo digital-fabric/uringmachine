@@ -105,3 +105,28 @@ int um_ssl_write(struct um *machine, VALUE ssl_obj, VALUE buf, size_t len) {
 
   return ret;
 }
+
+int um_ssl_write_all(struct um *machine, VALUE ssl_obj, VALUE buf) {
+  SSL *ssl = RTYPEDDATA_GET_DATA(ssl_obj);
+  const char *base;
+  size_t size;
+  um_get_buffer_bytes_for_writing(buf, (const void **)&base, &size, true);
+
+  size_t left = size;
+  while (left) {
+    int ret = SSL_write(ssl, base, (int)left);
+    if (ret <= 0) rb_raise(eUMError, "Failed to write");
+
+    left -= ret;
+    base += ret;
+  }
+
+  return size;
+}
+
+int um_ssl_writev(struct um *machine, VALUE ssl, int argc, VALUE *argv) {
+  size_t total = 0;
+  for (int i = 0; i < argc; i++)
+    total += um_ssl_write_all(machine, ssl, argv[i]);
+  return total;
+}

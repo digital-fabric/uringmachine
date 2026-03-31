@@ -465,6 +465,18 @@ VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VAL
   }
 }
 
+VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv) {
+  switch (conn->mode) {
+    case CONNECTION_FD:
+      return um_writev(conn->machine, conn->fd, argc, argv);
+    case CONNECTION_SOCKET:
+      return um_sendv(conn->machine, conn->fd, argc, argv);
+    case CONNECTION_SSL:
+      return ULONG2NUM(um_ssl_writev(conn->machine, conn->target, argc, argv));
+    default:
+      rb_raise(eUMError, "Invalid connection mode");
+  }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 

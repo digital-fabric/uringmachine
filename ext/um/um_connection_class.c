@@ -242,6 +242,11 @@ VALUE Connection_read_each(VALUE self) {
   return self;
 }
 
+VALUE Connection_write(int argc, VALUE *argv, VALUE self) {
+  struct um_connection *conn = um_get_connection(self);
+  return connection_writev(conn, argc, argv);
+}
+
 /* call-seq:
  *   conn.resp_decode -> obj
  *
@@ -335,7 +340,9 @@ void Init_Stream(void) {
   rb_define_method(cConnection, "read", Connection_read, 1);
   rb_define_method(cConnection, "read_to_delim", Connection_read_to_delim, 2);
   rb_define_method(cConnection, "skip", Connection_skip, 1);
-  rb_define_method(cConnection, "each", Connection_read_each, 0);
+  rb_define_method(cConnection, "read_each", Connection_read_each, 0);
+
+  rb_define_method(cConnection, "write", Connection_write, -1);
 
   rb_define_method(cConnection, "resp_read", Connection_resp_read, 0);
   rb_define_singleton_method(cConnection, "resp_encode", Connection_resp_encode, 2);

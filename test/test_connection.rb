@@ -277,7 +277,7 @@ class ConnectionTest < ConnectionBaseTest
     bufs = []
     f = machine.spin do
       bufs << :ready
-      conn.each {
+      conn.read_each {
         assert_kind_of IO::Buffer, it
         bufs << it.get_string
       }
@@ -304,6 +304,78 @@ class ConnectionTest < ConnectionBaseTest
   ensure
     machine.terminate(f)
     machine.join(f)
+  end
+end
+
+class ConnectionWriteTest < UMBaseTest
+  attr_reader :conn
+
+  def setup
+    super
+    @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    @conn = UM::Connection.new(@machine, @s1)
+  end
+
+  def teardown
+    @conn = nil
+    machine.close(@s1) rescue nil
+    machine.close(@s2) rescue nil
+    super
+  end
+
+  def test_connection_write_single_buf
+    assert_equal 3, conn.write('foo')
+
+    buf = +''
+    machine.read(@s2, buf, 100)
+    assert_equal 'foo', buf
+  end
+
+  def test_connection_write_multi_buf
+    assert_equal 6, conn.write('foo', 'bar')
+
+    buf = +''
+    machine.read(@s2, buf, 100)
+    assert_equal 'foobar', buf
+  end
+
+  def test_connection_write_socket_mode
+    conn = machine.connection(@s2, :socket)
+
+    assert_equal 6, conn.write('foo', 'bar')
+
+    buf = +''
+    machine.read(@s1, buf, 100)
+    assert_equal 'foobar', buf
+  end
+
+  def test_connection_write_ssl_mode
+    ssl1 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s1), Localhost::Authority.fetch.server_context)
+    ssl1.sync_close = true
+    ssl2 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s2), OpenSSL::SSL::SSLContext.new)
+    ssl2.sync_close = true
+
+    machine.ssl_set_bio(ssl1)
+    machine.ssl_set_bio(ssl2)
+
+    f = machine.spin { ssl1.accept rescue nil }
+
+    ssl2.connect
+    refute_equal 0, @machine.metrics[:total_ops]
+
+    conn1 = machine.connection(ssl1)
+    conn2 = machine.connection(ssl2)
+
+    assert_equal 10, conn1.write('foobar', "\n", 'baz')
+
+    assert_equal "foobar\nbaz", conn2.read(10)
+  ensure
+    ssl1.close rescue nil
+    ss2.close rescue nil
+    if f
+      machine.terminate(f)
+      machine.join(f)
+    end
   end
 end
 
