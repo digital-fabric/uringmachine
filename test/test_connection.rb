@@ -466,7 +466,7 @@ class ConnectionRespTest < ConnectionBaseTest
 
     writer.resp_write(true);
     assert_equal "#t\r\n", conn.read(-100)
-    
+
     writer.resp_write(false);
     assert_equal "#f\r\n", conn.read(-100)
 

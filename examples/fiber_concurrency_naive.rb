@@ -15,7 +15,7 @@
 
 @fiber2 = Fiber.new {
   last = Time.now
-  
+
   # sleep
   while Time.now < last + 5
     @fiber1.transfer

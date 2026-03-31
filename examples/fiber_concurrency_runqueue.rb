@@ -22,7 +22,7 @@ end
 
 @runqueue << Fiber.new {
   last = Time.now
-  
+
   # sleep
   while Time.now < last + 10
     fiber_switch

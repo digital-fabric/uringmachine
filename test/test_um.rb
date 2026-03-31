@@ -3688,7 +3688,7 @@ class TeeTest < UMBaseTest
     assert_equal 6, len1
 
     assert_equal 'foobar', result2
-    assert_equal 6, len2    
+    assert_equal 6, len2
   ensure
     machine.terminate(f)
     machine.join(f)
