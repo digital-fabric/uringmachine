@@ -378,7 +378,7 @@ VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t b
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
 VALUE um_read_each(struct um *machine, int fd, int bgid);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
-size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t maxlen);
+size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t len);
 VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv);
 VALUE um_write_async(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
 VALUE um_close(struct um *machine, int fd);
@@ -403,6 +403,7 @@ VALUE um_accept_into_queue(struct um *machine, int fd, VALUE queue);
 VALUE um_socket(struct um *machine, int domain, int type, int protocol, uint flags);
 VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, socklen_t addrlen);
 VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags);
+size_t um_send_raw(struct um *machine, int fd, const char *buffer, size_t len, int flags);
 VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv);
 VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags);
@@ -444,6 +445,7 @@ VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len,
 VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VALUE delim, ssize_t maxlen);
 void connection_skip(struct um_connection *conn, size_t inc, int safe_inc);
 void connection_read_each(struct um_connection *conn);
+size_t connection_write_raw(struct um_connection *conn, const char *buffer, size_t len);
 VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv);
 VALUE resp_read(struct um_connection *conn, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
@@ -465,6 +467,7 @@ void um_ssl_set_bio(struct um *machine, VALUE ssl_obj);
 int um_ssl_read(struct um *machine, VALUE ssl, VALUE buf, size_t maxlen);
 int um_ssl_read_raw(struct um *machine, VALUE ssl_obj, char *ptr, size_t maxlen);
 int um_ssl_write(struct um *machine, VALUE ssl, VALUE buf, size_t len);
+int um_ssl_write_raw(struct um *machine, VALUE ssl, const char *buffer, size_t len);
 int um_ssl_writev(struct um *machine, VALUE ssl, int argc, VALUE *argv);
 
 void bp_setup(struct um *machine);

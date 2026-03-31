@@ -458,6 +458,37 @@ class ConnectionRespTest < ConnectionBaseTest
     assert_equal "bazbug", conn.resp_read
   end
 
+  def test_connection_resp_write
+    writer = machine.connection(@wfd)
+
+    writer.resp_write(nil);
+    assert_equal "_\r\n", conn.read(-100)
+
+    writer.resp_write(true);
+    assert_equal "#t\r\n", conn.read(-100)
+    
+    writer.resp_write(false);
+    assert_equal "#f\r\n", conn.read(-100)
+
+    writer.resp_write(42);
+    assert_equal ":42\r\n", conn.read(-100)
+
+    writer.resp_write(42.1)
+    assert_equal ",42.1\r\n", conn.read(-100)
+
+    writer.resp_write('foobar')
+    assert_equal "$6\r\nfoobar\r\n", conn.read(-100)
+
+    writer.resp_write('פובאר')
+    assert_equal (+"$10\r\nפובאר\r\n").force_encoding('ASCII-8BIT'), conn.read(-100)
+
+    writer.resp_write(['foo', 'bar'])
+    assert_equal "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", conn.read(-100)
+
+    writer.resp_write({ 'foo' => 'bar', 'baz' => 42 })
+    assert_equal "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n:42\r\n", conn.read(-100)
+  end
+
   def test_connection_resp_encode
     s = UM::Connection
     assert_equal "_\r\n",             s.resp_encode(+'', nil)

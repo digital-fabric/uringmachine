@@ -652,11 +652,11 @@ VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_
   return ret;
 }
 
-size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t maxlen) {
+size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t len) {
   struct um_op *op = um_op_acquire(machine);
   um_prep_op(machine, op, OP_WRITE, 2, 0);
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-  io_uring_prep_write(sqe, fd, buffer, maxlen, 0);
+  io_uring_prep_write(sqe, fd, buffer, len, 0);
 
   int res = 0;
   VALUE ret = um_yield(machine);
@@ -829,6 +829,23 @@ VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags) {
   RAISE_IF_EXCEPTION(ret);
   RB_GC_GUARD(ret);
   return ret;
+}
+
+size_t um_send_raw(struct um *machine, int fd, const char *buffer, size_t len, int flags) {
+  struct um_op *op = um_op_acquire(machine);
+  um_prep_op(machine, op, OP_SEND, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
+  io_uring_prep_send(sqe, fd, buffer, len, flags);
+
+  int res = 0;
+  VALUE ret = um_yield(machine);
+
+  if (likely(um_verify_op_completion(machine, op, true))) res = op->result.res;
+  um_op_release(machine, op);
+
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return res;
 }
 
 // for some reason we don't get this define from liburing/io_uring.h

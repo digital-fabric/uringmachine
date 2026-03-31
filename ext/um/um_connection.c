@@ -465,6 +465,19 @@ VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VAL
   }
 }
 
+size_t connection_write_raw(struct um_connection *conn, const char *buffer, size_t len) {
+  switch (conn->mode) {
+    case CONNECTION_FD:
+      return um_write_raw(conn->machine, conn->fd, buffer, len);
+    case CONNECTION_SOCKET:
+      return um_send_raw(conn->machine, conn->fd, buffer, len, 0);
+    case CONNECTION_SSL:
+      return um_ssl_write_raw(conn->machine, conn->target, buffer, len);
+    default:
+      rb_raise(eUMError, "Invalid connection mode");
+  }
+}
+
 VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv) {
   switch (conn->mode) {
     case CONNECTION_FD:

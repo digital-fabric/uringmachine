@@ -242,13 +242,22 @@ VALUE Connection_read_each(VALUE self) {
   return self;
 }
 
+/* call-seq:
+ *   conn.write(*bufs) -> len
+ *
+ * Writes to the connection, ensuring that all data has been written before
+ * returning the total number of bytes written.
+ *
+ * @param bufs [Array<String, IO::Buffer>] data to write
+ * @return [Integer] total bytes written
+ */
 VALUE Connection_write(int argc, VALUE *argv, VALUE self) {
   struct um_connection *conn = um_get_connection(self);
   return connection_writev(conn, argc, argv);
 }
 
 /* call-seq:
- *   conn.resp_decode -> obj
+ *   conn.resp_read -> obj
  *
  * Decodes an object from a RESP (Redis protocol) message.
  *
@@ -260,6 +269,30 @@ VALUE Connection_resp_read(VALUE self) {
   VALUE obj = resp_read(conn, out_buffer);
   RB_GC_GUARD(out_buffer);
   return obj;
+}
+
+/* call-seq:
+ *   conn.resp_write(obj) -> conn
+ *
+ * Writes the given object using RESP (Redis protocol) to the connection target.
+ * Returns the number of bytes written.
+ *
+ * @param obj [any] object to write
+ * @return [Integer] total bytes written
+ */
+VALUE Connection_resp_write(VALUE self, VALUE obj) {
+  struct um_connection *conn = um_get_connection(self);
+
+  VALUE str = rb_str_new(NULL, 0);
+  struct um_write_buffer buf;
+  write_buffer_init(&buf, str);
+  rb_str_modify(str);
+  resp_encode(&buf, obj);
+  write_buffer_update_len(&buf);
+
+  size_t len = connection_write_raw(conn, buf.ptr, buf.len);
+  RB_GC_GUARD(str);
+  return ULONG2NUM(len);
 }
 
 /* call-seq:
@@ -345,6 +378,7 @@ void Init_Stream(void) {
   rb_define_method(cConnection, "write", Connection_write, -1);
 
   rb_define_method(cConnection, "resp_read", Connection_resp_read, 0);
+  rb_define_method(cConnection, "resp_write", Connection_resp_write, 1);
   rb_define_singleton_method(cConnection, "resp_encode", Connection_resp_encode, 2);
 
   rb_define_method(cConnection, "eof?", Connection_eof_p, 0);
