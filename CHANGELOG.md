@@ -1,3 +1,11 @@
+# 0.31.0 2026-03-31
+
+- Rework `Stream` into `Connection` class:
+  - Rename modes, improve SSL detection
+  - Rename and enhance different read methods
+  - Add `#write` method
+  - Add `#resp_write` method
+
 # 0.30.0 2026-03-23
 
 - Add `Stream#each`
