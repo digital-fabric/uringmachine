@@ -4,7 +4,7 @@
 def fiber_switch
   while true
     next_fiber, value = @runqueue.shift
-    return next_fiber.transfer value if next_fiber
+    return next_fiber.transfer(value) if next_fiber
 
     process_events
   end

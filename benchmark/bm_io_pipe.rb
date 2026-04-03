@@ -2,8 +2,8 @@
 
 require_relative './common'
 
-GROUPS = 48
-ITERATIONS = 10000
+GROUPS = ENV['C']&.to_i || 48
+ITERATIONS = ENV['I']&.to_i || 10000
 
 SIZE = 1024
 DATA = '*' * SIZE

@@ -62,35 +62,35 @@ class UMBenchmark
     # baseline_um:  [:baseline_um,  "UM no concurrency"],
     # thread_pool:  [:thread_pool,  "ThreadPool"],
 
-    threads:        [:threads,      "Threads"],
+    # threads:        [:threads,      "Threads"],
 
-    async_uring:    [:scheduler,    "Async uring"],
-    async_uring_x2: [:scheduler_x,  "Async uring x2"],
+    # async_uring:    [:scheduler,    "Async uring"],
+    # async_uring_x2: [:scheduler_x,  "Async uring x2"],
 
     # async_epoll:    [:scheduler,    "Async epoll"],
     # async_epoll_x2: [:scheduler_x,  "Async epoll x2"],
 
-    um_fs:          [:scheduler,    "UM FS"],
-    um_fs_x2:       [:scheduler_x,  "UM FS x2"],
+    # um_fs:          [:scheduler,    "UM FS"],
+    # um_fs_x2:       [:scheduler_x,  "UM FS x2"],
 
-    um:             [:um,           "UM"],
-    um_sidecar:     [:um,           "UM sidecar"],
+    # um:             [:um,           "UM"],
+    # um_sidecar:     [:um,           "UM sidecar"],
     # um_sqpoll:      [:um,           "UM sqpoll"],
     um_x2:          [:um_x,         "UM x2"],
-    um_x4:          [:um_x,         "UM x4"],
-    um_x8:          [:um_x,         "UM x8"],
+    # um_x4:          [:um_x,         "UM x4"],
+    # um_x8:          [:um_x,         "UM x8"],
   }
 
   def run_benchmarks(b)
     STDOUT.sync = true
     @@benchmarks.each do |sym, (doer, name)|
       if respond_to?(:"do_#{doer}")
-        STDOUT << "Running #{name}... "
-        ts = nil
+        # STDOUT << "Running #{name}... "
+        # ts = nil
         b.report(name) {
-          ts = measure_time { send(:"run_#{sym}") }
+          # ts = measure_time { send(:"run_#{sym}") }
+          send(:"run_#{sym}")
         }
-        p ts
         cleanup
       end
     end
@@ -197,7 +197,7 @@ class UMBenchmark
   end
 
   def run_um
-    machine = UM.new
+    machine = UM.new(size: 16384)
     fibers = []
     fds = []
     do_um(machine, fibers, fds)
@@ -226,7 +226,7 @@ class UMBenchmark
   def run_um_x2
     threads  = 2.times.map do
       Thread.new do
-        machine = UM.new
+        machine = UM.new(size: 16384)
         fibers = []
         fds = []
         do_um_x(2, machine, fibers, fds)
@@ -240,7 +240,7 @@ class UMBenchmark
   def run_um_x4
     threads  = 4.times.map do
       Thread.new do
-        machine = UM.new
+        machine = UM.new(size: 16384)
         fibers = []
         fds = []
         do_um_x(4, machine, fibers, fds)

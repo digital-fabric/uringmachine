@@ -1,3 +1,21 @@
+- Rename Connection to IO
+
+  ```ruby
+  io = machine.io(fd)
+  l = io.read_line(4)
+  io.write('foo')
+  ```
+
+- Add `IO#fd`/`IO#target` method
+
+- Add `UM#inspect` (show size, modes)
+- Add `UM::IO#inspect` (show target, mode, pending bytes)
+
+## Reimplement multishot read/recv using buffer pool
+
+- remove `#setup_buffer_ring` method
+- use buffer pool, just like UM::Connection
+
 ## immediate
 
 - Add tests for support for Set in `machine#await`
@@ -5,59 +23,6 @@
 - Add `UM#read_file` for reading entire file
 - Add `UM#write_file` for writing entire file
 - Rename stream methods: `:fd`, `:socket`, `:ssl`
-
-## Improving streams
-
-One wart of the stream API is that it's only for reading, so if we want to
-implement a protocol where we read and write to a target fd, we also need to
-keep the fd around or call `stream.target` every time we want to write to it,
-*and* we don't have a transport-agnostic write op.
-
-What if instead of `Stream` we had something called `Link`, which serves for
-both reading and writing:
-
-```ruby
-conn = machine.connection(fd)
-while l = conn.read_line
-  conn.write(l, '\n')
-end
-# or:
-buf = conn.read(42)
-```
-
-RESP:
-
-```ruby
-conn.resp_write(['foo', 'bar'])
-reply = conn.resp_read
-```
-
-HTTP:
-
-```ruby
-r = conn.http_read_request
-conn.http_write_response({ ':status' => 200 }, 'foo')
-
-# or:
-conn.http_write_request({ ':method' => 'GET', ':path' => '/foo' }, nil)
-```
-
-Plan of action:
-
-- Rename methods:
-  - [v] rename `#read_line` to `#read_line`
-  - [v] rename `#read` to `#read`
-  - [v] rename `#read_to_delim` to `#read_to_delim`
-  - [v] rename `#each` to `#read_each`
-  - [v] rename `#resp_decode` to `#resp_read`
-- Rename modes:
-  - [v] :fd to :fd
-  - [v] :socket to :socket
-  - [v] auto detect SSL
-- Rename `Stream` to `Connection`
-- Add methods:
-  - `#write(*bufs)`
-  - `#resp_write(obj)`
 
 ## Balancing I/O with the runqueue
 
@@ -124,11 +89,9 @@ Plan of action:
 
 ## ops still not implemented
 
-- splice / - tee
 - sendto
 - recvfrom
 - poll_multishot
-- fsync
 - mkdir / mkdirat
 - link / linkat / unlink / unlinkat / symlink
 - rename / renameat
