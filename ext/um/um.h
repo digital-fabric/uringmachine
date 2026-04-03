@@ -80,12 +80,12 @@ enum um_op_kind {
   OP_TIMEOUT_MULTISHOT,
 };
 
-enum um_connection_mode {
-  CONNECTION_FD,
-  CONNECTION_SOCKET,
-  CONNECTION_SSL,
-  CONNECTION_STRING,
-  CONNECTION_IO_BUFFER
+enum um_io_mode {
+  IO_FD,
+  IO_SOCKET,
+  IO_SSL,
+  IO_STRING,
+  IO_IO_BUFFER
 };
 
 #define OP_F_CQE_SEEN       (1U << 0) // CQE has been seen
@@ -272,11 +272,11 @@ struct um_async_op {
   struct um_op *op;
 };
 
-struct um_connection {
+struct um_io {
   VALUE self;
   struct um *machine;
 
-  enum um_connection_mode mode;
+  enum um_io_mode mode;
   union {
     int fd;
     VALUE target;
@@ -304,7 +304,7 @@ extern VALUE eUMError;
 extern VALUE cMutex;
 extern VALUE cQueue;
 extern VALUE cAsyncOp;
-extern VALUE eConnectionRESPError;
+extern VALUE eIORESPError;
 
 struct um *um_get_machine(VALUE self);
 void um_setup(VALUE self, struct um *machine, uint size, uint sqpoll_timeout_msec, int sidecar_mode);
@@ -438,16 +438,16 @@ VALUE um_queue_pop(struct um *machine, struct um_queue *queue);
 VALUE um_queue_unshift(struct um *machine, struct um_queue *queue, VALUE value);
 VALUE um_queue_shift(struct um *machine, struct um_queue *queue);
 
-void connection_teardown(struct um_connection *conn);
-void connection_clear(struct um_connection *conn);
-VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t maxlen);
-VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
-VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VALUE delim, ssize_t maxlen);
-void connection_skip(struct um_connection *conn, size_t inc, int safe_inc);
-void connection_read_each(struct um_connection *conn);
-size_t connection_write_raw(struct um_connection *conn, const char *buffer, size_t len);
-VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv);
-VALUE resp_read(struct um_connection *conn, VALUE out_buffer);
+void io_teardown(struct um_io *io);
+void io_clear(struct um_io *io);
+VALUE io_read_line(struct um_io *io, VALUE out_buffer, size_t maxlen);
+VALUE io_read(struct um_io *io, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc);
+VALUE io_read_to_delim(struct um_io *io, VALUE out_buffer, VALUE delim, ssize_t maxlen);
+void io_skip(struct um_io *io, size_t inc, int safe_inc);
+void io_read_each(struct um_io *io);
+size_t io_write_raw(struct um_io *io, const char *buffer, size_t len);
+VALUE io_writev(struct um_io *io, int argc, VALUE *argv);
+VALUE resp_read(struct um_io *io, VALUE out_buffer);
 void resp_encode(struct um_write_buffer *buf, VALUE obj);
 void resp_encode_cmd(struct um_write_buffer *buf, int argc, VALUE *argv);
 

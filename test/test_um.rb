@@ -3506,7 +3506,7 @@ class SetChildSubreaperTest < Minitest::Test
   end
 end
 
-class ConnectionMethodTest < UMBaseTest
+class IOMethodTest < UMBaseTest
   def setup
     super
     @rfd, @wfd = UM.pipe
@@ -3519,12 +3519,12 @@ class ConnectionMethodTest < UMBaseTest
     super
   end
 
-  def test_connection_method
+  def test_io_method
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
-    conn = machine.connection(@rfd)
-    assert_kind_of UM::Connection, conn
+    conn = machine.io(@rfd)
+    assert_kind_of UM::IO, conn
 
     buf = conn.read(3)
     assert_equal 'foo', buf
@@ -3536,13 +3536,13 @@ class ConnectionMethodTest < UMBaseTest
     conn.clear
   end
 
-  def test_connection_method_with_block
+  def test_io_method_with_block
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
 
     bufs = []
     conn_obj = nil
-    res = machine.connection(@rfd) do |s|
+    res = machine.io(@rfd) do |s|
       conn_obj = s
 
       bufs << s.read(3)
@@ -3551,7 +3551,7 @@ class ConnectionMethodTest < UMBaseTest
       :foo
     end
 
-    assert_kind_of UM::Connection, conn_obj
+    assert_kind_of UM::IO, conn_obj
     assert conn_obj.eof?
     assert_equal ['foo', 'bar'], bufs
     assert_equal :foo, res

@@ -1,3 +1,7 @@
+# 0.32.0 2026-04-03
+
+- Rename `Connection` to `IO`
+
 # 0.31.0 2026-03-31
 
 - Rework `Stream` into `Connection` class:

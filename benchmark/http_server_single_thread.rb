@@ -12,8 +12,8 @@ require 'uringmachine'
 RE_REQUEST_LINE = /^([a-z]+)\s+([^\s]+)\s+(http\/[0-9\.]{1,3})/i
 RE_HEADER_LINE = /^([a-z0-9\-]+)\:\s+(.+)/i
 
-def connection_get_request_line(conn, buf)
-  line = conn.read_line(0)
+def io_get_request_line(io, buf)
+  line = io.read_line(0)
   m = line&.match(RE_REQUEST_LINE)
   return nil if !m
 
@@ -26,12 +26,12 @@ end
 
 class InvalidHeadersError < StandardError; end
 
-def get_headers(conn, buf)
-  headers = connection_get_request_line(conn, buf)
+def get_headers(io, buf)
+  headers = io_get_request_line(io, buf)
   return nil if !headers
 
   while true
-    line = conn.read_line(0)
+    line =  io.read_line(0)
     break if line.empty?
 
     m = line.match(RE_HEADER_LINE)
@@ -52,11 +52,11 @@ end
 
 def handle_connection(machine, fd)
   machine.setsockopt(fd, UM::IPPROTO_TCP, UM::TCP_NODELAY, true)
-  conn = UM::Connection.new(machine, fd)
+  io = UM::IO.new(machine, fd)
   buf = String.new(capacity: 65536)
 
   while true
-    headers = get_headers(conn, buf)
+    headers = get_headers(io, buf)
     break if !headers
 
     send_response(machine, fd)
@@ -77,4 +77,4 @@ machine.bind(fd, '127.0.0.1', PORT)
 machine.listen(fd, 128)
 
 puts "Listening on localhost:#{PORT}"
-machine.accept_each(fd) { |conn| machine.spin { handle_connection(machine, conn) } }
+machine.accept_each(fd) { | io| machine.spin { handle_connection(machine,  io) } }

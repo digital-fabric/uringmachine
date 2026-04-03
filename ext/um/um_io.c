@@ -2,88 +2,88 @@
 #include <ruby/io/buffer.h>
 #include "um.h"
 
-inline void connection_add_segment(struct um_connection *conn, struct um_segment *segment) {
+inline void io_add_segment(struct um_io *io, struct um_segment *segment) {
   segment->next = NULL;
-  if (conn->tail) {
-    conn->tail->next = segment;
-    conn->tail = segment;
+  if (io->tail) {
+    io->tail->next = segment;
+    io->tail = segment;
   }
   else
-    conn->head = conn->tail = segment;
-  conn->pending_bytes += segment->len;
+    io->head = io->tail = segment;
+  io->pending_bytes += segment->len;
 }
 
-inline int connection_process_op_result(struct um_connection *conn, struct um_op_result *result) {
+inline int io_process_op_result(struct um_io *io, struct um_op_result *result) {
   if (likely(result->res > 0)) {
     if (likely(result->segment)) {
-      connection_add_segment(conn, result->segment);
+      io_add_segment(io, result->segment);
       result->segment = NULL;
     }
   }
   else
-    conn->eof = 1;
+    io->eof = 1;
 
   return result->res;
 }
 
-#define CONNECTION_OP_FLAGS (OP_F_MULTISHOT | OP_F_BUFFER_POOL)
+#define IO_OP_FLAGS (OP_F_MULTISHOT | OP_F_BUFFER_POOL)
 
-void connection_multishot_op_start(struct um_connection *conn) {
-  if (!conn->op)
-    conn->op = um_op_acquire(conn->machine);
+void io_multishot_op_start(struct um_io *io) {
+  if (!io->op)
+    io->op = um_op_acquire(io->machine);
   struct io_uring_sqe *sqe;
 
-  bp_ensure_commit_level(conn->machine);
+  bp_ensure_commit_level(io->machine);
 
-  switch (conn->mode) {
-    case CONNECTION_FD:
-      um_prep_op(conn->machine, conn->op, OP_READ_MULTISHOT, 2, CONNECTION_OP_FLAGS);
-      sqe = um_get_sqe(conn->machine, conn->op);
-      io_uring_prep_read_multishot(sqe, conn->fd, 0, -1, BP_BGID);
+  switch (io->mode) {
+    case IO_FD:
+      um_prep_op(io->machine, io->op, OP_READ_MULTISHOT, 2, IO_OP_FLAGS);
+      sqe = um_get_sqe(io->machine, io->op);
+      io_uring_prep_read_multishot(sqe, io->fd, 0, -1, BP_BGID);
       break;
-    case CONNECTION_SOCKET:
-      um_prep_op(conn->machine, conn->op, OP_RECV_MULTISHOT, 2, CONNECTION_OP_FLAGS);
-      sqe = um_get_sqe(conn->machine, conn->op);
-      io_uring_prep_recv_multishot(sqe, conn->fd, NULL, 0, 0);
+    case IO_SOCKET:
+      um_prep_op(io->machine, io->op, OP_RECV_MULTISHOT, 2, IO_OP_FLAGS);
+      sqe = um_get_sqe(io->machine, io->op);
+      io_uring_prep_recv_multishot(sqe, io->fd, NULL, 0, 0);
 	    sqe->buf_group = BP_BGID;
 	    sqe->flags |= IOSQE_BUFFER_SELECT;
       break;
     default:
       um_raise_internal_error("Invalid multishot op");
   }
-  conn->op->bp_commit_level = conn->machine->bp_commit_level;
+  io->op->bp_commit_level = io->machine->bp_commit_level;
 }
 
-void connection_multishot_op_stop(struct um_connection *conn) {
-  assert(!conn->op);
+void io_multishot_op_stop(struct um_io *io) {
+  assert(!io->op);
 
-  if (!(conn->op->flags & OP_F_CQE_DONE)) {
-    conn->op->flags |= OP_F_ASYNC;
-    um_cancel_op(conn->machine, conn->op);
+  if (!(io->op->flags & OP_F_CQE_DONE)) {
+    io->op->flags |= OP_F_ASYNC;
+    um_cancel_op(io->machine, io->op);
   }
   else
-    um_op_release(conn->machine, conn->op);
-  conn->op = NULL;
+    um_op_release(io->machine, io->op);
+  io->op = NULL;
 }
 
-void um_connection_cleanup(struct um_connection *conn) {
-  if (conn->op) connection_multishot_op_stop(conn);
+void um_io_cleanup(struct um_io *io) {
+  if (io->op) io_multishot_op_stop(io);
 
-  while (conn->head) {
-    struct um_segment *next = conn->head->next;
-    um_segment_checkin(conn->machine, conn->head);
-    conn->head = next;
+  while (io->head) {
+    struct um_segment *next = io->head->next;
+    um_segment_checkin(io->machine, io->head);
+    io->head = next;
   }
-  conn->pending_bytes = 0;
+  io->pending_bytes = 0;
 }
 
 // returns true if case of ENOBUFS error, sets more to true if more data forthcoming
-inline int connection_process_segments(
-  struct um_connection *conn, size_t *total_bytes, int *more) {
+inline int io_process_segments(
+  struct um_io *io, size_t *total_bytes, int *more) {
 
   *more = 0;
-  struct um_op_result *result = &conn->op->result;
-  conn->op->flags &= ~OP_F_CQE_SEEN;
+  struct um_op_result *result = &io->op->result;
+  io->op->flags &= ~OP_F_CQE_SEEN;
   while (result) {
     if (unlikely(result->res == -ENOBUFS)) {
       *more = 0;
@@ -97,142 +97,142 @@ inline int connection_process_segments(
 
     *more = (result->flags & IORING_CQE_F_MORE);
     *total_bytes += result->res;
-    connection_process_op_result(conn, result);
+    io_process_op_result(io, result);
     result = result->next;
   }
   return false;
 }
 
-void connection_clear(struct um_connection *conn) {
-  if (conn->op && conn->machine->ring_initialized) {
-    if (OP_CQE_SEEN_P(conn->op)) {
+void io_clear(struct um_io *io) {
+  if (io->op && io->machine->ring_initialized) {
+    if (OP_CQE_SEEN_P(io->op)) {
       size_t total_bytes = 0;
       int more = false;
-      connection_process_segments(conn, &total_bytes, &more);
-      um_op_multishot_results_clear(conn->machine, conn->op);
+      io_process_segments(io, &total_bytes, &more);
+      um_op_multishot_results_clear(io->machine, io->op);
     }
 
-    if (OP_CQE_DONE_P(conn->op))
-      um_op_release(conn->machine, conn->op);
+    if (OP_CQE_DONE_P(io->op))
+      um_op_release(io->machine, io->op);
     else
-      um_cancel_op_and_discard_cqe(conn->machine, conn->op);
+      um_cancel_op_and_discard_cqe(io->machine, io->op);
 
-    conn->op = NULL;
+    io->op = NULL;
   }
 
-  while (conn->head) {
-    struct um_segment *next = conn->head->next;
-    um_segment_checkin(conn->machine, conn->head);
-    conn->head = next;
+  while (io->head) {
+    struct um_segment *next = io->head->next;
+    um_segment_checkin(io->machine, io->head);
+    io->head = next;
   }
-  conn->pending_bytes = 0;
+  io->pending_bytes = 0;
 
-  if (conn->working_buffer) {
-    bp_buffer_checkin(conn->machine, conn->working_buffer);
-    conn->working_buffer = NULL;
+  if (io->working_buffer) {
+    bp_buffer_checkin(io->machine, io->working_buffer);
+    io->working_buffer = NULL;
   }
 }
 
-inline void connection_await_segments(struct um_connection *conn) {
-  if (unlikely(!conn->op)) connection_multishot_op_start(conn);
+inline void io_await_segments(struct um_io *io) {
+  if (unlikely(!io->op)) io_multishot_op_start(io);
 
-  if (!OP_CQE_SEEN_P(conn->op)) {
-    conn->op->flags &= ~OP_F_ASYNC;
-    VALUE ret = um_yield(conn->machine);
-    conn->op->flags |= OP_F_ASYNC;
-    if (!OP_CQE_SEEN_P(conn->op)) RAISE_IF_EXCEPTION(ret);
+  if (!OP_CQE_SEEN_P(io->op)) {
+    io->op->flags &= ~OP_F_ASYNC;
+    VALUE ret = um_yield(io->machine);
+    io->op->flags |= OP_F_ASYNC;
+    if (!OP_CQE_SEEN_P(io->op)) RAISE_IF_EXCEPTION(ret);
     RB_GC_GUARD(ret);
   }
 }
 
-int connection_get_more_segments_bp(struct um_connection *conn) {
+int io_get_more_segments_bp(struct um_io *io) {
   size_t total_bytes = 0;
   int more = false;
   int enobufs = false;
 
   while (1) {
-    if (unlikely(conn->eof)) return 0;
+    if (unlikely(io->eof)) return 0;
 
-    connection_await_segments(conn);
-    enobufs = connection_process_segments(conn, &total_bytes, &more);
-    um_op_multishot_results_clear(conn->machine, conn->op);
+    io_await_segments(io);
+    enobufs = io_process_segments(io, &total_bytes, &more);
+    um_op_multishot_results_clear(io->machine, io->op);
     if (unlikely(enobufs)) {
-      int should_restart = conn->pending_bytes < (conn->machine->bp_buffer_size * 4);
-      // int same_threshold = conn->op->bp_commit_level == conn->machine->bp_commit_level;
+      int should_restart = io->pending_bytes < (io->machine->bp_buffer_size * 4);
+      // int same_threshold = io->op->bp_commit_level == io->machine->bp_commit_level;
 
       // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
-      //   conn,
-      //   total_bytes, conn->pending_bytes, conn->machine->bp_commit_level,
-      //   conn->machine->bp_buffer_count,
+      //   io,
+      //   total_bytes, io->pending_bytes, io->machine->bp_commit_level,
+      //   io->machine->bp_buffer_count,
       //   same_threshold, should_restart
       // );
 
-      // If multiple connection ops are happening at the same time, they'll all
+      // If multiple IO ops are happening at the same time, they'll all
       // get ENOBUFS! We track the commit threshold in the op in order to
       // prevent running bp_handle_enobufs() more than once.
 
       if (should_restart) {
-        if (conn->op->bp_commit_level == conn->machine->bp_commit_level)
-          bp_handle_enobufs(conn->machine);
+        if (io->op->bp_commit_level == io->machine->bp_commit_level)
+          bp_handle_enobufs(io->machine);
 
-        um_op_release(conn->machine, conn->op);
-        conn->op = NULL;
-        // connection_multishot_op_start(conn);
+        um_op_release(io->machine, io->op);
+        io->op = NULL;
+        // io_multishot_op_start(io);
       }
       else {
-        um_op_release(conn->machine, conn->op);
-        conn->op = NULL;
+        um_op_release(io->machine, io->op);
+        io->op = NULL;
       }
 
       if (total_bytes) return total_bytes;
     }
     else {
       if (more)
-        conn->op->flags &= ~OP_F_CQE_SEEN;
-      if (total_bytes || conn->eof) return total_bytes;
+        io->op->flags &= ~OP_F_CQE_SEEN;
+      if (total_bytes || io->eof) return total_bytes;
     }
   }
 }
 
-int connection_get_more_segments_ssl(struct um_connection *conn) {
-  if (!conn->working_buffer)
-    conn->working_buffer = bp_buffer_checkout(conn->machine);
+int io_get_more_segments_ssl(struct um_io *io) {
+  if (!io->working_buffer)
+    io->working_buffer = bp_buffer_checkout(io->machine);
 
-  char *ptr = conn->working_buffer->buf + conn->working_buffer->pos;
-  size_t maxlen = conn->working_buffer->len - conn->working_buffer->pos;
-  int res = um_ssl_read_raw(conn->machine, conn->target, ptr, maxlen);
+  char *ptr = io->working_buffer->buf + io->working_buffer->pos;
+  size_t maxlen = io->working_buffer->len - io->working_buffer->pos;
+  int res = um_ssl_read_raw(io->machine, io->target, ptr, maxlen);
   if (res == 0) return 0;
   if (res < 0) rb_raise(eUMError, "Failed to read segment");
 
-  struct um_segment *segment = bp_buffer_consume(conn->machine, conn->working_buffer, res);
+  struct um_segment *segment = bp_buffer_consume(io->machine, io->working_buffer, res);
   if ((size_t)res == maxlen) {
-    bp_buffer_checkin(conn->machine, conn->working_buffer);
-    conn->working_buffer = NULL;
+    bp_buffer_checkin(io->machine, io->working_buffer);
+    io->working_buffer = NULL;
   }
-  connection_add_segment(conn, segment);
+  io_add_segment(io, segment);
   return 1;
 }
 
-int connection_get_more_segments(struct um_connection *conn) {
-  switch (conn->mode) {
-    case CONNECTION_FD:
-    case CONNECTION_SOCKET:
-      return connection_get_more_segments_bp(conn);
-    case CONNECTION_SSL:
-      return connection_get_more_segments_ssl(conn);
+int io_get_more_segments(struct um_io *io) {
+  switch (io->mode) {
+    case IO_FD:
+    case IO_SOCKET:
+      return io_get_more_segments_bp(io);
+    case IO_SSL:
+      return io_get_more_segments_ssl(io);
     default:
-      rb_raise(eUMError, "Invalid connection mode");
+      rb_raise(eUMError, "Invalid IO mode");
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-inline void connection_shift_head(struct um_connection *conn) {
-  struct um_segment *consumed = conn->head;
-  conn->head = consumed->next;
-  if (!conn->head) conn->tail = NULL;
-  um_segment_checkin(conn->machine, consumed);
-  conn->pos = 0;
+inline void io_shift_head(struct um_io *io) {
+  struct um_segment *consumed = io->head;
+  io->head = consumed->next;
+  if (!io->head) io->tail = NULL;
+  um_segment_checkin(io->machine, consumed);
+  io->pos = 0;
 }
 
 inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
@@ -242,32 +242,32 @@ inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
   );
 }
 
-inline void connection_skip(struct um_connection *conn, size_t inc, int safe_inc) {
-  if (unlikely(conn->eof && !conn->head)) return;
-  if (safe_inc && !conn->tail && !connection_get_more_segments(conn)) return;
+inline void io_skip(struct um_io *io, size_t inc, int safe_inc) {
+  if (unlikely(io->eof && !io->head)) return;
+  if (safe_inc && !io->tail && !io_get_more_segments(io)) return;
 
   while (inc) {
-    size_t segment_len = conn->head->len - conn->pos;
+    size_t segment_len = io->head->len - io->pos;
     size_t inc_len = (segment_len <= inc) ? segment_len : inc;
     inc -= inc_len;
-    conn->pos += inc_len;
-    conn->consumed_bytes += inc_len;
-    conn->pending_bytes -= inc_len;
-    if (conn->pos == conn->head->len) {
-      connection_shift_head(conn);
-      if (inc && safe_inc && !conn->head) {
-        if (!connection_get_more_segments(conn)) break;
+    io->pos += inc_len;
+    io->consumed_bytes += inc_len;
+    io->pending_bytes -= inc_len;
+    if (io->pos == io->head->len) {
+      io_shift_head(io);
+      if (inc && safe_inc && !io->head) {
+        if (!io_get_more_segments(io)) break;
       }
     }
   }
 }
 
-inline void connection_read_each(struct um_connection *conn) {
-  if (unlikely(conn->eof && !conn->head)) return;
-  if (!conn->tail && !connection_get_more_segments(conn)) return;
+inline void io_read_each(struct um_io *io) {
+  if (unlikely(io->eof && !io->head)) return;
+  if (!io->tail && !io_get_more_segments(io)) return;
 
-  struct um_segment *current = conn->head;
-  size_t pos = conn->pos;
+  struct um_segment *current = io->head;
+  size_t pos = io->pos;
 
   VALUE buffer = Qnil;
   while (true) {
@@ -275,34 +275,34 @@ inline void connection_read_each(struct um_connection *conn) {
     buffer = make_segment_io_buffer(current, pos);
     rb_yield(buffer);
     rb_io_buffer_free_locked(buffer);
-    connection_shift_head(conn);
+    io_shift_head(io);
 
     if (!next) {
-      if (!connection_get_more_segments(conn)) return;
+      if (!io_get_more_segments(io)) return;
     }
-    current = conn->head;
+    current = io->head;
     pos = 0;
   }
   RB_GC_GUARD(buffer);
 }
 
-inline void connection_copy(struct um_connection *conn, char *dest, size_t len) {
+inline void io_copy(struct um_io *io, char *dest, size_t len) {
   while (len) {
-    char *segment_ptr = conn->head->ptr + conn->pos;
-    size_t segment_len = conn->head->len - conn->pos;
+    char *segment_ptr = io->head->ptr + io->pos;
+    size_t segment_len = io->head->len - io->pos;
     size_t cpy_len = (segment_len <= len) ? segment_len : len;
     memcpy(dest, segment_ptr, cpy_len);
 
     len -= cpy_len;
-    conn->pos += cpy_len;
-    conn->consumed_bytes += cpy_len;
-    conn->pending_bytes -= cpy_len;
+    io->pos += cpy_len;
+    io->consumed_bytes += cpy_len;
+    io->pending_bytes -= cpy_len;
     dest += cpy_len;
-    if (conn->pos == conn->head->len) connection_shift_head(conn);
+    if (io->pos == io->head->len) io_shift_head(io);
   }
 }
 
-VALUE connection_consume_string(struct um_connection *conn, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
+VALUE io_consume_string(struct um_io *io, VALUE out_buffer, size_t len, size_t inc, int safe_inc) {
   VALUE str = Qnil;
   if (!NIL_P(out_buffer)) {
     str = out_buffer;
@@ -316,8 +316,8 @@ VALUE connection_consume_string(struct um_connection *conn, VALUE out_buffer, si
     str = rb_str_new(NULL, len);
   char *dest = RSTRING_PTR(str);
 
-  connection_copy(conn, dest, len);
-  connection_skip(conn, inc, safe_inc);
+  io_copy(io, dest, len);
+  io_skip(io, inc, safe_inc);
   return str;
   RB_GC_GUARD(str);
 }
@@ -326,16 +326,16 @@ inline int trailing_cr_p(char *ptr, size_t len) {
   return ptr[len - 1] == '\r';
 }
 
-VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t maxlen) {
-  if (unlikely(conn->eof && !conn->head)) return Qnil;
-  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
+VALUE io_read_line(struct um_io *io, VALUE out_buffer, size_t maxlen) {
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (!io->tail && !io_get_more_segments(io)) return Qnil;
 
   struct um_segment *last = NULL;
-  struct um_segment *current = conn->head;
+  struct um_segment *current = io->head;
   size_t remaining_len = maxlen;
   size_t total_len = 0;
   size_t inc = 1;
-  size_t pos = conn->pos;
+  size_t pos = io->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -359,7 +359,7 @@ VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t 
         }
       }
 
-      return connection_consume_string(conn, out_buffer, total_len, inc, false);
+      return io_consume_string(io, out_buffer, total_len, inc, false);
     }
     else {
       // not found, early return if segment len exceeds maxlen
@@ -370,7 +370,7 @@ VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t 
     }
 
     if (!current->next) {
-      if (!connection_get_more_segments(conn)) {
+      if (!io_get_more_segments(io)) {
         return Qnil;
       }
     }
@@ -381,15 +381,15 @@ VALUE connection_read_line(struct um_connection *conn, VALUE out_buffer, size_t 
   }
 }
 
-VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
-  if (unlikely(conn->eof && !conn->head)) return Qnil;
-  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
+VALUE io_read(struct um_io *io, VALUE out_buffer, ssize_t len, size_t inc, int safe_inc) {
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (!io->tail && !io_get_more_segments(io)) return Qnil;
 
-  struct um_segment *current = conn->head;
+  struct um_segment *current = io->head;
   size_t abs_len = labs(len);
   size_t remaining_len = abs_len;
   size_t total_len = 0;
-  size_t pos = conn->pos;
+  size_t pos = io->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -400,14 +400,14 @@ VALUE connection_read(struct um_connection *conn, VALUE out_buffer, ssize_t len,
     if (abs_len) {
       remaining_len -= segment_len;
       if (!remaining_len)
-        return connection_consume_string(conn, out_buffer, total_len, inc, safe_inc);
+        return io_consume_string(io, out_buffer, total_len, inc, safe_inc);
     }
 
     if (!current->next) {
       if (len <= 0)
-        return connection_consume_string(conn, out_buffer, total_len, inc, safe_inc);
+        return io_consume_string(io, out_buffer, total_len, inc, safe_inc);
 
-      if (!connection_get_more_segments(conn))
+      if (!io_get_more_segments(io))
         return Qnil;
     }
     current = current->next;
@@ -425,17 +425,17 @@ static inline char delim_to_char(VALUE delim) {
   return *RSTRING_PTR(delim);
 }
 
-VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
+VALUE io_read_to_delim(struct um_io *io, VALUE out_buffer, VALUE delim, ssize_t maxlen) {
   char delim_char = delim_to_char(delim);
 
-  if (unlikely(conn->eof && !conn->head)) return Qnil;
-  if (unlikely(!conn->tail) && !connection_get_more_segments(conn)) return Qnil;
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (unlikely(!io->tail) && !io_get_more_segments(io)) return Qnil;
 
-  struct um_segment *current = conn->head;
+  struct um_segment *current = io->head;
   size_t abs_maxlen = labs(maxlen);
   size_t remaining_len = abs_maxlen;
   size_t total_len = 0;
-  size_t pos = conn->pos;
+  size_t pos = io->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -447,7 +447,7 @@ VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VAL
     if (delim_ptr) {
       size_t len = delim_ptr - start;
       total_len += len;
-      return connection_consume_string(conn, out_buffer, total_len, 1, false);
+      return io_consume_string(io, out_buffer, total_len, 1, false);
     }
     else {
       // delimiter not found
@@ -455,51 +455,51 @@ VALUE connection_read_to_delim(struct um_connection *conn, VALUE out_buffer, VAL
       remaining_len -= search_len;
 
       if (abs_maxlen && total_len >= abs_maxlen)
-        return (maxlen > 0) ? Qnil : connection_consume_string(conn, out_buffer, abs_maxlen, 1, false);
+        return (maxlen > 0) ? Qnil : io_consume_string(io, out_buffer, abs_maxlen, 1, false);
     }
 
-    if (!current->next && !connection_get_more_segments(conn)) return Qnil;
+    if (!current->next && !io_get_more_segments(io)) return Qnil;
 
     current = current->next;
     pos = 0;
   }
 }
 
-size_t connection_write_raw(struct um_connection *conn, const char *buffer, size_t len) {
-  switch (conn->mode) {
-    case CONNECTION_FD:
-      return um_write_raw(conn->machine, conn->fd, buffer, len);
-    case CONNECTION_SOCKET:
-      return um_send_raw(conn->machine, conn->fd, buffer, len, 0);
-    case CONNECTION_SSL:
-      return um_ssl_write_raw(conn->machine, conn->target, buffer, len);
+size_t io_write_raw(struct um_io *io, const char *buffer, size_t len) {
+  switch (io->mode) {
+    case IO_FD:
+      return um_write_raw(io->machine, io->fd, buffer, len);
+    case IO_SOCKET:
+      return um_send_raw(io->machine, io->fd, buffer, len, 0);
+    case IO_SSL:
+      return um_ssl_write_raw(io->machine, io->target, buffer, len);
     default:
-      rb_raise(eUMError, "Invalid connection mode");
+      rb_raise(eUMError, "Invalid IO mode");
   }
 }
 
-VALUE connection_writev(struct um_connection *conn, int argc, VALUE *argv) {
-  switch (conn->mode) {
-    case CONNECTION_FD:
-      return um_writev(conn->machine, conn->fd, argc, argv);
-    case CONNECTION_SOCKET:
-      return um_sendv(conn->machine, conn->fd, argc, argv);
-    case CONNECTION_SSL:
-      return ULONG2NUM(um_ssl_writev(conn->machine, conn->target, argc, argv));
+VALUE io_writev(struct um_io *io, int argc, VALUE *argv) {
+  switch (io->mode) {
+    case IO_FD:
+      return um_writev(io->machine, io->fd, argc, argv);
+    case IO_SOCKET:
+      return um_sendv(io->machine, io->fd, argc, argv);
+    case IO_SSL:
+      return ULONG2NUM(um_ssl_writev(io->machine, io->target, argc, argv));
     default:
-      rb_raise(eUMError, "Invalid connection mode");
+      rb_raise(eUMError, "Invalid IO mode");
   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-VALUE resp_read_line(struct um_connection *conn, VALUE out_buffer) {
-  if (unlikely(conn->eof && !conn->head)) return Qnil;
-  if (!conn->tail && !connection_get_more_segments(conn)) return Qnil;
+VALUE resp_read_line(struct um_io *io, VALUE out_buffer) {
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (!io->tail && !io_get_more_segments(io)) return Qnil;
 
-  struct um_segment *current = conn->head;
+  struct um_segment *current = io->head;
   size_t total_len = 0;
-  size_t pos = conn->pos;
+  size_t pos = io->pos;
 
   while (true) {
     size_t segment_len = current->len - pos;
@@ -508,20 +508,20 @@ VALUE resp_read_line(struct um_connection *conn, VALUE out_buffer) {
     if (lf_ptr) {
       size_t len = lf_ptr - start;
       total_len += len;
-      return connection_consume_string(conn, out_buffer, total_len, 2, true);
+      return io_consume_string(io, out_buffer, total_len, 2, true);
     }
     else
       total_len += segment_len;
 
     if (!current->next)
-      if (!connection_get_more_segments(conn)) return Qnil;
+      if (!io_get_more_segments(io)) return Qnil;
 
     current = current->next;
   }
 }
 
-inline VALUE resp_read_string(struct um_connection *conn, ulong len, VALUE out_buffer) {
-  return connection_read(conn, out_buffer, len, 2, true);
+inline VALUE resp_read_string(struct um_io *io, ulong len, VALUE out_buffer) {
+  return io_read(io, out_buffer, len, 2, true);
 }
 
 inline ulong resp_parse_length_field(const char *ptr, int len) {
@@ -531,12 +531,12 @@ inline ulong resp_parse_length_field(const char *ptr, int len) {
   return acc;
 }
 
-VALUE resp_decode_hash(struct um_connection *conn, VALUE out_buffer, ulong len) {
+VALUE resp_decode_hash(struct um_io *io, VALUE out_buffer, ulong len) {
   VALUE hash = rb_hash_new();
 
   for (ulong i = 0; i < len; i++) {
-    VALUE key = resp_read(conn, out_buffer);
-    VALUE value = resp_read(conn, out_buffer);
+    VALUE key = resp_read(io, out_buffer);
+    VALUE value = resp_read(io, out_buffer);
     rb_hash_aset(hash, key, value);
     RB_GC_GUARD(key);
     RB_GC_GUARD(value);
@@ -546,11 +546,11 @@ VALUE resp_decode_hash(struct um_connection *conn, VALUE out_buffer, ulong len) 
   return hash;
 }
 
-VALUE resp_decode_array(struct um_connection *conn, VALUE out_buffer, ulong len) {
+VALUE resp_decode_array(struct um_io *io, VALUE out_buffer, ulong len) {
   VALUE array = rb_ary_new2(len);
 
   for (ulong i = 0; i < len; i++) {
-    VALUE value = resp_read(conn, out_buffer);
+    VALUE value = resp_read(io, out_buffer);
     rb_ary_push(array, value);
     RB_GC_GUARD(value);
   }
@@ -563,12 +563,12 @@ static inline VALUE resp_decode_simple_string(char *ptr, ulong len) {
   return rb_str_new(ptr + 1, len - 1);
 }
 
-static inline VALUE resp_decode_string(struct um_connection *conn, VALUE out_buffer, ulong len) {
-  return resp_read_string(conn, len, out_buffer);
+static inline VALUE resp_decode_string(struct um_io *io, VALUE out_buffer, ulong len) {
+  return resp_read_string(io, len, out_buffer);
 }
 
-static inline VALUE resp_decode_string_with_encoding(struct um_connection *conn, VALUE out_buffer, ulong len) {
-  VALUE with_enc = resp_read_string(conn, len, out_buffer);
+static inline VALUE resp_decode_string_with_encoding(struct um_io *io, VALUE out_buffer, ulong len) {
+  VALUE with_enc = resp_read_string(io, len, out_buffer);
   char *ptr = RSTRING_PTR(with_enc);
   len = RSTRING_LEN(with_enc);
   if ((len < 4) || (ptr[3] != ':')) return Qnil;
@@ -591,23 +591,23 @@ static inline VALUE resp_decode_simple_error(char *ptr, ulong len) {
   if (!ID_new) ID_new = rb_intern("new");
 
   VALUE msg = rb_str_new(ptr + 1, len - 1);
-  VALUE err = rb_funcall(eConnectionRESPError, ID_new, 1, msg);
+  VALUE err = rb_funcall(eIORESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
 
-static inline VALUE resp_decode_error(struct um_connection *conn, VALUE out_buffer, ulong len) {
+static inline VALUE resp_decode_error(struct um_io *io, VALUE out_buffer, ulong len) {
   static ID ID_new = 0;
   if (!ID_new) ID_new = rb_intern("new");
 
-  VALUE msg = resp_decode_string(conn, out_buffer, len);
-  VALUE err = rb_funcall(eConnectionRESPError, ID_new, 1, msg);
+  VALUE msg = resp_decode_string(io, out_buffer, len);
+  VALUE err = rb_funcall(eIORESPError, ID_new, 1, msg);
   RB_GC_GUARD(msg);
   return err;
 }
 
-VALUE resp_read(struct um_connection *conn, VALUE out_buffer) {
-  VALUE msg = resp_read_line(conn, out_buffer);
+VALUE resp_read(struct um_io *io, VALUE out_buffer) {
+  VALUE msg = resp_read_line(io, out_buffer);
   if (msg == Qnil) return Qnil;
 
   char *ptr = RSTRING_PTR(msg);
@@ -619,22 +619,22 @@ VALUE resp_read(struct um_connection *conn, VALUE out_buffer) {
     case '%': // hash
     case '|': // attributes hash
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_hash(conn, out_buffer, data_len);
+      return resp_decode_hash(io, out_buffer, data_len);
 
     case '*': // array
     case '~': // set
     case '>': // pub/sub push
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_array(conn, out_buffer, data_len);
+      return resp_decode_array(io, out_buffer, data_len);
 
     case '+': // simple string
       return resp_decode_simple_string(ptr, len);
     case '$': // string
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string(conn, out_buffer, data_len);
+      return resp_decode_string(io, out_buffer, data_len);
     case '=': // string with encoding
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_string_with_encoding(conn, out_buffer, data_len);
+      return resp_decode_string_with_encoding(io, out_buffer, data_len);
 
     case '_': // null
       return Qnil;
@@ -652,7 +652,7 @@ VALUE resp_read(struct um_connection *conn, VALUE out_buffer) {
       return resp_decode_simple_error(ptr, len);
     case '!': // error
       data_len = resp_parse_length_field(ptr, len);
-      return resp_decode_error(conn, out_buffer, data_len);
+      return resp_decode_error(io, out_buffer, data_len);
     default:
       um_raise_internal_error("Invalid character encountered");
   }

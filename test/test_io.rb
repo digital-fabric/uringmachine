@@ -5,13 +5,13 @@ require 'securerandom'
 require 'openssl'
 require 'localhost/authority'
 
-class ConnectionBaseTest < UMBaseTest
+class IOBaseTest < UMBaseTest
   attr_reader :conn
 
   def setup
     super
     @rfd, @wfd = UM.pipe
-    @conn = UM::Connection.new(@machine, @rfd)
+    @conn = UM::IO.new(@machine, @rfd)
   end
 
   def teardown
@@ -22,7 +22,7 @@ class ConnectionBaseTest < UMBaseTest
   end
 end
 
-class ConnectionTest < ConnectionBaseTest
+class IOTest < IOBaseTest
   def buffer_metrics
     machine.metrics.fetch_values(
       :buffers_allocated,
@@ -55,7 +55,7 @@ class ConnectionTest < ConnectionBaseTest
 
   def test_connection_clear
     rfd, wfd = UM.pipe
-    conn = UM::Connection.new(machine, rfd)
+    conn = UM::IO.new(machine, rfd)
 
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(wfd, "foobar")
@@ -79,7 +79,7 @@ class ConnectionTest < ConnectionBaseTest
 
   def test_connection_big_read
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    conn = UM::Connection.new(machine, s2)
+    conn = UM::IO.new(machine, s2)
 
     msg = '1234567' * 20000
 
@@ -98,7 +98,7 @@ class ConnectionTest < ConnectionBaseTest
 
   def test_connection_buffer_reuse
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    conn = UM::Connection.new(machine, s2)
+    conn = UM::IO.new(machine, s2)
 
     msg = '1234567' * 20000
 
@@ -307,13 +307,13 @@ class ConnectionTest < ConnectionBaseTest
   end
 end
 
-class ConnectionWriteTest < UMBaseTest
+class IOWriteTest < UMBaseTest
   attr_reader :conn
 
   def setup
     super
     @s1, @s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-    @conn = UM::Connection.new(@machine, @s1)
+    @conn = UM::IO.new(@machine, @s1)
   end
 
   def teardown
@@ -340,7 +340,7 @@ class ConnectionWriteTest < UMBaseTest
   end
 
   def test_connection_write_socket_mode
-    conn = machine.connection(@s2, :socket)
+    conn = machine.io(@s2, :socket)
 
     assert_equal 6, conn.write('foo', 'bar')
 
@@ -363,8 +363,8 @@ class ConnectionWriteTest < UMBaseTest
     ssl2.connect
     refute_equal 0, @machine.metrics[:total_ops]
 
-    conn1 = machine.connection(ssl1)
-    conn2 = machine.connection(ssl2)
+    conn1 = machine.io(ssl1)
+    conn2 = machine.io(ssl2)
 
     assert_equal 10, conn1.write('foobar', "\n", 'baz')
 
@@ -379,7 +379,7 @@ class ConnectionWriteTest < UMBaseTest
   end
 end
 
-class ConnectionRespTest < ConnectionBaseTest
+class IORespTest < IOBaseTest
   def test_connection_resp_read
     machine.write(@wfd, "+foo bar\r\n")
     assert_equal "foo bar", conn.resp_read
@@ -389,12 +389,12 @@ class ConnectionRespTest < ConnectionBaseTest
 
     machine.write(@wfd, "-foobar\r\n")
     o = conn.resp_read
-    assert_kind_of UM::Connection::RESPError, o
+    assert_kind_of UM::IO::RESPError, o
     assert_equal "foobar", o.message
 
     machine.write(@wfd, "!3\r\nbaz\r\n")
     o = conn.resp_read
-    assert_kind_of UM::Connection::RESPError, o
+    assert_kind_of UM::IO::RESPError, o
     assert_equal "baz", o.message
 
     machine.write(@wfd, ":123\r\n")
@@ -459,7 +459,7 @@ class ConnectionRespTest < ConnectionBaseTest
   end
 
   def test_connection_resp_write
-    writer = machine.connection(@wfd)
+    writer = machine.io(@wfd)
 
     writer.resp_write(nil);
     assert_equal "_\r\n", conn.read(-100)
@@ -490,7 +490,7 @@ class ConnectionRespTest < ConnectionBaseTest
   end
 
   def test_connection_resp_encode
-    s = UM::Connection
+    s = UM::IO
     assert_equal "_\r\n",             s.resp_encode(+'', nil)
     assert_equal "#t\r\n",            s.resp_encode(+'', true)
     assert_equal "#f\r\n",            s.resp_encode(+'', false)
@@ -507,7 +507,7 @@ class ConnectionRespTest < ConnectionBaseTest
   end
 end
 
-class ConnectionStressTest < UMBaseTest
+class IOStressTest < UMBaseTest
   def setup
     super
 
@@ -525,7 +525,7 @@ class ConnectionStressTest < UMBaseTest
 
   def start_connection_fiber(fd)
     machine.spin do
-      conn = UM::Connection.new(machine, fd)
+      conn = UM::IO.new(machine, fd)
       while (msg = conn.read_line(0))
         @received << msg
       end
@@ -620,10 +620,10 @@ class ConnectionStressTest < UMBaseTest
   end
 end
 
-class ConnectionDevRandomTest < UMBaseTest
+class IODevRandomTest < UMBaseTest
   def test_connection_dev_random_read_line
     fd = machine.open('/dev/random', UM::O_RDONLY)
-    conn = UM::Connection.new(machine, fd)
+    conn = UM::IO.new(machine, fd)
 
     n = 100000
     lines = []
@@ -639,7 +639,7 @@ class ConnectionDevRandomTest < UMBaseTest
 
   def read_line_do(n, acc)
     fd = @machine.open('/dev/random', UM::O_RDONLY)
-    conn = UM::Connection.new(@machine, fd)
+    conn = UM::IO.new(@machine, fd)
     n.times { acc << conn.read_line(0) }
   end
 
@@ -656,7 +656,7 @@ class ConnectionDevRandomTest < UMBaseTest
 
   def test_connection_dev_random_read
     fd = machine.open('/dev/random', UM::O_RDONLY)
-    conn = UM::Connection.new(machine, fd)
+    conn = UM::IO.new(machine, fd)
 
     n = 256
     size = 65536 * 8
@@ -676,10 +676,10 @@ class ConnectionDevRandomTest < UMBaseTest
   end
 end
 
-class ConnectionModeTest < UMBaseTest
+class IOModeTest < UMBaseTest
   def test_connection_default_mode
     r, w = UM.pipe
-    conn = UM::Connection.new(machine, r)
+    conn = UM::IO.new(machine, r)
     assert_equal :fd, conn.mode
   ensure
     machine.close(r) rescue nil
@@ -692,7 +692,7 @@ class ConnectionModeTest < UMBaseTest
     sock1, sock2 = UNIXSocket.pair
 
     s1 = OpenSSL::SSL::SSLSocket.new(sock1, @server_ctx)
-    conn = UM::Connection.new(machine, s1)
+    conn = UM::IO.new(machine, s1)
     assert_equal :ssl, conn.mode
   ensure
     sock1&.close rescue nil
@@ -704,7 +704,7 @@ class ConnectionModeTest < UMBaseTest
     machine.write(w, 'foobar')
     machine.close(w)
 
-    conn = UM::Connection.new(machine, r, :socket)
+    conn = UM::IO.new(machine, r, :socket)
     assert_equal :socket, conn.mode
     # assert :socket, conn.mode
     assert_raises(Errno::ENOTSOCK) { conn.read(0) }
@@ -718,7 +718,7 @@ class ConnectionModeTest < UMBaseTest
     machine.write(w, 'foobar')
     machine.close(w)
 
-    conn = UM::Connection.new(machine, r, :socket)
+    conn = UM::IO.new(machine, r, :socket)
     assert_equal :socket, conn.mode
     buf = conn.read(0)
     assert_equal 'foobar', buf
@@ -751,7 +751,7 @@ class ConnectionModeTest < UMBaseTest
     assert_equal 10, @machine.ssl_write(s1, buf, buf.bytesize)
     buf = +''
 
-    conn = UM::Connection.new(machine, s2, :ssl)
+    conn = UM::IO.new(machine, s2, :ssl)
     assert_equal "foobar", conn.read_line(0)
 
     buf = "buh"
@@ -774,7 +774,7 @@ class ConnectionModeTest < UMBaseTest
   end
 end
 
-class ConnectionByteCountsTest < ConnectionBaseTest
+class IOByteCountsTest < IOBaseTest
   def test_connection_byte_counts
     machine.write(@wfd, "foobar")
 

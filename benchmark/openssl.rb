@@ -81,7 +81,7 @@ end
 @um.ssl_set_bio(@ssl_conn)
 @ssl_conn.connect
 
-@conn = @um.connection(@ssl_conn, :ssl)
+@io = @um.io(@ssl_conn)
 
 @msg = 'abc' * 1000
 @msg_newline = @msg + "\n"
@@ -91,15 +91,15 @@ def do_io(ssl)
   ssl.gets
 end
 
-def do_io_connection(ssl, um, conn)
+def do_io_io(ssl, um, io)
   um.ssl_write(ssl, @msg_newline, 0)
-  conn.read_line(0)
+  io.read_line(0)
 end
 
 Benchmark.ips do |x|
   x.report('stock') { do_io(@ssl_stock) }
   x.report('UM BIO') { do_io(@ssl_um) }
-  x.report('UM Stream') { do_io_connection(@ssl_conn, @um, @conn) }
+  x.report('UM::IO') { do_io_io(@ssl_conn, @um, @io) }
 
   x.compare!(order: :baseline)
 end

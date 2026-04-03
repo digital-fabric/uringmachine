@@ -195,24 +195,24 @@ class UringMachine
   end
 
   # call-seq:
-  #   machine.connection(fd, mode = nil) -> conn
-  #   machine.connection(fd, mode = nil) { |conn| }
+  #   machine.io(fd, mode = nil) -> conn
+  #   machine.io(fd, mode = nil) { |conn| }
   #
-  # Creates a connection for reading from the given target fd or other object.
-  # The mode indicates the type of target and how it is read from:
+  # Creates an UM::IO for the given target (fd or SSLSocket). The mode indicates
+  # the type of target and how it is read from:
   #
   # - :fd - read from the given fd using the buffer pool (default mode)
   # - :socket - receive from the given socket fd using the buffer pool
-  # - :ssl - read from the given SSL connection
+  # - :ssl - read from the given SSL socket
   #
-  # If a block is given, the block will be called with the connection object and
-  # the method will return the block's return value.
+  # If a block is given, the block will be called with the IO instance as
+  # argument and the method will return the block's return value.
   #
-  # @param target [Integer, OpenSSL::SSL::SSLSocket] fd or ssl connection
-  # @param mode [Symbol, nil] connection mode
-  # @return [UringMachine::Stream] connection object
-  def connection(target, mode = nil)
-    conn = UM::Connection.new(self, target, mode)
+  # @param target [Integer, OpenSSL::SSL::SSLSocket] fd or ssl socket
+  # @param mode [Symbol, nil] IO mode
+  # @return [UringMachine::IO] IO object
+  def io(target, mode = nil)
+    conn = UM::IO.new(self, target, mode)
     return conn if !block_given?
 
     res = yield(conn)

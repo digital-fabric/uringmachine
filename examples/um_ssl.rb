@@ -6,6 +6,6 @@ ssl.write('Hello!')
 # also:
 machine.ssl_write(ssl, 'Hello!')
 
-conn = machine.connection(ssl)
-line = conn.read_line(4096)
+io = machine.io(ssl)
+line = io.read_line(4096)
 ...

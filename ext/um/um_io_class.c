@@ -1,24 +1,24 @@
 #include "um.h"
 
-VALUE cConnection;
-VALUE eConnectionRESPError;
+VALUE cIO;
+VALUE eIORESPError;
 
 VALUE SYM_fd;
 VALUE SYM_socket;
 VALUE SYM_ssl;
 
-inline int connection_has_target_obj_p(struct um_connection *conn) {
+inline int io_has_target_obj_p(struct um_io *conn) {
   switch (conn->mode) {
-    case CONNECTION_SSL:
-    case CONNECTION_STRING:
-    case CONNECTION_IO_BUFFER:
+    case IO_SSL:
+    case IO_STRING:
+    case IO_IO_BUFFER:
       return true;
     default:
       return false;
   }
 }
 
-inline void connection_mark_segments(struct um_connection *conn) {
+inline void io_mark_segments(struct um_io *conn) {
   struct um_segment *curr = conn->head;
   while (curr) {
     // rb_gc_mark_movable(curr->obj);
@@ -26,7 +26,7 @@ inline void connection_mark_segments(struct um_connection *conn) {
   }
 }
 
-inline void connection_compact_segments(struct um_connection *conn) {
+inline void io_compact_segments(struct um_io *conn) {
   struct um_segment *curr = conn->head;
   while (curr) {
     // curr->obj = rb_gc_location(curr->obj);
@@ -34,63 +34,63 @@ inline void connection_compact_segments(struct um_connection *conn) {
   }
 }
 
-static void Connection_mark(void *ptr) {
-  struct um_connection *conn = ptr;
+static void IO_mark(void *ptr) {
+  struct um_io *conn = ptr;
   rb_gc_mark_movable(conn->self);
   rb_gc_mark_movable(conn->machine->self);
 
-  if (connection_has_target_obj_p(conn)) {
+  if (io_has_target_obj_p(conn)) {
     rb_gc_mark_movable(conn->target);
-    connection_mark_segments(conn);
+    io_mark_segments(conn);
   }
 }
 
-static void Connection_compact(void *ptr) {
-  struct um_connection *conn = ptr;
+static void IO_compact(void *ptr) {
+  struct um_io *conn = ptr;
   conn->self = rb_gc_location(conn->self);
 
-  if (connection_has_target_obj_p(conn)) {
+  if (io_has_target_obj_p(conn)) {
     conn->target = rb_gc_location(conn->target);
-    connection_compact_segments(conn);
+    io_compact_segments(conn);
   }
 }
 
-static void Connection_free(void *ptr) {
-  struct um_connection *conn = ptr;
-  connection_clear(conn);
+static void IO_free(void *ptr) {
+  struct um_io *conn = ptr;
+  io_clear(conn);
 }
 
-static const rb_data_type_t Connection_type = {
-  .wrap_struct_name = "UringMachine::Connection",
+static const rb_data_type_t IO_type = {
+  .wrap_struct_name = "UringMachine::IO",
   .function = {
-    .dmark = Connection_mark,
-    .dfree = Connection_free,
+    .dmark = IO_mark,
+    .dfree = IO_free,
     .dsize = NULL,
-    .dcompact = Connection_compact
+    .dcompact = IO_compact
   },
   .flags = RUBY_TYPED_FREE_IMMEDIATELY | RUBY_TYPED_WB_PROTECTED | RUBY_TYPED_EMBEDDABLE
 };
 
-static VALUE Connection_allocate(VALUE klass) {
-  struct um_connection *conn;
-  VALUE self = TypedData_Make_Struct(klass, struct um_connection, &Connection_type, conn);
+static VALUE IO_allocate(VALUE klass) {
+  struct um_io *conn;
+  VALUE self = TypedData_Make_Struct(klass, struct um_io, &IO_type, conn);
   return self;
 }
 
-static inline struct um_connection *um_get_connection(VALUE self) {
-  struct um_connection *conn;
-  TypedData_Get_Struct(self, struct um_connection, &Connection_type, conn);
+static inline struct um_io *um_get_io(VALUE self) {
+  struct um_io *conn;
+  TypedData_Get_Struct(self, struct um_io, &IO_type, conn);
   return conn;
 }
 
-static inline void connection_set_target(struct um_connection *conn, VALUE target, enum um_connection_mode mode) {
+static inline void io_set_target(struct um_io *conn, VALUE target, enum um_io_mode mode) {
   conn->mode = mode;
   switch (mode) {
-    case CONNECTION_FD:
-    case CONNECTION_SOCKET:
+    case IO_FD:
+    case IO_SOCKET:
       conn->fd = NUM2INT(target);
       return;
-    case CONNECTION_SSL:
+    case IO_SSL:
       conn->target = target;
       um_ssl_set_bio(conn->machine, target);
       return;
@@ -99,20 +99,20 @@ static inline void connection_set_target(struct um_connection *conn, VALUE targe
   }
 }
 
-static inline void connection_setup(struct um_connection *conn, VALUE target, VALUE mode) {
+static inline void io_setup(struct um_io *conn, VALUE target, VALUE mode) {
   conn->working_buffer = NULL;
   if (NIL_P(mode)) {
     if (TYPE(target) == T_DATA)
-      connection_set_target(conn, target, CONNECTION_SSL);
+      io_set_target(conn, target, IO_SSL);
     else
-      connection_set_target(conn, target, CONNECTION_FD);
+      io_set_target(conn, target, IO_FD);
   }
   else if (mode == SYM_fd)
-    connection_set_target(conn, target, CONNECTION_FD);
+    io_set_target(conn, target, IO_FD);
   else if (mode == SYM_socket)
-    connection_set_target(conn, target, CONNECTION_SOCKET);
+    io_set_target(conn, target, IO_SOCKET);
   else if (mode == SYM_ssl)
-    connection_set_target(conn, target, CONNECTION_SSL);
+    io_set_target(conn, target, IO_SSL);
   else
     rb_raise(eUMError, "Invalid connection mode");
 }
@@ -131,18 +131,18 @@ static inline void connection_setup(struct um_connection *conn, VALUE target, VA
  * @param mode [Symbol] optional connection mode: :fd, :socket, :ssl
  * @return [void]
  */
-VALUE Connection_initialize(int argc, VALUE *argv, VALUE self) {
+VALUE IO_initialize(int argc, VALUE *argv, VALUE self) {
   VALUE machine;
   VALUE target;
   VALUE mode;
   rb_scan_args(argc, argv, "21", &machine, &target, &mode);
 
-  struct um_connection *conn = um_get_connection(self);
-  memset(conn, 0, sizeof(struct um_connection));
+  struct um_io *conn = um_get_io(self);
+  memset(conn, 0, sizeof(struct um_io));
 
   RB_OBJ_WRITE(self, &conn->self, self);
   conn->machine = um_get_machine(machine);
-  connection_setup(conn, target, mode);
+  io_setup(conn, target, mode);
 
   return self;
 }
@@ -154,12 +154,12 @@ VALUE Connection_initialize(int argc, VALUE *argv, VALUE self) {
  *
  * @return [Symbol] connection mode
  */
-VALUE Connection_mode(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_mode(VALUE self) {
+  struct um_io *conn = um_get_io(self);
   switch (conn->mode) {
-    case CONNECTION_FD:  return SYM_fd;
-    case CONNECTION_SOCKET:  return SYM_socket;
-    case CONNECTION_SSL:      return SYM_ssl;
+    case IO_FD:  return SYM_fd;
+    case IO_SOCKET:  return SYM_socket;
+    case IO_SSL:      return SYM_ssl;
     default:              return Qnil;
   }
   return Qnil;
@@ -175,9 +175,9 @@ VALUE Connection_mode(VALUE self) {
  * @param limit [integer] maximum line length (0 means no limit)
  * @return [String, nil] read data or nil
  */
-VALUE Connection_read_line(VALUE self, VALUE limit) {
-  struct um_connection *conn = um_get_connection(self);
-  return connection_read_line(conn, Qnil, NUM2ULONG(limit));
+VALUE IO_read_line(VALUE self, VALUE limit) {
+  struct um_io *conn = um_get_io(self);
+  return io_read_line(conn, Qnil, NUM2ULONG(limit));
 }
 
 /* call-seq:
@@ -190,9 +190,9 @@ VALUE Connection_read_line(VALUE self, VALUE limit) {
  * @param len [integer] number of bytes to read
  * @return [String, nil] read data or nil
  */
-VALUE Connection_read(VALUE self, VALUE len) {
-  struct um_connection *conn = um_get_connection(self);
-  return connection_read(conn, Qnil, NUM2LONG(len), 0, false);
+VALUE IO_read(VALUE self, VALUE len) {
+  struct um_io *conn = um_get_io(self);
+  return io_read(conn, Qnil, NUM2LONG(len), 0, false);
 }
 
 /* call-seq:
@@ -210,9 +210,9 @@ VALUE Connection_read(VALUE self, VALUE len) {
  * @param delim [String] delimiter (single byte) @param limit [integer] maximum
  * line length (0 means no limit) @return [String, nil] read data or nil
  */
-VALUE Connection_read_to_delim(VALUE self, VALUE delim, VALUE limit) {
-  struct um_connection *conn = um_get_connection(self);
-  return connection_read_to_delim(conn, Qnil, delim, NUM2LONG(limit));
+VALUE IO_read_to_delim(VALUE self, VALUE delim, VALUE limit) {
+  struct um_io *conn = um_get_io(self);
+  return io_read_to_delim(conn, Qnil, delim, NUM2LONG(limit));
 }
 
 /* call-seq:
@@ -223,9 +223,9 @@ VALUE Connection_read_to_delim(VALUE self, VALUE delim, VALUE limit) {
  * @param len [integer] number of bytes to skip
  * @return [Integer] len
  */
-VALUE Connection_skip(VALUE self, VALUE len) {
-  struct um_connection *conn = um_get_connection(self);
-  connection_skip(conn, NUM2LONG(len), true);
+VALUE IO_skip(VALUE self, VALUE len) {
+  struct um_io *conn = um_get_io(self);
+  io_skip(conn, NUM2LONG(len), true);
   return len;
 }
 
@@ -234,11 +234,11 @@ VALUE Connection_skip(VALUE self, VALUE len) {
  *
  * Reads from the target, passing each chunk to the given block.
  *
- * @return [UringMachine::Connection] conn
+ * @return [UringMachine::IO] conn
  */
-VALUE Connection_read_each(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
-  connection_read_each(conn);
+VALUE IO_read_each(VALUE self) {
+  struct um_io *conn = um_get_io(self);
+  io_read_each(conn);
   return self;
 }
 
@@ -251,9 +251,9 @@ VALUE Connection_read_each(VALUE self) {
  * @param bufs [Array<String, IO::Buffer>] data to write
  * @return [Integer] total bytes written
  */
-VALUE Connection_write(int argc, VALUE *argv, VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
-  return connection_writev(conn, argc, argv);
+VALUE IO_write(int argc, VALUE *argv, VALUE self) {
+  struct um_io *conn = um_get_io(self);
+  return io_writev(conn, argc, argv);
 }
 
 /* call-seq:
@@ -263,8 +263,8 @@ VALUE Connection_write(int argc, VALUE *argv, VALUE self) {
  *
  * @return [any] decoded object
  */
-VALUE Connection_resp_read(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_resp_read(VALUE self) {
+  struct um_io *conn = um_get_io(self);
   VALUE out_buffer = rb_utf8_str_new_literal("");
   VALUE obj = resp_read(conn, out_buffer);
   RB_GC_GUARD(out_buffer);
@@ -280,8 +280,8 @@ VALUE Connection_resp_read(VALUE self) {
  * @param obj [any] object to write
  * @return [Integer] total bytes written
  */
-VALUE Connection_resp_write(VALUE self, VALUE obj) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_resp_write(VALUE self, VALUE obj) {
+  struct um_io *conn = um_get_io(self);
 
   VALUE str = rb_str_new(NULL, 0);
   struct um_write_buffer buf;
@@ -290,7 +290,7 @@ VALUE Connection_resp_write(VALUE self, VALUE obj) {
   resp_encode(&buf, obj);
   write_buffer_update_len(&buf);
 
-  size_t len = connection_write_raw(conn, buf.ptr, buf.len);
+  size_t len = io_write_raw(conn, buf.ptr, buf.len);
   RB_GC_GUARD(str);
   return ULONG2NUM(len);
 }
@@ -304,7 +304,7 @@ VALUE Connection_resp_write(VALUE self, VALUE obj) {
  * @param obj [any] object to be encoded
  * @return [String] str
  */
-VALUE Connection_resp_encode(VALUE self, VALUE str, VALUE obj) {
+VALUE IO_resp_encode(VALUE self, VALUE str, VALUE obj) {
   struct um_write_buffer buf;
   write_buffer_init(&buf, str);
   rb_str_modify(str);
@@ -320,8 +320,8 @@ VALUE Connection_resp_encode(VALUE self, VALUE str, VALUE obj) {
  *
  * @return [bool] EOF reached
  */
-VALUE Connection_eof_p(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_eof_p(VALUE self) {
+  struct um_io *conn = um_get_io(self);
   return conn->eof ? Qtrue : Qfalse;
 }
 
@@ -332,8 +332,8 @@ VALUE Connection_eof_p(VALUE self) {
  *
  * @return [Integer] total bytes consumed
  */
-VALUE Connection_consumed(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_consumed(VALUE self) {
+  struct um_io *conn = um_get_io(self);
   return LONG2NUM(conn->consumed_bytes);
 }
 
@@ -344,8 +344,8 @@ VALUE Connection_consumed(VALUE self) {
  *
  * @return [Integer] bytes available
  */
-VALUE Connection_pending(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
+VALUE IO_pending(VALUE self) {
+  struct um_io *conn = um_get_io(self);
   return LONG2NUM(conn->pending_bytes);
 }
 
@@ -356,37 +356,37 @@ VALUE Connection_pending(VALUE self) {
  *
  * @return [UM::Stream] self
  */
-VALUE Connection_clear(VALUE self) {
-  struct um_connection *conn = um_get_connection(self);
-  connection_clear(conn);
+VALUE IO_clear(VALUE self) {
+  struct um_io *conn = um_get_io(self);
+  io_clear(conn);
   return self;
 }
 
-void Init_Stream(void) {
-  cConnection = rb_define_class_under(cUM, "Connection", rb_cObject);
-  rb_define_alloc_func(cConnection, Connection_allocate);
+void Init_IO(void) {
+  cIO = rb_define_class_under(cUM, "IO", rb_cObject);
+  rb_define_alloc_func(cIO, IO_allocate);
 
-  rb_define_method(cConnection, "initialize", Connection_initialize, -1);
-  rb_define_method(cConnection, "mode", Connection_mode, 0);
+  rb_define_method(cIO, "initialize", IO_initialize, -1);
+  rb_define_method(cIO, "mode", IO_mode, 0);
 
-  rb_define_method(cConnection, "read_line", Connection_read_line, 1);
-  rb_define_method(cConnection, "read", Connection_read, 1);
-  rb_define_method(cConnection, "read_to_delim", Connection_read_to_delim, 2);
-  rb_define_method(cConnection, "skip", Connection_skip, 1);
-  rb_define_method(cConnection, "read_each", Connection_read_each, 0);
+  rb_define_method(cIO, "read_line", IO_read_line, 1);
+  rb_define_method(cIO, "read", IO_read, 1);
+  rb_define_method(cIO, "read_to_delim", IO_read_to_delim, 2);
+  rb_define_method(cIO, "skip", IO_skip, 1);
+  rb_define_method(cIO, "read_each", IO_read_each, 0);
 
-  rb_define_method(cConnection, "write", Connection_write, -1);
+  rb_define_method(cIO, "write", IO_write, -1);
 
-  rb_define_method(cConnection, "resp_read", Connection_resp_read, 0);
-  rb_define_method(cConnection, "resp_write", Connection_resp_write, 1);
-  rb_define_singleton_method(cConnection, "resp_encode", Connection_resp_encode, 2);
+  rb_define_method(cIO, "resp_read", IO_resp_read, 0);
+  rb_define_method(cIO, "resp_write", IO_resp_write, 1);
+  rb_define_singleton_method(cIO, "resp_encode", IO_resp_encode, 2);
 
-  rb_define_method(cConnection, "eof?", Connection_eof_p, 0);
-  rb_define_method(cConnection, "consumed", Connection_consumed, 0);
-  rb_define_method(cConnection, "pending", Connection_pending, 0);
-  rb_define_method(cConnection, "clear", Connection_clear, 0);
+  rb_define_method(cIO, "eof?", IO_eof_p, 0);
+  rb_define_method(cIO, "consumed", IO_consumed, 0);
+  rb_define_method(cIO, "pending", IO_pending, 0);
+  rb_define_method(cIO, "clear", IO_clear, 0);
 
-  eConnectionRESPError = rb_define_class_under(cConnection, "RESPError", rb_eStandardError);
+  eIORESPError = rb_define_class_under(cIO, "RESPError", rb_eStandardError);
 
   SYM_fd = ID2SYM(rb_intern("fd"));
   SYM_socket = ID2SYM(rb_intern("socket"));
