@@ -1,28 +1,13 @@
-- Rename Connection to IO
-
-  ```ruby
-  io = machine.io(fd)
-  l = io.read_line(4)
-  io.write('foo')
-  ```
-
-- Add `IO#fd`/`IO#target` method
-
-- Add `UM#inspect` (show size, modes)
-- Add `UM::IO#inspect` (show target, mode, pending bytes)
-
-## Reimplement multishot read/recv using buffer pool
-
-- remove `#setup_buffer_ring` method
-- use buffer pool, just like UM::Connection
-
 ## immediate
+
+- Add `IO#http_xxx` methods
+  - `#http_read_request_headers()`
+  - `#http_read_body(content_length)` (-1 means chunked TE)
 
 - Add tests for support for Set in `machine#await`
 - Add tests for support for Set, Array in `machine#join`
 - Add `UM#read_file` for reading entire file
 - Add `UM#write_file` for writing entire file
-- Rename stream methods: `:fd`, `:socket`, `:ssl`
 
 ## Balancing I/O with the runqueue
 
@@ -48,7 +33,7 @@
 - debounce
 
   ```ruby
-  debouncer = machine.debounce { }
+  debouncer = machine.debounce { ... }
   ```
 
 - happy eyeballs algo for TCP connect
@@ -104,8 +89,6 @@
 When doing a `call`, we need to provide a mailbox for the response. can this be
 automatic?
 
-##
-
 ## Syntax / pattern for launching/supervising multiple operations
 
 Select (see above):
@@ -125,3 +108,38 @@ machine.shift_select(*queues) #=> [result, queue]
   #        ['1.1.1.1:80', '2.2.2.2:80']
   tcp_connect_he(*addrs)
   ```
+
+## Character scanning in UM::IO
+
+```c
+// bitmaps for character types can be generated with a bit of Ruby:
+//
+// def t(r); (0..255).map { [it].pack('c') =~ r ? 1 : 0 }; end
+// def tn(r); (0..255).map { [it].pack('c') =~ r ? 0 : 1 }; end
+// def u64(bits); bits.reverse.join.to_i(2); end
+// def p(a); a.each_slice(64).map { u64(it) }; end
+
+// usage:
+//
+//   p(t(/[a-zA-Z0-9]/)).map { format('%016X', it) }
+
+
+// /[a-zA-Z0-9]/
+uint64_t alpha_numeric[] = [
+  0x000000000000FFC0,
+  0x7FFFFFE07FFFFFE0,
+  0x0000000000000000,
+  0x0000000000000000
+];
+
+// HTTP method: /[a-zA-Z]/    (3-12 characters)
+// header-key:  /[a-zA-Z\-]/  ()
+// path:        /^($/
+
+// check if character is in bitmap
+inline int test_char(char c, uint64 *bitmap) {
+  return bitmap[c / 64] & (1UL << (c % 64));
+}
+
+
+```

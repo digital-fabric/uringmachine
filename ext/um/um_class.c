@@ -129,18 +129,6 @@ VALUE UM_initialize(int argc, VALUE *argv, VALUE self) {
   return self;
 }
 
-/* Creates a buffer group (buffer ring) with the given buffer size and buffer count.
- *
- * @param size [Integer] buffer size in bytes
- * @param count [Integer] number of buffers in group
- * @return [Integer] buffer group id
- */
-VALUE UM_setup_buffer_ring(VALUE self, VALUE size, VALUE count) {
-  struct um *machine = um_get_machine(self);
-  int bgid = um_setup_buffer_ring(machine, NUM2UINT(size), NUM2UINT(count));
-  return INT2NUM(bgid);
-}
-
 /* Returns the SQ (submission queue) size.
  *
  * @return [Integer] SQ size
@@ -408,21 +396,19 @@ VALUE UM_read(int argc, VALUE *argv, VALUE self) {
 }
 
 /* call-seq:
- *   machine.read_each(fd, bgid) { |data| }
+ *   machine.read_each(fd) { |data| }
  *
- * Reads repeatedly from the given `fd` using the given buffer group id. The
- * buffer group should have been previously setup using `#setup_buffer_ring`.
- * Read data is yielded in an infinite loop to the given block.
+ * Reads repeatedly from the given fd. Read data is yielded in an infinite
+ * loop to the given block.
  *
  * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_read_multishot.3.html
  *
  * @param fd [Integer] file descriptor
- * @param bgid [Integer] buffer group id
  * @return [void]
  */
-VALUE UM_read_each(VALUE self, VALUE fd, VALUE bgid) {
+VALUE UM_read_each(VALUE self, VALUE fd) {
   struct um *machine = um_get_machine(self);
-  return um_read_each(machine, NUM2INT(fd), NUM2INT(bgid));
+  return um_read_each(machine, NUM2INT(fd));
 }
 
 /* call-seq:
@@ -837,38 +823,6 @@ VALUE UM_sendv(int argc, VALUE *argv, VALUE self) {
 
 
 /* call-seq:
- *   machine.send_bundle(fd, bgid, *buffers) -> bytes_sent
- *
- * Sends data on the given socket from the given buffers using a registered
- * buffer group. The buffer group should have been previously registered using
- * `#setup_buffer_ring`.
- *
- * - https://www.man7.org/linux/man-pages/man2/send.2.html
- * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_send.3.html
- *
- * @overload send_bundle(fd, bgid, *buffers)
- *   @param fd [Integer] file descriptor
- *   @param bgid [Integer] buffer group id
- *   @param *buffers [Array<String, IO::Buffer>] buffers
- *   @return [Integer] number of bytes sent
- */
-VALUE UM_send_bundle(int argc, VALUE *argv, VALUE self) {
-  struct um *machine = um_get_machine(self);
-  VALUE fd;
-  VALUE bgid;
-  VALUE strings;
-  rb_scan_args(argc, argv, "2*", &fd, &bgid, &strings);
-
-  if (RARRAY_LEN(strings) == 1) {
-    VALUE first = rb_ary_entry(strings, 0);
-    if (TYPE(first) == T_ARRAY)
-      strings = first;
-  }
-
-  return um_send_bundle(machine, NUM2INT(fd), NUM2INT(bgid), strings);
-}
-
-/* call-seq:
  *   machine.recv(fd, buffer, maxlen, flags) -> bytes_received
  *
  * Receives data from the given socket.
@@ -888,23 +842,20 @@ VALUE UM_recv(VALUE self, VALUE fd, VALUE buffer, VALUE maxlen, VALUE flags) {
 }
 
 /* call-seq:
- *   machine.recv_each(fd, bgid, flags) { |data| ... }
+ *   machine.recv_each(fd, flags) { |data| ... }
  *
- * Repeatedlty receives data from the given socket in an infinite loop using the
- * given buffer group id. The buffer group should have been previously setup
- * using `#setup_buffer_ring`.
+ * Repeatedlty receives data from the given socket in an infinite loop.
  *
  * - https://www.man7.org/linux/man-pages/man2/recv.2.html
  * - https://www.man7.org/linux/man-pages/man3/io_uring_prep_recv.3.html
  *
  * @param fd [Integer] file descriptor
- * @param bgid [Integer] buffer group id
  * @param flags [Integer] flags mask
  * @return [void]
  */
-VALUE UM_recv_each(VALUE self, VALUE fd, VALUE bgid, VALUE flags) {
+VALUE UM_recv_each(VALUE self, VALUE fd, VALUE flags) {
   struct um *machine = um_get_machine(self);
-  return um_recv_each(machine, NUM2INT(fd), NUM2INT(bgid), NUM2INT(flags));
+  return um_recv_each(machine, NUM2INT(fd), NUM2INT(flags));
 }
 
 /* call-seq:
@@ -1512,8 +1463,6 @@ void Init_UM(void) {
   rb_define_method(cUM, "sidecar_start", UM_sidecar_start, 0);
   rb_define_method(cUM, "sidecar_stop", UM_sidecar_stop, 0);
 
-  rb_define_method(cUM, "setup_buffer_ring", UM_setup_buffer_ring, 2);
-
   rb_define_method(cUM, "schedule", UM_schedule, 2);
   rb_define_method(cUM, "snooze", UM_snooze, 0);
   rb_define_method(cUM, "timeout", UM_timeout, 2);
@@ -1527,7 +1476,7 @@ void Init_UM(void) {
   rb_define_method(cUM, "close_async", UM_close_async, 1);
   rb_define_method(cUM, "open", UM_open, 2);
   rb_define_method(cUM, "read", UM_read, -1);
-  rb_define_method(cUM, "read_each", UM_read_each, 2);
+  rb_define_method(cUM, "read_each", UM_read_each, 1);
   rb_define_method(cUM, "sleep", UM_sleep, 1);
   rb_define_method(cUM, "periodically", UM_periodically, 1);
   rb_define_method(cUM, "write", UM_write, -1);
@@ -1554,11 +1503,10 @@ void Init_UM(void) {
   rb_define_method(cUM, "getsockopt", UM_getsockopt, 3);
   rb_define_method(cUM, "listen", UM_listen, 2);
   rb_define_method(cUM, "recv", UM_recv, 4);
-  rb_define_method(cUM, "recv_each", UM_recv_each, 3);
+  rb_define_method(cUM, "recv_each", UM_recv_each, 2);
   rb_define_method(cUM, "send", UM_send, 4);
   rb_define_method(cUM, "sendv", UM_sendv, -1);
 
-  rb_define_method(cUM, "send_bundle", UM_send_bundle, -1);
   rb_define_method(cUM, "setsockopt", UM_setsockopt, 4);
   rb_define_method(cUM, "socket", UM_socket, 4);
   rb_define_method(cUM, "shutdown", UM_shutdown, 2);

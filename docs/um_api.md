@@ -56,8 +56,6 @@
   resume value.
 - `select(rfds, wfds, efds)` - selects ready fds from the given readable,
   writable and exeptable fds.
-- `send_bundle(fd, bgid, *strings)` - sends a bundle of buffers to the given fd
-  using the given buffer group id.
 - `send(fd, buffer, len, flags)` - sends to the given fd from the given buffer.
 - `sendv(fd, *buffers)` - sends multiple buffers to the given fd.
 - `setsockopt(fd, level, opt, value)` - sets a socket option.
