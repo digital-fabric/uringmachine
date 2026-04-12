@@ -1,3 +1,8 @@
+# 0.33.0 2026-04-12
+
+- Use buffer pool for `#read_each`, `#recv_each` methods
+- Remove `#setup_buffer_group`, `#send_bundle`
+
 # 0.32.0 2026-04-03
 
 - Rename `UM::Connection` to `UM::IO`
