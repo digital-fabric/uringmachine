@@ -20,7 +20,6 @@ const char * um_op_kind_name(enum um_op_kind kind) {
     case OP_RECV:               return "OP_RECV";
     case OP_RECVMSG:            return "OP_RECVMSG";
     case OP_SEND:               return "OP_SEND";
-    case OP_SEND_BUNDLE:        return "OP_SEND_BUNDLE";
     case OP_SENDMSG:            return "OP_SENDMSG";
     case OP_SENDV:              return "OP_SENDV";
     case OP_SOCKET:             return "OP_SOCKET";

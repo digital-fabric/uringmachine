@@ -49,12 +49,6 @@ inline void um_teardown(struct um *machine) {
   if (machine->sidecar_mode) um_sidecar_teardown(machine);
   if (machine->sidecar_signal) free(machine->sidecar_signal);
 
-  for (unsigned i = 0; i < machine->buffer_ring_count; i++) {
-    struct buf_ring_descriptor *desc = machine->buffer_rings + i;
-    io_uring_free_buf_ring(&machine->ring, desc->br, desc->buf_count, i);
-    free(desc->buf_base);
-  }
-  machine->buffer_ring_count = 0;
   io_uring_queue_exit(&machine->ring);
   machine->ring_initialized = 0;
 
@@ -523,7 +517,6 @@ struct op_ctx {
   struct um *machine;
   struct um_op *op;
   int fd;
-  int bgid;
 
   struct um_queue *queue;
   void *read_buf;
@@ -859,25 +852,6 @@ VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv) {
   struct io_uring_sqe *sqe = um_get_sqe(machine, op);
   io_uring_prep_send(sqe, fd, iovecs, argc, MSG_NOSIGNAL | MSG_WAITALL);
   sqe->ioprio |= IORING_SEND_VECTORIZED;
-
-  VALUE ret = um_yield(machine);
-
-  if (likely(um_verify_op_completion(machine, op, true))) ret = INT2NUM(op->result.res);
-  um_op_release(machine, op);
-
-  RAISE_IF_EXCEPTION(ret);
-  RB_GC_GUARD(ret);
-  return ret;
-}
-
-VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings) {
-  um_add_strings_to_buffer_ring(machine, bgid, strings);
-  struct um_op *op = um_op_acquire(machine);
-  um_prep_op(machine, op, OP_SEND_BUNDLE, 2, 0);
-  struct io_uring_sqe *sqe = um_get_sqe(machine, op);
-	io_uring_prep_send_bundle(sqe, fd, 0, MSG_NOSIGNAL | MSG_WAITALL);
-	sqe->flags |= IOSQE_BUFFER_SELECT;
-	sqe->buf_group = bgid;
 
   VALUE ret = um_yield(machine);
 
@@ -1461,72 +1435,44 @@ VALUE um_accept_into_queue(struct um *machine, int fd, VALUE queue) {
   return rb_ensure(accept_into_queue_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
-int um_read_each_singleshot_loop(struct op_ctx *ctx) {
-  struct buf_ring_descriptor *desc = ctx->machine->buffer_rings + ctx->bgid;
-  ctx->read_maxlen = desc->buf_size;
-  ctx->read_buf = malloc(desc->buf_size);
-  int total = 0;
-
-  while (1) {
-    um_prep_op(ctx->machine, ctx->op, OP_READ, 2, 0);
-    struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
-    io_uring_prep_read(sqe, ctx->fd, ctx->read_buf, ctx->read_maxlen, -1);
-
-    VALUE ret = um_yield(ctx->machine);
-
-    if (likely(um_verify_op_completion(ctx->machine, ctx->op, true))) {
-      VALUE buf = rb_str_new(ctx->read_buf, ctx->op->result.res);
-      total += ctx->op->result.res;
-      rb_yield(buf);
-      RB_GC_GUARD(buf);
-    }
-    else {
-      RAISE_IF_EXCEPTION(ret);
-      return 0;
-    }
-    RB_GC_GUARD(ret);
-  }
-  return 0;
-}
-
 // // returns true if more results are expected
-int read_recv_each_multishot_process_result(struct op_ctx *ctx, struct um_op_result *result, int *total) {
+inline int read_recv_each_multishot_process_result(struct op_ctx *ctx, struct um_op_result *result, int *total) {
   if (result->res == 0)
     return false;
 
   *total += result->res;
-  VALUE buf = um_read_from_buffer_ring(ctx->machine, ctx->bgid, result->res, result->flags);
-  rb_yield(buf);
-  RB_GC_GUARD(buf);
-
-  // TTY devices might not support multishot reads:
-  // https://github.com/axboe/liburing/issues/1185. We detect this by checking
-  // if the F_MORE flag is absent, then switch to single shot mode.
-  if (unlikely(!(result->flags & IORING_CQE_F_MORE))) {
-    *total += um_read_each_singleshot_loop(ctx);
-    return false;
+  if (likely(result->segment)) {
+    VALUE buf = rb_str_new(result->segment->ptr, result->segment->len);
+    um_segment_checkin(ctx->machine, result->segment);
+    result->segment = NULL;
+    rb_yield(buf);
+    RB_GC_GUARD(buf);
   }
 
   return true;
 }
 
-void read_recv_each_prep(struct io_uring_sqe *sqe, struct op_ctx *ctx) {
+static inline void read_recv_each_prep(struct io_uring_sqe *sqe, struct op_ctx *ctx) {
+  bp_ensure_commit_level(ctx->machine);
+  ctx->op->bp_commit_level = ctx->machine->bp_commit_level;
+
   switch (ctx->op->kind) {
     case OP_READ_MULTISHOT:
-      io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, ctx->bgid);
+      io_uring_prep_read_multishot(sqe, ctx->fd, 0, -1, BP_BGID);
       return;
     case OP_RECV_MULTISHOT:
       io_uring_prep_recv_multishot(sqe, ctx->fd, NULL, 0, 0);
-	    sqe->buf_group = ctx->bgid;
+	    sqe->buf_group = BP_BGID;
 	    sqe->flags |= IOSQE_BUFFER_SELECT;
       return;
     default:
-      return;
+      um_raise_internal_error("Invalid multishot op");
   }
 }
 
 VALUE read_recv_each_start(VALUE arg) {
   struct op_ctx *ctx = (struct op_ctx *)arg;
+
   struct io_uring_sqe *sqe = um_get_sqe(ctx->machine, ctx->op);
   read_recv_each_prep(sqe, ctx);
   int total = 0;
@@ -1558,19 +1504,19 @@ VALUE read_recv_each_start(VALUE arg) {
   return Qnil;
 }
 
-VALUE um_read_each(struct um *machine, int fd, int bgid) {
+VALUE um_read_each(struct um *machine, int fd) {
   struct um_op *op = um_op_acquire(machine);
-  um_prep_op(machine, op, OP_READ_MULTISHOT, 2, OP_F_MULTISHOT);
+  um_prep_op(machine, op, OP_READ_MULTISHOT, 2, OP_F_MULTISHOT | OP_F_BUFFER_POOL);
 
-  struct op_ctx ctx = { .machine = machine, .op = op, .fd = fd, .bgid = bgid, .read_buf = NULL };
+  struct op_ctx ctx = { .machine = machine, .op = op, .fd = fd, .read_buf = NULL };
   return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 
-VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags) {
+VALUE um_recv_each(struct um *machine, int fd, int flags) {
   struct um_op *op = um_op_acquire(machine);
-  um_prep_op(machine, op, OP_RECV_MULTISHOT, 2, OP_F_MULTISHOT);
+  um_prep_op(machine, op, OP_RECV_MULTISHOT, 2, OP_F_MULTISHOT | OP_F_BUFFER_POOL);
 
-  struct op_ctx ctx = { .machine = machine, .op = op, .fd = fd, .bgid = bgid, .read_buf = NULL, .flags = flags };
+  struct op_ctx ctx = { .machine = machine, .op = op, .fd = fd, .read_buf = NULL, .flags = flags };
   return rb_ensure(read_recv_each_start, (VALUE)&ctx, multishot_complete, (VALUE)&ctx);
 }
 

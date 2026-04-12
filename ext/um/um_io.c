@@ -177,7 +177,6 @@ int io_get_more_segments_bp(struct um_io *io) {
 
         um_op_release(io->machine, io->op);
         io->op = NULL;
-        // io_multishot_op_start(io);
       }
       else {
         um_op_release(io->machine, io->op);

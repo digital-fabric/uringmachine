@@ -653,8 +653,6 @@ class ReadEachTest < UMBaseTest
   def test_read_each
     r, w = IO.pipe
     bufs = []
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
 
     f = Fiber.new do
       w << 'foo'
@@ -669,7 +667,7 @@ class ReadEachTest < UMBaseTest
 
     machine.schedule(f, nil)
 
-    machine.read_each(r.fileno, bgid) do |buf|
+    machine.read_each(r.fileno) do |buf|
       bufs << buf
     end
 
@@ -681,15 +679,13 @@ class ReadEachTest < UMBaseTest
   # send once and close write fd
   def test_read_each_raising_1
     r, w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
 
     w << 'foo'
     w.close
 
     e = nil
     begin
-      machine.read_each(r.fileno, bgid) do |buf|
+      machine.read_each(r.fileno) do |buf|
         raise 'hi'
       end
     rescue => e
@@ -704,14 +700,12 @@ class ReadEachTest < UMBaseTest
   # send once and leave write fd open
   def test_read_each_raising_2
     r, w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
 
     w << 'foo'
 
     e = nil
     begin
-      machine.read_each(r.fileno, bgid) do |buf|
+      machine.read_each(r.fileno) do |buf|
         raise 'hi'
       end
     rescue => e
@@ -728,15 +722,13 @@ class ReadEachTest < UMBaseTest
   # send twice
   def test_read_each_raising_3
     r, w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
 
     w << 'foo'
     w << 'bar'
 
     e = nil
     begin
-      machine.read_each(r.fileno, bgid) do |buf|
+      machine.read_each(r.fileno) do |buf|
         raise 'hi'
       end
     rescue => e
@@ -752,7 +744,6 @@ class ReadEachTest < UMBaseTest
 
   def test_read_each_break
     r, w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
 
     t = Thread.new do
       sleep 0.1
@@ -762,7 +753,7 @@ class ReadEachTest < UMBaseTest
     end
 
     bufs = []
-    machine.read_each(r.fileno, bgid) do |b|
+    machine.read_each(r.fileno) do |b|
       bufs << b
       break
     end
@@ -779,13 +770,12 @@ class ReadEachTest < UMBaseTest
 
   def test_read_each_timeout
     r, _w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
 
     bufs = []
     e = nil
     begin
       machine.timeout(0.01, TOError) do
-        machine.read_each(r.fileno, bgid) do |b|
+        machine.read_each(r.fileno) do |b|
           bufs << b
         end
       end
@@ -804,10 +794,9 @@ class ReadEachTest < UMBaseTest
 
   def test_read_each_bad_file
     _r, w = IO.pipe
-    bgid = machine.setup_buffer_ring(4096, 1024)
 
     assert_raises(Errno::EBADF) do
-      machine.read_each(w.fileno, bgid)
+      machine.read_each(w.fileno)
     end
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:ops_free]
@@ -1892,15 +1881,9 @@ class RecvEachTest < UMBaseTest
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
-
-    bgid2 = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 1, bgid2
-
     bufs = []
 
-    machine.recv_each(fd, bgid, 0) do |buf|
+    machine.recv_each(fd, 0) do |buf|
       bufs << buf
     end
     assert_equal ['abc', 'def', 'ghi'], bufs
@@ -1922,14 +1905,11 @@ class RecvEachTest < UMBaseTest
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
-
     bufs = []
     e = nil
     begin
       machine.timeout(0.01, TOError) do
-        machine.recv_each(fd, bgid, 0) do |buf|
+        machine.recv_each(fd, 0) do |buf|
           bufs << buf
         end
       end
@@ -1953,9 +1933,6 @@ class RecvEachTest < UMBaseTest
     res = machine.connect(fd, '127.0.0.1', @port)
     assert_equal 0, res
 
-    bgid = machine.setup_buffer_ring(4096, 1024)
-    assert_equal 0, bgid
-
     bufs = []
     e = nil
 
@@ -1965,7 +1942,7 @@ class RecvEachTest < UMBaseTest
     }
 
     begin
-      machine.recv_each(fd, bgid, 0) do |buf|
+      machine.recv_each(fd, 0) do |buf|
         bufs << buf
       end
     rescue => e
@@ -3094,61 +3071,6 @@ class ForkTest < UMBaseTest
     assert_equal 'foo', buf
   ensure
     Process.wait(child_pid) rescue nil
-  end
-end
-
-class SendBundleTest < UMBaseTest
-  def setup
-    super
-    @client_fd, @server_fd = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
-  end
-
-  def test_send_bundle_splat
-    bgid = machine.setup_buffer_ring(0, 8)
-    assert_equal 0, bgid
-
-    strs = ['foo', 'bar', 'bazzzzz']
-    len = strs.inject(0) { |len, s| len + s.bytesize }
-
-    ret = machine.send_bundle(@client_fd, bgid, *strs)
-    assert_equal len, ret
-
-    buf = +''
-    ret = machine.recv(@server_fd, buf, 8192, 0)
-    assert_equal len, ret
-    assert_equal strs.join, buf
-  end
-
-  def test_send_bundle_array
-    bgid = machine.setup_buffer_ring(0, 8)
-    assert_equal 0, bgid
-
-    strs = ['foo', 'bar', 'bazzzzz']
-    len = strs.inject(0) { |len, s| len + s.bytesize }
-
-    ret = machine.send_bundle(@client_fd, bgid, strs)
-    assert_equal len, ret
-
-    buf = +''
-    ret = machine.recv(@server_fd, buf, 8192, 0)
-    assert_equal len, ret
-    assert_equal strs.join, buf
-  end
-
-  def test_send_bundle_non_strings
-    bgid = machine.setup_buffer_ring(0, 8)
-    assert_equal 0, bgid
-
-    strs = [42, 'bar', false]
-    len = strs.inject(0) { |len, s| len + s.to_s.bytesize }
-
-    ret = machine.send_bundle(@client_fd, bgid, strs)
-    assert_equal len, ret
-
-    buf = +''
-    ret = machine.recv(@server_fd, buf, 8192, 0)
-    assert_equal len, ret
-    assert_equal strs.map(&:to_s).join, buf
   end
 end
 

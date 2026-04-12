@@ -56,7 +56,6 @@ enum um_op_kind {
   OP_RECV,
   OP_RECVMSG,
   OP_SEND,
-  OP_SEND_BUNDLE,
   OP_SENDMSG,
   OP_SENDV,
   OP_SOCKET,
@@ -168,15 +167,6 @@ struct um_op {
   };
 };
 
-struct buf_ring_descriptor {
-  struct io_uring_buf_ring *br;
-  size_t br_size;
-  unsigned buf_count;
-  unsigned buf_size;
-  unsigned buf_mask;
-	void *buf_base;
-};
-
 struct um_metrics {
   ulong total_ops;                // total ops submitted
   ulong total_switches;           // total fiber switches
@@ -199,8 +189,6 @@ struct um_metrics {
   double time_first_cpu;          // last seen time stamp
 };
 
-#define BUFFER_RING_MAX_COUNT 10
-
 struct um {
   VALUE self;
 
@@ -216,12 +204,8 @@ struct um {
   pthread_t sidecar_thread;
   uint32_t *sidecar_signal;
 
-  uint buffer_ring_count; // number of registered buffer rings
-
   uint size; // size of SQ
   uint sqpoll_mode; // SQPOLL mode enabled
-
-  struct buf_ring_descriptor buffer_rings[BUFFER_RING_MAX_COUNT];
 
   struct um_op *transient_head; // list of pending transient ops
   VALUE pending_fibers; // set containing pending fibers
@@ -351,9 +335,7 @@ void um_raise_on_error_result(int result);
 int um_get_buffer_bytes_for_writing(VALUE buffer, const void **base, size_t *size, int raise_on_bad_buffer);
 void * um_prepare_read_buffer(VALUE buffer, ssize_t len, ssize_t ofs);
 void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result);
-int um_setup_buffer_ring(struct um *machine, unsigned size, unsigned count);
-VALUE um_read_from_buffer_ring(struct um *machine, int bgid, __s32 result, __u32 flags);
-void um_add_strings_to_buffer_ring(struct um *machine, int bgid, VALUE strings);
+
 struct iovec *um_alloc_iovecs_for_writing(int argc, VALUE *argv, size_t *total_len);
 void um_advance_iovecs_for_writing(struct iovec **ptr, int *len, size_t adv);
 
@@ -376,7 +358,7 @@ VALUE um_sleep(struct um *machine, double duration);
 VALUE um_periodically(struct um *machine, double interval);
 VALUE um_read(struct um *machine, int fd, VALUE buffer, size_t maxlen, ssize_t buffer_offset, __u64 file_offset);
 size_t um_read_raw(struct um *machine, int fd, char *buffer, size_t maxlen);
-VALUE um_read_each(struct um *machine, int fd, int bgid);
+VALUE um_read_each(struct um *machine, int fd);
 VALUE um_write(struct um *machine, int fd, VALUE buffer, size_t len, __u64 file_offset);
 size_t um_write_raw(struct um *machine, int fd, const char *buffer, size_t len);
 VALUE um_writev(struct um *machine, int fd, int argc, VALUE *argv);
@@ -405,9 +387,8 @@ VALUE um_connect(struct um *machine, int fd, const struct sockaddr *addr, sockle
 VALUE um_send(struct um *machine, int fd, VALUE buffer, size_t len, int flags);
 size_t um_send_raw(struct um *machine, int fd, const char *buffer, size_t len, int flags);
 VALUE um_sendv(struct um *machine, int fd, int argc, VALUE *argv);
-VALUE um_send_bundle(struct um *machine, int fd, int bgid, VALUE strings);
 VALUE um_recv(struct um *machine, int fd, VALUE buffer, size_t maxlen, int flags);
-VALUE um_recv_each(struct um *machine, int fd, int bgid, int flags);
+VALUE um_recv_each(struct um *machine, int fd, int flags);
 VALUE um_bind(struct um *machine, int fd, struct sockaddr *addr, socklen_t addrlen);
 VALUE um_listen(struct um *machine, int fd, int backlog);
 VALUE um_getsockopt(struct um *machine, int fd, int level, int opt);
