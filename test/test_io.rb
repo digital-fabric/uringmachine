@@ -33,7 +33,7 @@ class IOTest < IOBaseTest
     )
   end
 
-  def test_connection_basic_usage
+  def test_io_basic_usage
     assert_equal [0, 0, 0, 0, 0], buffer_metrics
     machine.write(@wfd, "foobar")
     machine.close(@wfd)
@@ -53,7 +53,7 @@ class IOTest < IOBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
   end
 
-  def test_connection_clear
+  def test_io_clear
     rfd, wfd = UM.pipe
     conn = UM::IO.new(machine, rfd)
 
@@ -77,7 +77,7 @@ class IOTest < IOBaseTest
     machine.close(wfd) rescue nil
   end
 
-  def test_connection_big_read
+  def test_io_big_read
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     conn = UM::IO.new(machine, s2)
 
@@ -96,7 +96,7 @@ class IOTest < IOBaseTest
     machine.join(f)
   end
 
-  def test_connection_buffer_reuse
+  def test_io_buffer_reuse
     s1, s2 = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     conn = UM::IO.new(machine, s2)
 
@@ -131,7 +131,7 @@ class IOTest < IOBaseTest
     machine.join(f)
   end
 
-  def test_connection_read_line
+  def test_io_read_line
     machine.write(@wfd, "foo\nbar\r\nbaz")
     machine.close(@wfd)
 
@@ -145,7 +145,7 @@ class IOTest < IOBaseTest
     assert_equal "baz", conn.read(-6)
   end
 
-  def test_connection_read_line_segmented
+  def test_io_read_line_segmented
     machine.write(@wfd, "foo\n")
     assert_equal 'foo', conn.read_line(0)
 
@@ -163,7 +163,7 @@ class IOTest < IOBaseTest
     assert_nil conn.read_line(0)
   end
 
-  def test_connection_read_line_maxlen
+  def test_io_read_line_maxlen
     machine.write(@wfd, "foobar\r\n")
 
     assert_nil conn.read_line(3)
@@ -188,7 +188,7 @@ class IOTest < IOBaseTest
     assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
-  def test_connection_read
+  def test_io_read
     machine.write(@wfd, "foobarbazblahzzz")
     machine.close(@wfd)
 
@@ -198,7 +198,7 @@ class IOTest < IOBaseTest
     assert_nil conn.read(4)
   end
 
-  def test_connection_read_zero_len
+  def test_io_read_zero_len
     machine.write(@wfd, "foobar")
 
     assert_equal 'foobar', conn.read(0)
@@ -209,7 +209,7 @@ class IOTest < IOBaseTest
     assert_nil conn.read(0)
   end
 
-  def test_connection_read_negative_len
+  def test_io_read_negative_len
     machine.write(@wfd, "foobar")
 
     assert_equal 'foo', conn.read(-3)
@@ -221,7 +221,7 @@ class IOTest < IOBaseTest
     assert_nil conn.read(-3)
   end
 
-  def test_connection_read_to_delim
+  def test_io_read_to_delim
     machine.write(@wfd, "abc,def,ghi")
     machine.close(@wfd)
 
@@ -233,7 +233,7 @@ class IOTest < IOBaseTest
     assert_equal 'ghi', conn.read_to_delim(',', -3)
   end
 
-  def test_connection_read_to_delim_invalid_delim
+  def test_io_read_to_delim_invalid_delim
     machine.write(@wfd, "abc,def,ghi")
 
     assert_raises(ArgumentError) { conn.read_to_delim(:foo, 0) }
@@ -242,7 +242,7 @@ class IOTest < IOBaseTest
     assert_raises(UM::Error) { conn.read_to_delim('🙂', 0) }
   end
 
-  def test_connection_skip
+  def test_io_skip
     machine.write(@wfd, "foobarbaz")
 
     conn.skip(2)
@@ -252,7 +252,7 @@ class IOTest < IOBaseTest
     assert_equal 'az', conn.read(0)
   end
 
-  def test_connection_big_data
+  def test_io_big_data
     data = SecureRandom.random_bytes(300_000)
     fiber = machine.spin {
       machine.writev(@wfd, data)
@@ -273,7 +273,7 @@ class IOTest < IOBaseTest
     assert_equal data, received.join
   end
 
-  def test_connection_read_each
+  def test_io_read_each
     bufs = []
     f = machine.spin do
       bufs << :ready
@@ -323,7 +323,7 @@ class IOWriteTest < UMBaseTest
     super
   end
 
-  def test_connection_write_single_buf
+  def test_io_write_single_buf
     assert_equal 3, conn.write('foo')
 
     buf = +''
@@ -331,7 +331,7 @@ class IOWriteTest < UMBaseTest
     assert_equal 'foo', buf
   end
 
-  def test_connection_write_multi_buf
+  def test_io_write_multi_buf
     assert_equal 6, conn.write('foo', 'bar')
 
     buf = +''
@@ -339,7 +339,7 @@ class IOWriteTest < UMBaseTest
     assert_equal 'foobar', buf
   end
 
-  def test_connection_write_socket_mode
+  def test_io_write_socket_mode
     conn = machine.io(@s2, :socket)
 
     assert_equal 6, conn.write('foo', 'bar')
@@ -349,7 +349,7 @@ class IOWriteTest < UMBaseTest
     assert_equal 'foobar', buf
   end
 
-  def test_connection_write_ssl_mode
+  def test_io_write_ssl_mode
     ssl1 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s1), Localhost::Authority.fetch.server_context)
     ssl1.sync_close = true
     ssl2 = OpenSSL::SSL::SSLSocket.new(IO.for_fd(@s2), OpenSSL::SSL::SSLContext.new)
@@ -380,7 +380,7 @@ class IOWriteTest < UMBaseTest
 end
 
 class IORespTest < IOBaseTest
-  def test_connection_resp_read
+  def test_io_resp_read
     machine.write(@wfd, "+foo bar\r\n")
     assert_equal "foo bar", conn.resp_read
 
@@ -443,7 +443,7 @@ class IORespTest < IOBaseTest
     assert_equal({ 'a' => 42, 'b' => ['foo', 'bar', 'baz'] }, conn.resp_read)
   end
 
-  def test_connection_resp_read_segmented
+  def test_io_resp_read_segmented
     machine.write(@wfd, "\n")
     assert_equal "", conn.read_line(0)
 
@@ -458,7 +458,7 @@ class IORespTest < IOBaseTest
     assert_equal "bazbug", conn.resp_read
   end
 
-  def test_connection_resp_write
+  def test_io_resp_write
     writer = machine.io(@wfd)
 
     writer.resp_write(nil);
@@ -489,7 +489,7 @@ class IORespTest < IOBaseTest
     assert_equal "%2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n$3\r\nbaz\r\n:42\r\n", conn.read(-100)
   end
 
-  def test_connection_resp_encode
+  def test_io_resp_encode
     s = UM::IO
     assert_equal "_\r\n",             s.resp_encode(+'', nil)
     assert_equal "#t\r\n",            s.resp_encode(+'', true)
@@ -537,7 +537,7 @@ class IOStressTest < UMBaseTest
     end
   end
 
-  def test_connection_server_big_lines
+  def test_io_server_big_lines
     server_fibers = []
     server_fibers << machine.spin do
       machine.accept_each(@listen_fd) { |fd|
@@ -580,7 +580,7 @@ class IOStressTest < UMBaseTest
     assert_equal msg * client_count, @received.map { it + "\n" }.join
   end
 
-  def test_connection_server_http
+  def test_io_server_http
     server_fibers = []
     server_fibers << machine.spin do
       machine.accept_each(@listen_fd) { |fd|
@@ -621,7 +621,7 @@ class IOStressTest < UMBaseTest
 end
 
 class IODevRandomTest < UMBaseTest
-  def test_connection_dev_random_read_line
+  def test_io_dev_random_read_line
     fd = machine.open('/dev/random', UM::O_RDONLY)
     conn = UM::IO.new(machine, fd)
 
@@ -643,7 +643,7 @@ class IODevRandomTest < UMBaseTest
     n.times { acc << conn.read_line(0) }
   end
 
-  def test_connection_dev_random_read_line_concurrent
+  def test_io_dev_random_read_line_concurrent
     acc = []
     c = 1
     n = 100000
@@ -654,7 +654,7 @@ class IODevRandomTest < UMBaseTest
     assert_equal c * n, acc.size
   end
 
-  def test_connection_dev_random_read
+  def test_io_dev_random_read
     fd = machine.open('/dev/random', UM::O_RDONLY)
     conn = UM::IO.new(machine, fd)
 
@@ -677,7 +677,7 @@ class IODevRandomTest < UMBaseTest
 end
 
 class IOModeTest < UMBaseTest
-  def test_connection_default_mode
+  def test_io_default_mode
     r, w = UM.pipe
     conn = UM::IO.new(machine, r)
     assert_equal :fd, conn.mode
@@ -686,7 +686,7 @@ class IOModeTest < UMBaseTest
     machine.close(w) rescue nil
   end
 
-  def test_connection_default_mode_ssl
+  def test_io_default_mode_ssl
     authority = Localhost::Authority.fetch
     @server_ctx = authority.server_context
     sock1, sock2 = UNIXSocket.pair
@@ -699,7 +699,7 @@ class IOModeTest < UMBaseTest
     sock2&.close rescue nil
   end
 
-  def test_connection_socket_mode_non_socket
+  def test_io_socket_mode_non_socket
     r, w = UM.pipe
     machine.write(w, 'foobar')
     machine.close(w)
@@ -713,7 +713,7 @@ class IOModeTest < UMBaseTest
     machine.close(w) rescue nil
   end
 
-  def test_connection_socket_mode_socket
+  def test_io_socket_mode_socket
     r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
     machine.write(w, 'foobar')
     machine.close(w)
@@ -727,7 +727,7 @@ class IOModeTest < UMBaseTest
     machine.close(w) rescue nil
   end
 
-  def test_connection_ssl_mode
+  def test_io_ssl_mode
     authority = Localhost::Authority.fetch
     @server_ctx = authority.server_context
     sock1, sock2 = UNIXSocket.pair
@@ -775,7 +775,7 @@ class IOModeTest < UMBaseTest
 end
 
 class IOByteCountsTest < IOBaseTest
-  def test_connection_byte_counts
+  def test_io_byte_counts
     machine.write(@wfd, "foobar")
 
     assert_equal 0, conn.consumed

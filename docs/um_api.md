@@ -43,13 +43,12 @@
 - `pop(queue)` - removes and returns a value off the end of the given queue.
 - `prep_timeout(interval)` - returns a timeout AsyncOp with the given interval.
 - `push(queue, value)` - adds the given value to the end of the given queue.
-- `read_each(fd, bgid) { |data| ... }` - reads repeatedly from the given fd
-  using the given buffer group id, yielding each chunk of data to the given
-  block.
+- `read_each(fd) { |data| ... }` - reads repeatedly from the given fd, yielding
+  each chunk of data to the given block.
 - `read(fd, buffer[, maxlen[, buffer_offset[, file_offset]]])` - reads from the
   given fd int o the given buffer (String or IO::Buffer).
-- `recv_each(fd, bgid, flags)` - receives from the given fd using the given
-  buffer group id, with the given flags.
+- `recv_each(fd, flags)` - receives repeatedly from the given fd with the given
+  flags.
 - `recv(fd, buffer, maxlen, flags)` - receives from the given fd into the given
   buffer.
 - `schedule(fiber, value)` - adds the given fiber to the runqueue with the given
@@ -59,8 +58,6 @@
 - `send(fd, buffer, len, flags)` - sends to the given fd from the given buffer.
 - `sendv(fd, *buffers)` - sends multiple buffers to the given fd.
 - `setsockopt(fd, level, opt, value)` - sets a socket option.
-- `setup_buffer_ring(size, count)` - sets up a buffer ring and returns the
-  buffer group id.
 - `shift(queue)` - removes and returns a value from the head of given queue.
 - `shutdown_async(fd, how)` - shuts down the given socket fd without blocking.
 - `shutdown(fd, how)` - shuts down the given socket fd.

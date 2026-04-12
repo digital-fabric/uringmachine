@@ -22,7 +22,6 @@ VALUE SYM_ops_free;
 VALUE SYM_ops_transient;
 VALUE SYM_time_total_cpu;
 VALUE SYM_time_total_wait;
-VALUE SYM_buffer_groups;
 VALUE SYM_buffers_allocated;
 VALUE SYM_buffers_free;
 VALUE SYM_segments_free;
@@ -1543,7 +1542,6 @@ void Init_UM(void) {
   SYM_ops_transient           = ID2SYM(rb_intern("ops_transient"));
   SYM_time_total_cpu          = ID2SYM(rb_intern("time_total_cpu"));
   SYM_time_total_wait         = ID2SYM(rb_intern("time_total_wait"));
-  SYM_buffer_groups           = ID2SYM(rb_intern("buffer_groups"));
   SYM_buffers_allocated       = ID2SYM(rb_intern("buffers_allocated"));
   SYM_buffers_free            = ID2SYM(rb_intern("buffers_free"));
   SYM_segments_free           = ID2SYM(rb_intern("segments_free"));

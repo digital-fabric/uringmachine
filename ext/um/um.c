@@ -1569,7 +1569,6 @@ extern VALUE SYM_ops_free;
 extern VALUE SYM_ops_transient;
 extern VALUE SYM_time_total_cpu;
 extern VALUE SYM_time_total_wait;
-extern VALUE SYM_buffer_groups;
 extern VALUE SYM_buffers_allocated;
 extern VALUE SYM_buffers_free;
 extern VALUE SYM_segments_free;
