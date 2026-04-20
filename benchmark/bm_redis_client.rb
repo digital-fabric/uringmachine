@@ -4,7 +4,7 @@ require_relative './common'
 require 'securerandom'
 
 C = ENV['C']&.to_i || 50
-I = 10
+I = 100
 puts "C=#{C}"
 
 class UMBenchmark
@@ -12,6 +12,7 @@ class UMBenchmark
 
   def start_redis_server
     `docker run --name #{CONTAINER_NAME} -d -p 6379:6379 redis:latest`
+    create_redis_conn
   end
 
   def stop_redis_server
@@ -22,7 +23,7 @@ class UMBenchmark
     Redis.new
   rescue
     if retries < 3
-      sleep 0.5
+      sleep 0.2
       create_redis_conn(retries + 1)
     else
     raise
@@ -31,7 +32,7 @@ class UMBenchmark
 
   def query_redis(conn)
     conn.set('abc', 'def')
-    p conn.get('abc')
+    conn.get('abc')
   end
 
   def with_container
@@ -45,25 +46,33 @@ class UMBenchmark
   stop_redis_server
   end
 
+  def create_redis_conn(retries = 0)
+    Redis.new
+  rescue
+    raise if retries >= 3
+    
+    sleep 0.5
+    create_redis_conn(retries + 1)
+  end
+
   def benchmark
     with_container {
       Benchmark.bm { run_benchmarks(it) }
     }
   end
 
-  # def do_threads(threads, ios)
-  #   C.times.map do
-  #     threads << Thread.new do
-  #       conn = create_redis_conn
-  #       I.times { query_redis(conn) }
-  #     ensure
-  #       conn.close
-  #     end
-  #   end
-  # end
+  def do_threads(threads, ios)
+    C.times.map do
+      threads << Thread.new do
+        conn = create_redis_conn
+        I.times { query_redis(conn) }
+      ensure
+        conn.close
+      end
+    end
+  end
 
   def do_scheduler(scheduler, ios)
-    return if !scheduler.is_a?(UM::FiberScheduler)
     C.times do
       Fiber.schedule do
         conn = create_redis_conn

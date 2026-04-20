@@ -140,6 +140,4 @@ uint64_t alpha_numeric[] = [
 inline int test_char(char c, uint64 *bitmap) {
   return bitmap[c / 64] & (1UL << (c % 64));
 }
-
-
 ```

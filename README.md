@@ -37,7 +37,7 @@ implementation that allows integration with the entire Ruby ecosystem.
 - Excellent performance characteristics for concurrent I/O-bound applications.
 - `Fiber::Scheduler` implementation to automatically integrate with the Ruby
   ecosystem in a transparent fashion.
-- [IO](#io-api) class with automatic buffer management for reading.
+- [UM::IO](#io-higher-level-api) class with automatic buffer management for reading.
 - Optimized I/O for encrypted SSL connections.
 
 ## Design
@@ -286,7 +286,7 @@ fiber = Fiber.schedule do
 end
 ```
 
-## IO API
+## IO Higher-level API
 
 `UringMachine::IO` is a class designed for efficiently read from and write to a
 socket or other file descriptor. The IO class is ideal for implementing

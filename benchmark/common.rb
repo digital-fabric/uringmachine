@@ -62,7 +62,7 @@ class UMBenchmark
     # baseline_um:  [:baseline_um,  "UM no concurrency"],
     # thread_pool:  [:thread_pool,  "ThreadPool"],
 
-    # threads:        [:threads,      "Threads"],
+    threads:        [:threads,      "Threads"],
 
     # async_uring:    [:scheduler,    "Async uring"],
     # async_uring_x2: [:scheduler_x,  "Async uring x2"],
@@ -70,10 +70,10 @@ class UMBenchmark
     # async_epoll:    [:scheduler,    "Async epoll"],
     # async_epoll_x2: [:scheduler_x,  "Async epoll x2"],
 
-    # um_fs:          [:scheduler,    "UM FS"],
-    # um_fs_x2:       [:scheduler_x,  "UM FS x2"],
+    um_fs:          [:scheduler,    "UM FS"],
+    um_fs_x2:       [:scheduler_x,  "UM FS x2"],
 
-    # um:             [:um,           "UM"],
+    um:             [:um,           "UM"],
     # um_sidecar:     [:um,           "UM sidecar"],
     # um_sqpoll:      [:um,           "UM sqpoll"],
     um_x2:          [:um_x,         "UM x2"],
