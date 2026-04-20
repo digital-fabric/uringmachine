@@ -62,8 +62,7 @@ inline struct io_uring_sqe *um_get_sqe(struct um *machine, struct um_op *op) {
     machine->metrics.ops_unsubmitted, machine->metrics.ops_pending, machine->metrics.total_ops
   );
 
-  struct io_uring_sqe *sqe;
-  sqe = io_uring_get_sqe(&machine->ring);
+  struct io_uring_sqe *sqe = io_uring_get_sqe(&machine->ring);
   if (likely(sqe)) goto done;
 
   um_raise_internal_error("Submission queue full. Consider raising the machine size.");
@@ -282,22 +281,22 @@ void *um_wait_for_cqe_without_gvl(void *ptr) {
   return NULL;
 }
 
-inline void um_profile_wait_cqe_pre(struct um *machine, double *time_monotonic0, VALUE *fiber) {
-  // *fiber = rb_fiber_current();
-  *time_monotonic0 = um_get_time_monotonic();
-  // double time_cpu = um_get_time_cpu();
-  // double elapsed = time_cpu - machine->metrics.time_last_cpu;
-  // um_update_fiber_time_run(fiber, time_monotonic0, elapsed);
-  // machine->metrics.time_last_cpu = time_cpu;
-}
+// inline void um_profile_wait_cqe_pre(struct um *machine, double *time_monotonic0, VALUE *fiber) {
+//   VALUE fiber = rb_fiber_current();
+//   *time_monotonic0 = um_get_time_monotonic();
+//   double time_cpu = um_get_time_cpu();
+//   double elapsed = time_cpu - machine->metrics.time_last_cpu;
+//   um_update_fiber_time_run(fiber, time_monotonic0, elapsed);
+//   machine->metrics.time_last_cpu = time_cpu;
+// }
 
-inline void um_profile_wait_cqe_post(struct um *machine, double time_monotonic0, VALUE fiber) {
-  // double time_cpu = um_get_time_cpu();
-  double elapsed = um_get_time_monotonic() - time_monotonic0;
-  // um_update_fiber_last_time(fiber, cpu_time1);
-  machine->metrics.time_total_wait += elapsed;
-  // machine->metrics.time_last_cpu = time_cpu;
-}
+// inline void um_profile_wait_cqe_post(struct um *machine, double time_monotonic0, VALUE fiber) {
+//   // double time_cpu = um_get_time_cpu();
+//   double elapsed = um_get_time_monotonic() - time_monotonic0;
+//   // um_update_fiber_last_time(fiber, cpu_time1);
+//   machine->metrics.time_total_wait += elapsed;
+//   // machine->metrics.time_last_cpu = time_cpu;
+// }
 
 inline void *um_wait_for_sidecar_signal(void *ptr) {
   struct um *machine = ptr;
@@ -329,11 +328,11 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
     // fprintf(stderr, "<< sidecar wait cqes\n");
   }
   else {
-    double time_monotonic0 = 0.0;
-    VALUE fiber;
-    if (machine->profile_mode) um_profile_wait_cqe_pre(machine, &time_monotonic0, &fiber);
+    // double time_monotonic0 = 0.0;
+    // VALUE fiber;
+    // if (machine->profile_mode) um_profile_wait_cqe_pre(machine, &time_monotonic0, &fiber);
     rb_thread_call_without_gvl(um_wait_for_cqe_without_gvl, (void *)&ctx, RUBY_UBF_IO, 0);
-    if (machine->profile_mode) um_profile_wait_cqe_post(machine, time_monotonic0, fiber);
+    // if (machine->profile_mode) um_profile_wait_cqe_post(machine, time_monotonic0, fiber);
 
     if (unlikely(ctx.result < 0)) {
       // the internal calls to (maybe submit) and wait for cqes may fail with:
@@ -357,14 +356,14 @@ static inline void um_wait_for_and_process_ready_cqes(struct um *machine, int wa
   }
 }
 
-inline void um_profile_switch(struct um *machine, VALUE next_fiber) {
-  // *current_fiber = rb_fiber_current();
-  // double time_cpu = um_get_time_cpu();
-  // double elapsed = time_cpu - machine->metrics.time_last_cpu;
-  // um_update_fiber_time_run(cur_fiber, time_cpu, elapsed);
-  // um_update_fiber_time_wait(next_fiber, time_cpu);
-  // machine->metrics.time_last_cpu = time_cpu;
-}
+// inline void um_profile_switch(struct um *machine, VALUE next_fiber) {
+//   VALUE current_fiber = rb_fiber_current();
+//   double time_cpu = um_get_time_cpu();
+//   double elapsed = time_cpu - machine->metrics.time_last_cpu;
+//   um_update_fiber_time_run(cur_fiber, time_cpu, elapsed);
+//   um_update_fiber_time_wait(next_fiber, time_cpu);
+//   machine->metrics.time_last_cpu = time_cpu;
+// }
 
 inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   DEBUG_PRINTF("* process_runqueue_op: op=%p kind=%s ref_count=%d flags=%x\n",
@@ -378,7 +377,7 @@ inline VALUE process_runqueue_op(struct um *machine, struct um_op *op) {
   op->flags &= ~OP_F_SCHEDULED;
   um_op_release(machine, op);
 
-  if (machine->profile_mode) um_profile_switch(machine, fiber);
+  // if (machine->profile_mode) um_profile_switch(machine, fiber);
   VALUE ret = rb_fiber_transfer(fiber, 1, &value);
   RB_GC_GUARD(value);
   RB_GC_GUARD(ret);
