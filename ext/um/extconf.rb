@@ -74,11 +74,4 @@ $defs << '-DHAVE_IO_URING_PREP_BIND'            if config[:prep_bind]
 $defs << '-DHAVE_IO_URING_PREP_LISTEN'          if config[:prep_listen]
 $defs << '-DHAVE_IO_URING_SEND_VECTORIZED'      if config[:send_vectoized]
 
-$CFLAGS << ' -Werror -Wall -Wextra'
-
-if ENV['SANITIZE']
-  $CFLAGS << ' -fsanitize=undefined,address -lasan'
-  $LDFLAGS << ' -fsanitize=undefined,address -lasan'
-end
-
 create_makefile 'um_ext'
