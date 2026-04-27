@@ -1,3 +1,7 @@
+# 1.0.0 2026-04-27
+
+- Remove custom -Wxxx CFLAGS
+
 # 0.33.0 2026-04-12
 
 - Use buffer pool for `#read_each`, `#recv_each` methods

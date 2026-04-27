@@ -50,7 +50,7 @@ class UMBenchmark
     Redis.new
   rescue
     raise if retries >= 3
-    
+
     sleep 0.5
     create_redis_conn(retries + 1)
   end
