@@ -64,14 +64,14 @@ class UMBenchmark
 
     threads:        [:threads,      "Threads"],
 
-    # async_uring:    [:scheduler,    "Async uring"],
+    async_uring:    [:scheduler,    "Async uring"],
     # async_uring_x2: [:scheduler_x,  "Async uring x2"],
 
     # async_epoll:    [:scheduler,    "Async epoll"],
     # async_epoll_x2: [:scheduler_x,  "Async epoll x2"],
 
     um_fs:          [:scheduler,    "UM FS"],
-    um_fs_x2:       [:scheduler_x,  "UM FS x2"],
+    # um_fs_x2:       [:scheduler_x,  "UM FS x2"],
 
     um:             [:um,           "UM"],
     # um_sidecar:     [:um,           "UM sidecar"],

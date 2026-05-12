@@ -210,13 +210,21 @@ class UringMachine
     # Waits for the given io to become ready.
     #
     # @param io [IO] IO object
-    # @param events [Number] readiness bitmask
+    # @param events [Integer] readiness bitmask
     # @param timeout [Number, nil] optional timeout
-    # @return [void]
+    # @return [Integer] ready events bitmask
     def io_wait(io, events, timeout = nil)
-      # p io_wait: [io, events, timeout]
+      # Useful note from the Carbon Fiber Fiber::Scheduler implementation:
+      # Net::HTTP#begin_transport calls `wait_readable(0)` before every
+      # keep-alive request to probe for a closed connection.  On a healthy
+      # connection this is always "not readable", so returning false
+      # directly saves one MSG_PEEK recvfrom per request.  On a genuinely
+      # closed connection Net::HTTP will detect EOF on the next real read
+      # and reconnect — one extra request's worth of latency, at most.
+      return 0 if timeout == 0 && events == ::IO::READABLE && io.is_a?(BasicSocket)
+
       timeout ||= io.timeout
-      if timeout
+      if timeout && timeout > 0
         @machine.timeout(timeout, Timeout::Error) {
           @machine.poll(io.fileno, events)
         }
