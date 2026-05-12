@@ -1,3 +1,7 @@
+# 1.0.1 2026-05-12
+
+- Fix Net::HTTP performance regression when running on fiber scheduler
+
 # 1.0.0 2026-04-27
 
 - Remove custom -Wxxx CFLAGS
