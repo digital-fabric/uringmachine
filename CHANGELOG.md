@@ -1,3 +1,7 @@
+# 1.0.2 2026-05-25
+
+- Fix DNS resolver
+
 # 1.0.1 2026-05-12
 
 - Fix Net::HTTP performance regression when running on fiber scheduler
