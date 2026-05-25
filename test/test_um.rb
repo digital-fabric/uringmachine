@@ -3636,3 +3636,10 @@ class FsyncTest < UMBaseTest
     assert_raises(Errno::EINVAL) { machine.fsync(1) }
   end
 end
+
+class ResolveTest < UMBaseTest
+  def test_resolve_ipv4
+    ip = machine.resolve('localhost')
+    assert_equal ['127.0.0.1'], ip
+  end
+end

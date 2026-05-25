@@ -44,7 +44,7 @@ class UringMachine
     # @return [Array<String>] name servers
     def get_nameservers
       nameservers = []
-      IO.readlines('/etc/resolv.conf').each do |line|
+      ::IO.readlines('/etc/resolv.conf').each do |line|
         if line =~ /^nameserver (.+)$/
           nameservers << $1.split(/\s+/).first
         end
