@@ -1,5 +1,20 @@
 ## immediate
 
+- SSL kTLS:
+  - discussion: https://share.gemini.google/tPWiFpr3bWeF
+  - API:
+
+    ```ruby
+    machine.ssl_setup_ktls(fd)
+
+    # then we can just use normal send/recv
+    machine.send(fd, "foo!")
+    ```
+
+- SSL custom BIO:
+  - release GVL before calling `SSL_read`, `SSL_write`
+  - reacquire GVL (`rb_thread_call_with_gvl`) in `um_bio_read`, `um_bio_write`
+
 - Add `IO#http_xxx` methods
   - `#http_read_request_headers()`
   - `#http_read_body(content_length)` (-1 means chunked TE)

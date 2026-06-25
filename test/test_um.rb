@@ -3277,6 +3277,23 @@ class FileWatchTest < UMBaseTest
         name: 'foo.txt'
       }
     ], events
+
+    fn = File.join(@root, '.bar')
+    IO.write(fn, 'barbar')
+
+    events = machine.inotify_get_events(fd)
+    assert_equal [
+      {
+        wd: wd,
+        mask: UM::IN_CREATE,
+        name: '.bar'
+      },
+      {
+        wd: wd,
+        mask: UM::IN_CLOSE_WRITE,
+        name: '.bar'
+      }
+    ], events
   end
 
   def write_file(fn, data)
@@ -3385,6 +3402,25 @@ class FileWatchTest < UMBaseTest
       { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
       { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
       { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+    ], events
+
+    fn = File.join(@root, 'bar/.dotfile')
+    write_file(fn, 'dotdot')
+    machine.sleep(0.05)
+    assert_equal [
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'foo/baz.txt') },
+      { mask: UM::IN_DELETE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_DELETE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE | UM::IN_ISDIR, fn: File.join(@root, 'bar') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/baz.txt') },
+      { mask: UM::IN_CREATE, fn: File.join(@root, 'bar/.dotfile') },
+      { mask: UM::IN_CLOSE_WRITE, fn: File.join(@root, 'bar/.dotfile') },
     ], events
   ensure
     machine.schedule(f, UM::Terminate.new)
