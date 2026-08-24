@@ -242,6 +242,25 @@ VALUE IO_read_each(VALUE self) {
   return self;
 }
 
+#define MAX_INT_SIZE 8
+
+/* call-seq:
+ *   conn.read_int_be(len) -> int
+ *
+ * Reads an integer from the target in big endian notation. The len parameter
+ * indicates the integer field length in bytes, with an upper limit of 8 bytes.
+ * If EOF is encountered before enough bytes are read, returns nil.
+ *
+ * @param len [Integer] number of bytes to read
+ * @return [Integer, nil] integer value or nil if EOF
+ */
+VALUE IO_read_int_be(VALUE self, VALUE len) {
+  struct um_io *conn = um_get_io(self);
+  size_t len_i = NUM2UINT(len);
+  if (unlikely(len_i > MAX_INT_SIZE)) rb_raise(eUMError, "Invalid length given");
+  return io_read_int_be(conn, len_i);
+}
+
 /* call-seq:
  *   conn.write(*bufs) -> len
  *
@@ -374,6 +393,8 @@ void Init_IO(void) {
   rb_define_method(cIO, "read_to_delim", IO_read_to_delim, 2);
   rb_define_method(cIO, "skip", IO_skip, 1);
   rb_define_method(cIO, "read_each", IO_read_each, 0);
+
+  rb_define_method(cIO, "read_int_be", IO_read_int_be, 1);
 
   rb_define_method(cIO, "write", IO_write, -1);
 

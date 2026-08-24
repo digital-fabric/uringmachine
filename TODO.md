@@ -1,5 +1,28 @@
 ## immediate
 
+- IO methods:
+  ```ruby
+  io.read_int_be(length)
+  io.read_uint_be(length)
+  io.read_int_le(length)
+  io.read_uint_le(length)
+  ```
+
+- It might be interesting to have a DSL where we can define a frame/header structure:
+
+  ```ruby
+  http2_transform = UM::IO.transform do
+    length    uint(24)
+    type      uint(8)
+    flags     uint(8)
+    stream_id uint(32)
+  end
+
+  frame = io.read(http2_transform)
+  raise if frame[:length] > MAX_LENGTH
+  raise if stream_id &  0x80000000
+  ```
+
 - SSL kTLS:
   - discussion: https://share.gemini.google/tPWiFpr3bWeF
   - API:
@@ -98,21 +121,6 @@
 - fadvise
 - madvise
 - getxattr / setxattr
-
-## actors
-
-When doing a `call`, we need to provide a mailbox for the response. can this be
-automatic?
-
-## Syntax / pattern for launching/supervising multiple operations
-
-Select (see above):
-
-```ruby
-# select
-machine.join_select(*fibers) #=> [result, fiber]
-machine.shift_select(*queues) #=> [result, queue]
-```
 
 ## Other abstractions
 

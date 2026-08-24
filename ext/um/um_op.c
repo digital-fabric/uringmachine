@@ -156,9 +156,8 @@ inline void um_op_multishot_results_push(struct um *machine, struct um_op *op, _
   result->res   = res;
   result->flags = flags;
   result->next  = NULL;
-  if (op->flags & OP_F_BUFFER_POOL && res >= 0) {
+  if (op->flags & OP_F_BUFFER_POOL && res >= 0)
     result->segment = bp_get_op_result_segment(machine, op, res, flags);
-  }
 
   op->multishot_result_tail = result;
   op->multishot_result_count++;

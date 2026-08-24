@@ -74,13 +74,12 @@ void um_io_cleanup(struct um_io *io) {
     um_segment_checkin(io->machine, io->head);
     io->head = next;
   }
+  io->tail = NULL;
   io->pending_bytes = 0;
 }
 
 // returns true if case of ENOBUFS error, sets more to true if more data forthcoming
-inline int io_process_segments(
-  struct um_io *io, size_t *total_bytes, int *more) {
-
+inline int io_process_segments(struct um_io *io, size_t *total_bytes, int *more) {
   *more = 0;
   struct um_op_result *result = &io->op->result;
   io->op->flags &= ~OP_F_CQE_SEEN;
@@ -125,12 +124,37 @@ void io_clear(struct um_io *io) {
     um_segment_checkin(io->machine, io->head);
     io->head = next;
   }
+  io->tail = NULL;
   io->pending_bytes = 0;
 
   if (io->working_buffer) {
     bp_buffer_checkin(io->machine, io->working_buffer);
     io->working_buffer = NULL;
   }
+}
+
+inline void io_handle_enobufs(struct um_io *io) {
+  // we want to restart only if in case we don't already have lots of pending
+  // bytes in the stream. This heuristic might need a closer look to determine
+  // if this is the correct behavior.
+  int should_restart = io->pending_bytes < (io->machine->bp_buffer_size * 4);
+
+  // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
+  //   io,
+  //   total_bytes, io->pending_bytes, io->machine->bp_commit_level,
+  //   io->machine->bp_buffer_count,
+  //   same_threshold, should_restart
+  // );
+
+  if (should_restart) {
+    // If multiple IO ops are happening at the same time, they'll all get
+    // ENOBUFS! We track the buffer pool commit level in the op in order to
+    // prevent running bp_handle_enobufs() more than once.
+    if (io->op->bp_commit_level == io->machine->bp_commit_level)
+      bp_handle_enobufs(io->machine);
+  }
+  um_op_release(io->machine, io->op);
+  io->op = NULL;
 }
 
 inline void io_await_segments(struct um_io *io) {
@@ -156,40 +180,12 @@ int io_get_more_segments_bp(struct um_io *io) {
     io_await_segments(io);
     enobufs = io_process_segments(io, &total_bytes, &more);
     um_op_multishot_results_clear(io->machine, io->op);
-    if (unlikely(enobufs)) {
-      int should_restart = io->pending_bytes < (io->machine->bp_buffer_size * 4);
-      // int same_threshold = io->op->bp_commit_level == io->machine->bp_commit_level;
 
-      // fprintf(stderr, "%p enobufs total: %ld pending: %ld threshold: %ld bc: %d (same: %d, restart: %d)\n",
-      //   io,
-      //   total_bytes, io->pending_bytes, io->machine->bp_commit_level,
-      //   io->machine->bp_buffer_count,
-      //   same_threshold, should_restart
-      // );
-
-      // If multiple IO ops are happening at the same time, they'll all
-      // get ENOBUFS! We track the commit threshold in the op in order to
-      // prevent running bp_handle_enobufs() more than once.
-
-      if (should_restart) {
-        if (io->op->bp_commit_level == io->machine->bp_commit_level)
-          bp_handle_enobufs(io->machine);
-
-        um_op_release(io->machine, io->op);
-        io->op = NULL;
-      }
-      else {
-        um_op_release(io->machine, io->op);
-        io->op = NULL;
-      }
-
-      if (total_bytes) return total_bytes;
-    }
-    else {
-      if (more)
-        io->op->flags &= ~OP_F_CQE_SEEN;
-      if (total_bytes || io->eof) return total_bytes;
-    }
+    if (unlikely(enobufs))
+      io_handle_enobufs(io);
+    else if (more)
+      io->op->flags &= ~OP_F_CQE_SEEN;
+    if (total_bytes || io->eof) return total_bytes;
   }
 }
 
@@ -254,9 +250,7 @@ inline void io_skip(struct um_io *io, size_t inc, int safe_inc) {
     io->pending_bytes -= inc_len;
     if (io->pos == io->head->len) {
       io_shift_head(io);
-      if (inc && safe_inc && !io->head) {
-        if (!io_get_more_segments(io)) break;
-      }
+      if (inc && safe_inc && !io->head && !io_get_more_segments(io)) break;
     }
   }
 }
@@ -283,6 +277,32 @@ inline void io_read_each(struct um_io *io) {
     pos = 0;
   }
   RB_GC_GUARD(buffer);
+}
+
+VALUE io_read_int_be(struct um_io *io, size_t len) {
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (!io->tail && !io_get_more_segments(io)) return Qnil;
+
+  long value = 0;
+  struct um_segment *current = io->head;
+
+  while (true) {
+    size_t segment_len = current->len - io->pos;
+    int pos = 0;
+    while (segment_len > 0 && len > 0) {
+      value = value * 0x100 + *(unsigned char *)(current->ptr + io->pos + pos);
+      len--;
+      segment_len--;
+      pos++;
+    }
+    if (pos > 0) io_skip(io, pos, true);
+
+    if (len == 0) return LONG2NUM(value);
+
+    if (!io->head && !io_get_more_segments(io))
+      return Qnil;
+    current = io->head;
+  }
 }
 
 inline void io_copy(struct um_io *io, char *dest, size_t len) {
@@ -316,7 +336,7 @@ VALUE io_consume_string(struct um_io *io, VALUE out_buffer, size_t len, size_t i
   char *dest = RSTRING_PTR(str);
 
   io_copy(io, dest, len);
-  io_skip(io, inc, safe_inc);
+  if (inc) io_skip(io, inc, safe_inc);
   return str;
   RB_GC_GUARD(str);
 }

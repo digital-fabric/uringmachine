@@ -3433,22 +3433,26 @@ class SetChildSubreaperTest < Minitest::Test
     r, w = IO.pipe
     UM.pr_set_child_subreaper(true)
 
-    child_pid = fork {
+    child_pid = fork do
       r2, w2 = IO.pipe
-      pid = fork {
+      pid = fork do
         r.close
         w.close
         w2.close
         r2.read
         r2.close
         sleep(0.01)
-      }
+      ensure
+        exit!
+      end
       w << pid
       w.close
       r2.close
       w2 << 'done'
       w2.close
-    }
+    ensure
+      exit!
+    end
     Process.wait(child_pid)
 
     w.close
