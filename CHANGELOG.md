@@ -1,3 +1,8 @@
+# 1.0.3 2026-08-24
+
+- Add `IO#read_int_be` method
+- Don't schedule fiber for async multishot ops (fixes potential segfault when using UM::IO)
+
 # 1.0.2 2026-05-25
 
 - Fix DNS resolver
