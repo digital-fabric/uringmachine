@@ -427,6 +427,7 @@ VALUE io_read_to_delim(struct um_io *io, VALUE out_buffer, VALUE delim, ssize_t 
 void io_skip(struct um_io *io, size_t inc, int safe_inc);
 void io_read_each(struct um_io *io);
 VALUE io_read_int_be(struct um_io *io, size_t len);
+VALUE io_read_uint_be(struct um_io *io, size_t len);
 size_t io_write_raw(struct um_io *io, const char *buffer, size_t len);
 VALUE io_writev(struct um_io *io, int argc, VALUE *argv);
 VALUE resp_read(struct um_io *io, VALUE out_buffer);

@@ -247,9 +247,9 @@ VALUE IO_read_each(VALUE self) {
 /* call-seq:
  *   conn.read_int_be(len) -> int
  *
- * Reads an integer from the target in big endian notation. The len parameter
- * indicates the integer field length in bytes, with an upper limit of 8 bytes.
- * If EOF is encountered before enough bytes are read, returns nil.
+ * Reads a signed integer from the target in big endian notation. The len
+ * parameter indicates the integer field length in bytes, with an upper limit of
+ * 8 bytes. If EOF is encountered before enough bytes are read, returns nil.
  *
  * @param len [Integer] number of bytes to read
  * @return [Integer, nil] integer value or nil if EOF
@@ -259,6 +259,23 @@ VALUE IO_read_int_be(VALUE self, VALUE len) {
   size_t len_i = NUM2UINT(len);
   if (unlikely(len_i > MAX_INT_SIZE)) rb_raise(eUMError, "Invalid length given");
   return io_read_int_be(conn, len_i);
+}
+
+/* call-seq:
+ *   conn.read_uint_be(len) -> int
+ *
+ * Reads an unsigned integer from the target in big endian notation. The len
+ * parameter indicates the integer field length in bytes, with an upper limit
+ * of 8 bytes. If EOF is encountered before enough bytes are read, returns nil.
+ *
+ * @param len [Integer] number of bytes to read
+ * @return [Integer, nil] integer value or nil if EOF
+ */
+VALUE IO_read_uint_be(VALUE self, VALUE len) {
+  struct um_io *conn = um_get_io(self);
+  size_t len_i = NUM2UINT(len);
+  if (unlikely(len_i > MAX_INT_SIZE)) rb_raise(eUMError, "Invalid length given");
+  return io_read_uint_be(conn, len_i);
 }
 
 /* call-seq:
@@ -395,6 +412,7 @@ void Init_IO(void) {
   rb_define_method(cIO, "read_each", IO_read_each, 0);
 
   rb_define_method(cIO, "read_int_be", IO_read_int_be, 1);
+  rb_define_method(cIO, "read_uint_be", IO_read_uint_be, 1);
 
   rb_define_method(cIO, "write", IO_write, -1);
 

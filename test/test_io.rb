@@ -873,4 +873,62 @@ class IOIntTest < IOBaseTest
     value = conn.read_int_be(8)
     assert_equal 0x0102030405060708, value
   end
+
+  def test_io_read_uint_be
+    machine.write(@wfd, "abcd")
+    conn.read(4)
+
+    machine.write(@wfd, "\x00\x01\x05\xdf")
+    value = conn.read_uint_be(2)
+    assert_equal 0x0001, value
+    value = conn.read_uint_be(2)
+    assert_equal 0x05df, value
+
+    machine.write(@wfd, "\x00\x01\x05\xdf")
+    value = conn.read_uint_be(4)
+    assert_equal 0x000105df, value
+
+    machine.write(@wfd, "\xde\xfa")
+    machine.snooze
+    machine.write(@wfd, "\xdd\x03")
+    machine.snooze
+    value = conn.read_uint_be(4)
+    assert_equal 0xdefadd03, value
+
+    machine.write(@wfd, "\xed\xcb\xa9")
+    value = conn.read_uint_be(3)
+    assert_equal 0xedcba9, value
+
+    f = machine.spin do
+      machine.write(@wfd, "\xde")
+      machine.snooze
+      machine.write(@wfd, "\x90\x03")
+    end
+    value = conn.read_uint_be(3)
+    machine.join(f)
+    assert_equal 0xde9003, value
+
+    machine.write(@wfd, "\xff" * 8)
+    value = conn.read_uint_be(8)
+    assert_equal 0xffffffffffffffff, value
+
+    machine.write(@wfd, "\x80\x00\x00\x00\x00\x00\x00\x00")
+    value = conn.read_uint_be(8)
+    assert_equal 0x8000000000000000, value
+
+    machine.write(@wfd, "\xde\xfa")
+    machine.close(@wfd)
+    assert_nil conn.read_uint_be(4)
+  end
+
+  def test_io_read_uint_be_invalid_length
+    machine.write(@wfd, (0xf1..0xf8).to_a.pack('C*'))
+    assert_raises(UM::Error) { conn.read_uint_be(-1) }
+    assert_raises(UM::Error) { conn.read_uint_be(20) }
+    assert_raises(UM::Error) { conn.read_uint_be(9) }
+
+    # 8 is my limit on Schnitzengruben
+    value = conn.read_uint_be(8)
+    assert_equal 0xf1f2f3f4f5f6f7f8, value
+  end
 end

@@ -305,6 +305,32 @@ VALUE io_read_int_be(struct um_io *io, size_t len) {
   }
 }
 
+VALUE io_read_uint_be(struct um_io *io, size_t len) {
+  if (unlikely(io->eof && !io->head)) return Qnil;
+  if (!io->tail && !io_get_more_segments(io)) return Qnil;
+
+  unsigned long value = 0;
+  struct um_segment *current = io->head;
+
+  while (true) {
+    size_t segment_len = current->len - io->pos;
+    int pos = 0;
+    while (segment_len > 0 && len > 0) {
+      value = value * 0x100 + *(unsigned char *)(current->ptr + io->pos + pos);
+      len--;
+      segment_len--;
+      pos++;
+    }
+    if (pos > 0) io_skip(io, pos, true);
+
+    if (len == 0) return ULONG2NUM(value);
+
+    if (!io->head && !io_get_more_segments(io))
+      return Qnil;
+    current = io->head;
+  }
+}
+
 inline void io_copy(struct um_io *io, char *dest, size_t len) {
   while (len) {
     char *segment_ptr = io->head->ptr + io->pos;
