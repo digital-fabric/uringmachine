@@ -305,6 +305,22 @@ class IOTest < IOBaseTest
     machine.terminate(f)
     machine.join(f)
   end
+
+  def test_io_read_segfault
+    machine.write(@wfd, "abcd")
+    conn.read(4)
+
+    machine.write(@wfd, "\x00\x01\x05\xdf")
+    conn.read(4)
+
+    f = machine.spin do
+      machine.write(@wfd, "\xde")
+      machine.snooze
+      machine.write(@wfd, "\x90\x03")
+    end
+    value = conn.read(3)
+    assert_equal "\xde\x90\x03".b, value
+  end  
 end
 
 class IOWriteTest < UMBaseTest

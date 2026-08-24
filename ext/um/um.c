@@ -192,7 +192,7 @@ static inline void um_process_cqe(struct um *machine, struct io_uring_cqe *cqe) 
     um_op_multishot_results_push(machine, op, cqe->res, cqe->flags);
 
     op->flags |= done ? (OP_F_CQE_SEEN | OP_F_CQE_DONE) : OP_F_CQE_SEEN;
-    if (!OP_SCHEDULED_P(op)) um_schedule_op(machine, op);
+    if (!(op->flags & (OP_F_SCHEDULED | OP_F_ASYNC))) um_schedule_op(machine, op);
   }
   else {
     // single shot
