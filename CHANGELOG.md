@@ -1,3 +1,7 @@
+# 1.0.4 2026-08-24
+
+- Add `IO#read_uint_be` method
+
 # 1.0.3 2026-08-24
 
 - Add `IO#read_int_be` method
