@@ -1,3 +1,7 @@
+# 1.0.5 2026-10-01
+
+- Add support for regular files in UM::IO with :file mode
+
 # 1.0.4 2026-08-24
 
 - Add `IO#read_uint_be` method
