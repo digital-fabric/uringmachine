@@ -1,3 +1,7 @@
+# 1.0.6 2026-10-01
+
+- Add `UM#file_read` convenience method
+
 # 1.0.5 2026-10-01
 
 - Add support for regular files in UM::IO with :file mode
