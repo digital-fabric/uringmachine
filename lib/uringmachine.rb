@@ -50,7 +50,7 @@ class UringMachine
   end
 
   # Runs the given block in the given fiber. This method is used to run fibers
-  # indirectly.
+  # indirectly. See FiberScheduler#fiber
   #
   # @param fiber [Fiber] fiber
   # @param block [Proc] block to run
@@ -202,9 +202,10 @@ class UringMachine
   # the type of target and how it is read from:
   #
   # - :fd - read from the given fd using the buffer pool (default mode)
+  # - :file - read from a regular file
   # - :socket - receive from the given socket fd using the buffer pool
   # - :ssl - read from the given SSL socket
-  #
+  # 
   # If a block is given, the block will be called with the IO instance as
   # argument and the method will return the block's return value.
   #
@@ -218,6 +219,17 @@ class UringMachine
     res = yield(conn)
     conn.clear
     res
+  end
+
+  # call-seq:
+  #   machine.file_read(fn) -> data
+  #
+  # Reads and returns the content of the given filename, with a maximum length of 1GB.
+  #
+  # @param fn [String] filename
+  # @return [String] file content
+  def file_read(fn)
+    open(fn, O_RDONLY) { io(it, :file).read(-(1 << 30)) }
   end
 
   # Creates, binds and sets up a TCP socket for listening on the given host and

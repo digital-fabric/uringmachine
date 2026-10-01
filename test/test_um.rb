@@ -2,6 +2,7 @@
 
 require_relative 'helper'
 require 'socket'
+require 'tempfile'
 
 class UringMachineTest < Minitest::Test
   def test_kernel_version
@@ -3517,6 +3518,23 @@ class IOMethodTest < UMBaseTest
     assert conn_obj.eof?
     assert_equal ['foo', 'bar'], bufs
     assert_equal :foo, res
+  end
+end
+
+class FileHelperMethodsTest < UMBaseTest
+  def setup
+    super
+    @fn = Tempfile.new('uringmachine_test_io_from_file').path
+  end
+
+  def test_file_read
+    IO.write(@fn, 'foobar' * 321)
+    buf = machine.file_read(@fn)
+    assert_equal 'foobar' * 321, buf
+  end
+
+  def test_file_read_bad_fn
+    assert_raises(Errno::ENOENT) { machine.file_read(@fn + '-missing') }
   end
 end
 
