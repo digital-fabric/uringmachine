@@ -1,4 +1,46 @@
-## immediate
+## Character scanning in UM::IO
+
+- Refactor character scanning
+  - functions/macros for iterating over segments
+
+  - SIMD?
+    - prep work for SIMD character scanning
+    - we'll probably need a bit of helper code for dealing with SIMD
+    - a good overview here: https://mitchellh.com/writing/everyone-should-know-simd
+    - SIMD prep work should be done once before iterating over segments
+
+```c
+// bitmaps for character types can be generated with a bit of Ruby:
+//
+// def t(r); (0..255).map { [it].pack('c') =~ r ? 1 : 0 }; end
+// def tn(r); (0..255).map { [it].pack('c') =~ r ? 0 : 1 }; end
+// def u64(bits); bits.reverse.join.to_i(2); end
+// def p(a); a.each_slice(64).map { u64(it) }; end
+
+// usage:
+//
+//   p(t(/[a-zA-Z0-9]/)).map { format('%016X', it) }
+
+
+// /[a-zA-Z0-9]/
+uint64_t alpha_numeric[] = [
+  0x000000000000FFC0,
+  0x7FFFFFE07FFFFFE0,
+  0x0000000000000000,
+  0x0000000000000000
+];
+
+// HTTP method: /[a-zA-Z]/    (3-12 characters)
+// header-key:  /[a-zA-Z\-]/  ()
+// path:        /^($/
+
+// check if character is in bitmap
+inline int test_char(char c, uint64 *bitmap) {
+  return bitmap[c / 64] & (1UL << (c % 64));
+}
+```
+
+## IO methods
 
 - IO methods:
   ```ruby
@@ -23,29 +65,19 @@
   raise if stream_id &  0x80000000
   ```
 
-- SSL kTLS:
-  - discussion: https://share.gemini.google/tPWiFpr3bWeF
-  - API:
-
-    ```ruby
-    machine.ssl_setup_ktls(fd)
-
-    # then we can just use normal send/recv
-    machine.send(fd, "foo!")
-    ```
-
-- SSL custom BIO:
-  - release GVL before calling `SSL_read`, `SSL_write`
-  - reacquire GVL (`rb_thread_call_with_gvl`) in `um_bio_read`, `um_bio_write`
-
-- Add `IO#http_xxx` methods
-  - `#http_read_request_headers()`
-  - `#http_read_body(content_length)` (-1 means chunked TE)
+- Add `IO#http1_xxx` methods
+  - `#http1_read_request_headers()`
+  - `#http1_read_body(content_length)` (-1 means chunked TE)
 
 - Add tests for support for Set in `machine#await`
 - Add tests for support for Set, Array in `machine#join`
-- Add `UM#read_file` for reading entire file
+  - Add `UM#read_file` for reading entire file
 - Add `UM#write_file` for writing entire file
+
+## SSL custom BIO:
+
+- release GVL before calling `SSL_read`, `SSL_write`
+- reacquire GVL (`rb_thread_call_with_gvl`) in `um_bio_read`, `um_bio_write`
 
 ## Balancing I/O with the runqueue
 
@@ -109,6 +141,7 @@
 - select on fibers:
   - select fibers that are done
   - select first done fiber
+- we might want to rename `#select` to `#fdselect`
 
 ## ops still not implemented
 
@@ -131,36 +164,3 @@
   #        ['1.1.1.1:80', '2.2.2.2:80']
   tcp_connect_he(*addrs)
   ```
-
-## Character scanning in UM::IO
-
-```c
-// bitmaps for character types can be generated with a bit of Ruby:
-//
-// def t(r); (0..255).map { [it].pack('c') =~ r ? 1 : 0 }; end
-// def tn(r); (0..255).map { [it].pack('c') =~ r ? 0 : 1 }; end
-// def u64(bits); bits.reverse.join.to_i(2); end
-// def p(a); a.each_slice(64).map { u64(it) }; end
-
-// usage:
-//
-//   p(t(/[a-zA-Z0-9]/)).map { format('%016X', it) }
-
-
-// /[a-zA-Z0-9]/
-uint64_t alpha_numeric[] = [
-  0x000000000000FFC0,
-  0x7FFFFFE07FFFFFE0,
-  0x0000000000000000,
-  0x0000000000000000
-];
-
-// HTTP method: /[a-zA-Z]/    (3-12 characters)
-// header-key:  /[a-zA-Z\-]/  ()
-// path:        /^($/
-
-// check if character is in bitmap
-inline int test_char(char c, uint64 *bitmap) {
-  return bitmap[c / 64] & (1UL << (c % 64));
-}
-```

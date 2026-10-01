@@ -83,6 +83,7 @@ enum um_io_mode {
   IO_FD,
   IO_SOCKET,
   IO_SSL,
+  IO_FILE,
   IO_STRING,
   IO_IO_BUFFER
 };

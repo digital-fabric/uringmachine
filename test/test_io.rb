@@ -4,6 +4,7 @@ require_relative 'helper'
 require 'securerandom'
 require 'openssl'
 require 'localhost/authority'
+require 'tempfile'
 
 class IOBaseTest < UMBaseTest
   attr_reader :conn
@@ -713,6 +714,23 @@ class IOModeTest < UMBaseTest
   ensure
     sock1&.close rescue nil
     sock2&.close rescue nil
+  end
+
+  def test_io_file_mode
+    fn = Tempfile.new('uringmachine_test_io_from_file').path
+    IO.write(fn, (0..9).to_a.join)
+    fd = machine.open(fn, UM::O_RDONLY)
+    io = machine.io(fd, :file)
+    buf = io.read(3)
+    assert_equal '012', buf
+
+    buf = io.read(5)
+    assert_equal '34567', buf
+
+    buf = io.read(-4)
+    assert_equal '89', buf
+  ensure
+    machine.close(fd) if fd
   end
 
   def test_io_socket_mode_non_socket

@@ -157,7 +157,7 @@ inline void io_handle_enobufs(struct um_io *io) {
   io->op = NULL;
 }
 
-inline void io_await_segments(struct um_io *io) {
+static inline void io_await_segments(struct um_io *io) {
   if (unlikely(!io->op)) io_multishot_op_start(io);
 
   if (!OP_CQE_SEEN_P(io->op)) {
@@ -208,11 +208,54 @@ int io_get_more_segments_ssl(struct um_io *io) {
   return 1;
 }
 
+int io_get_more_segments_file(struct um_io *io) {
+  if (!io->working_buffer)
+    io->working_buffer = bp_buffer_checkout(io->machine);
+
+  char *ptr = io->working_buffer->buf + io->working_buffer->pos;
+  size_t maxlen = io->working_buffer->len - io->working_buffer->pos;
+
+  struct um_op *op = um_op_acquire(io->machine);
+  um_prep_op(io->machine, op, OP_READ, 2, 0);
+  struct io_uring_sqe *sqe = um_get_sqe(io->machine, op);
+  io_uring_prep_read(sqe, io->fd, ptr, maxlen, -1);
+
+  VALUE ret = um_yield(io->machine);
+  int has_more = 0;
+
+  if (likely(um_verify_op_completion(io->machine, op, true))) {
+    int res = op->result.res;
+
+    if (res == 0) {
+      bp_buffer_checkin(io->machine, io->working_buffer);
+      io->working_buffer = NULL;
+      goto done;
+    }
+
+    struct um_segment *segment = bp_buffer_consume(io->machine, io->working_buffer, res);
+    io_add_segment(io, segment);
+
+    if ((size_t)res == maxlen) {
+      bp_buffer_checkin(io->machine, io->working_buffer);
+      io->working_buffer = NULL;
+    }
+    else has_more = 1;
+  }
+  um_op_release(io->machine, op);
+
+done:
+  RAISE_IF_EXCEPTION(ret);
+  RB_GC_GUARD(ret);
+  return has_more;
+}
+
 int io_get_more_segments(struct um_io *io) {
   switch (io->mode) {
     case IO_FD:
     case IO_SOCKET:
       return io_get_more_segments_bp(io);
+    case IO_FILE:
+      return io_get_more_segments_file(io);
     case IO_SSL:
       return io_get_more_segments_ssl(io);
     default:
@@ -438,14 +481,15 @@ VALUE io_read(struct um_io *io, VALUE out_buffer, ssize_t len, size_t inc, int s
 
   while (true) {
     size_t segment_len = current->len - pos;
-    if (abs_len && segment_len > remaining_len) {
+    if (abs_len && segment_len > (size_t)remaining_len) {
       segment_len = remaining_len;
     }
     total_len += segment_len;
     if (abs_len) {
       remaining_len -= segment_len;
-      if (!remaining_len)
+      if (!remaining_len) {
         return io_consume_string(io, out_buffer, total_len, inc, safe_inc);
+      }
     }
 
     if (!current->next) {

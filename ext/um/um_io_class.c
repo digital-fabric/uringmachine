@@ -4,6 +4,7 @@ VALUE cIO;
 VALUE eIORESPError;
 
 VALUE SYM_fd;
+VALUE SYM_file;
 VALUE SYM_socket;
 VALUE SYM_ssl;
 
@@ -87,6 +88,7 @@ static inline void io_set_target(struct um_io *conn, VALUE target, enum um_io_mo
   conn->mode = mode;
   switch (mode) {
     case IO_FD:
+    case IO_FILE:
     case IO_SOCKET:
       conn->fd = NUM2INT(target);
       return;
@@ -109,6 +111,8 @@ static inline void io_setup(struct um_io *conn, VALUE target, VALUE mode) {
   }
   else if (mode == SYM_fd)
     io_set_target(conn, target, IO_FD);
+  else if (mode == SYM_file)
+    io_set_target(conn, target, IO_FILE);
   else if (mode == SYM_socket)
     io_set_target(conn, target, IO_SOCKET);
   else if (mode == SYM_ssl)
@@ -157,10 +161,11 @@ VALUE IO_initialize(int argc, VALUE *argv, VALUE self) {
 VALUE IO_mode(VALUE self) {
   struct um_io *conn = um_get_io(self);
   switch (conn->mode) {
-    case IO_FD:  return SYM_fd;
-    case IO_SOCKET:  return SYM_socket;
-    case IO_SSL:      return SYM_ssl;
-    default:              return Qnil;
+    case IO_FD:     return SYM_fd;
+    case IO_FILE:   return SYM_file;
+    case IO_SOCKET: return SYM_socket;
+    case IO_SSL:    return SYM_ssl;
+    default:        return Qnil;
   }
   return Qnil;
 }
@@ -427,7 +432,8 @@ void Init_IO(void) {
 
   eIORESPError = rb_define_class_under(cIO, "RESPError", rb_eStandardError);
 
-  SYM_fd = ID2SYM(rb_intern("fd"));
-  SYM_socket = ID2SYM(rb_intern("socket"));
+  SYM_fd      = ID2SYM(rb_intern("fd"));
+  SYM_file    = ID2SYM(rb_intern("file"));
+  SYM_socket  = ID2SYM(rb_intern("socket"));
   SYM_ssl     = ID2SYM(rb_intern("ssl"));
 }
