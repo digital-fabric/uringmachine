@@ -3062,7 +3062,6 @@ class ForkTest < UMBaseTest
       # we cannot use the same machine after fork
       m = UM.new
       buf = +''
-      puts
       m.read(child_rfd, buf, 8192)
       m.write(child_wfd, buf, buf.bytesize)
       m.close(child_wfd)

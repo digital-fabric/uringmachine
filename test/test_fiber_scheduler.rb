@@ -94,6 +94,10 @@ class FiberSchedulerTest < UMBaseTest
     f3 = Fiber.schedule do
       str = i.read
       buffer << str
+    rescue => e
+      p e
+      p e.backtrace
+      exit!
     end
 
     @scheduler.join

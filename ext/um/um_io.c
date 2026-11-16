@@ -306,7 +306,7 @@ inline void io_read_each(struct um_io *io) {
   while (true) {
     struct um_segment *next = current->next;
     buffer = make_segment_io_buffer(current, pos);
-    rb_yield(buffer);
+    rb_yield(rb_io_buffer_lock(buffer));
     rb_io_buffer_free_locked(buffer);
     io_shift_head(io);
 

@@ -296,11 +296,11 @@ class IOTest < IOBaseTest
     assert_equal [:ready, 'foo'], bufs
 
     machine.write(@wfd, 'barb')
-    machine.snooze
+    3.times { machine.snooze }
     assert_equal [:ready, 'foo', 'barb'], bufs
 
     machine.close(@wfd)
-    machine.snooze
+    3.times { machine.snooze }
     assert_equal [:ready, 'foo', 'barb', :done], bufs
   ensure
     machine.terminate(f)

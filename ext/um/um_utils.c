@@ -93,7 +93,7 @@ static inline void adjust_read_buffer_len(VALUE buffer, int result, ssize_t ofs)
 }
 
 inline void um_update_read_buffer(VALUE buffer, ssize_t buffer_offset, __s32 result) {
-  if (!result) return;
+  // if (!result) return;
 
   adjust_read_buffer_len(buffer, result, buffer_offset);
 }
