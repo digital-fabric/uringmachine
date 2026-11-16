@@ -77,6 +77,237 @@ class UringMachine
   # concurrent applications in Ruby, in tight integration with the standard Ruby
   # I/O and locking APIs.
   class FiberScheduler
+
+    # read/write methods for FiberScheduler interface v<=3
+    module V_LTE_3_Methods
+      # Reads from the given IO.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] read buffer
+      # @param length [Integer] read length
+      # @param offset [Integer] buffer offset
+      # @return [Integer] bytes read
+      def io_read(io, buffer, length, offset)
+        # p io_read: [io, buffer, length, offset]
+        length = buffer.size if length == 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.read(io.fileno, buffer, length, offset)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.read(io.fileno, buffer, length, offset)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Reads from the given IO at the given file offset
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] read buffer
+      # @param from [Integer] read offset
+      # @param length [Integer] read length
+      # @param offset [Integer] buffer offset
+      # @return [Integer] bytes read
+      def io_pread(io, buffer, from, length, offset)
+        # p io_pread: [io, buffer, from, length, offset]
+        length = buffer.size if length == 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.read(io.fileno, buffer, length, offset, from)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.read(io.fileno, buffer, length, offset, from)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Writes to the given IO.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] write buffer
+      # @param length [Integer] write length
+      # @param offset [Integer] write offset
+      # @return [Integer] bytes written
+      def io_write(io, buffer, length, offset)
+        # p io_write: [io, buffer, length, offset]
+        length = buffer.size if length == 0
+        buffer = buffer.slice(offset) if offset > 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.write(io.fileno, buffer, length)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.write(io.fileno, buffer, length)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Writes to the given IO at the given file offset.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] write buffer
+      # @param from [Integer] file offset
+      # @param length [Integer] write length
+      # @param offset [Integer] buffer offset
+      # @return [Integer] bytes written
+      def io_pwrite(io, buffer, from, length, offset)
+        # p io_pwrite: [io, buffer, from, length, offset]
+        length = buffer.size if length == 0
+        buffer = buffer.slice(offset) if offset > 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.write(io.fileno, buffer, length, from)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.write(io.fileno, buffer, length, from)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+    end
+
+    # read/write methods for FiberScheduler interface v>=4
+    module V_GTE_4_Methods
+      # Reads from the given IO.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] read buffer
+      # @param offset [Integer] buffer offset
+      # @param length [Integer] read length
+      # @return [Integer] bytes read
+      def io_read(io, buffer, offset, length)
+        # p io_read: [io, buffer, length, offset]
+        return 0 if length == 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.read(io.fileno, buffer, length, offset)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.read(io.fileno, buffer, length, offset)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Reads from the given IO at the given file offset
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] read buffer
+      # @param from [Integer] read offset
+      # @param offset [Integer] buffer offset
+      # @param length [Integer] read length
+      # @return [Integer] bytes read
+      def io_pread(io, buffer, from, offset, length)
+        # p io_pread: [io, buffer, from, length, offset]
+        return 0 if length == 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.read(io.fileno, buffer, length, offset, from)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.read(io.fileno, buffer, length, offset, from)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Writes to the given IO.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] write buffer
+      # @param offset [Integer] write offset
+      # @param length [Integer] write length
+      # @return [Integer] bytes written
+      def io_write(io, buffer, offset, length)
+        # p io_write: [io, buffer, length, offset]
+        return 0 if length == 0
+
+        buffer = buffer.slice(offset) if offset > 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.write(io.fileno, buffer, length)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.write(io.fileno, buffer, length)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+  
+      # Writes to the given IO at the given file offset.
+      #
+      # @param io [IO] IO object
+      # @param buffer [IO::Buffer] write buffer
+      # @param from [Integer] file offset
+      # @param offset [Integer] buffer offset
+      # @param length [Integer] write length
+      # @return [Integer] bytes written
+      def io_pwrite(io, buffer, from, offset, length)
+        # p io_pwrite: [io, buffer, from, length, offset]
+        return 0 if length == 0
+
+        buffer = buffer.slice(offset) if offset > 0
+  
+        if (timeout = io.timeout)
+          @machine.timeout(timeout, Timeout::Error) do
+            @machine.write(io.fileno, buffer, length, from)
+          rescue Errno::EINTR
+            retry
+          end
+        else
+          @machine.write(io.fileno, buffer, length, from)
+        end
+      rescue Errno::EINTR
+        retry
+      rescue Errno => e
+        -e.errno
+      end
+    end
+
+    if UM::RUBY_FIBER_SCHEDULER_VERSION < 4
+      include(V_LTE_3_Methods)
+    else
+      include(V_GTE_4_Methods)
+    end
+    
     BLOCKING_OP_SUPPORT = ENV['BLOCKING_OP_SUPPORT']
 
 
@@ -102,6 +333,14 @@ class UringMachine
       @thread_pool = thread_pool
       @fiber_map = ObjectSpace::WeakMap.new
       @thread = Thread.current
+      @interruptions = UM::Queue.new
+      @machine.spin {
+        loop {
+          target, exception = @machine.shift(@interruptions)
+          @machine.schedule(Fiber.current, nil)
+          target.raise(exception)
+        }
+      }
     end
 
     # :nodoc:
@@ -257,114 +496,6 @@ class UringMachine
       [unmap_fds(r, map_r), unmap_fds(w, map_w), unmap_fds(e, map_e)]
     end
 
-    # Reads from the given IO.
-    #
-    # @param io [IO] IO object
-    # @param buffer [IO::Buffer] read buffer
-    # @param length [Integer] read length
-    # @param offset [Integer] buffer offset
-    # @return [Integer] bytes read
-    def io_read(io, buffer, length, offset)
-      # p io_read: [io, buffer, length, offset]
-      length = buffer.size if length == 0
-
-      if (timeout = io.timeout)
-        @machine.timeout(timeout, Timeout::Error) do
-          @machine.read(io.fileno, buffer, length, offset)
-        rescue Errno::EINTR
-          retry
-        end
-      else
-        @machine.read(io.fileno, buffer, length, offset)
-      end
-    rescue Errno::EINTR
-      retry
-    rescue Errno => e
-      -e.errno
-    end
-
-    # Reads from the given IO at the given file offset
-    #
-    # @param io [IO] IO object
-    # @param buffer [IO::Buffer] read buffer
-    # @param from [Integer] read offset
-    # @param length [Integer] read length
-    # @param offset [Integer] buffer offset
-    # @return [Integer] bytes read
-    def io_pread(io, buffer, from, length, offset)
-      # p io_pread: [io, buffer, from, length, offset]
-      length = buffer.size if length == 0
-
-      if (timeout = io.timeout)
-        @machine.timeout(timeout, Timeout::Error) do
-          @machine.read(io.fileno, buffer, length, offset, from)
-        rescue Errno::EINTR
-          retry
-        end
-      else
-        @machine.read(io.fileno, buffer, length, offset, from)
-      end
-    rescue Errno::EINTR
-      retry
-    rescue Errno => e
-      -e.errno
-    end
-
-    # Writes to the given IO.
-    #
-    # @param io [IO] IO object
-    # @param buffer [IO::Buffer] write buffer
-    # @param length [Integer] write length
-    # @param offset [Integer] write offset
-    # @return [Integer] bytes written
-    def io_write(io, buffer, length, offset)
-      # p io_write: [io, buffer, length, offset]
-      length = buffer.size if length == 0
-      buffer = buffer.slice(offset) if offset > 0
-
-      if (timeout = io.timeout)
-        @machine.timeout(timeout, Timeout::Error) do
-          @machine.write(io.fileno, buffer, length)
-        rescue Errno::EINTR
-          retry
-        end
-      else
-        @machine.write(io.fileno, buffer, length)
-      end
-    rescue Errno::EINTR
-      retry
-    rescue Errno => e
-      -e.errno
-    end
-
-    # Writes to the given IO at the given file offset.
-    #
-    # @param io [IO] IO object
-    # @param buffer [IO::Buffer] write buffer
-    # @param from [Integer] file offset
-    # @param length [Integer] write length
-    # @param offset [Integer] buffer offset
-    # @return [Integer] bytes written
-    def io_pwrite(io, buffer, from, length, offset)
-      # p io_pwrite: [io, buffer, from, length, offset]
-      length = buffer.size if length == 0
-      buffer = buffer.slice(offset) if offset > 0
-
-      if (timeout = io.timeout)
-        @machine.timeout(timeout, Timeout::Error) do
-          @machine.write(io.fileno, buffer, length, from)
-        rescue Errno::EINTR
-          retry
-        end
-      else
-        @machine.write(io.fileno, buffer, length, from)
-      end
-    rescue Errno::EINTR
-      retry
-    rescue Errno => e
-      -e.errno
-    end
-
     # Closes the given fd.
     #
     # @param fd [Integer] file descriptor
@@ -389,15 +520,26 @@ class UringMachine
       end
     end
 
+    module FiberSchedulerThreadExtensions
+      attr_accessor :__um_fiber_interrupt_machine__
+    end
+    ::Thread.include(FiberSchedulerThreadExtensions)
+
     # Interrupts the given fiber with an exception.
     #
     # @param fiber [Fiber] fiber to interrupt
     # @param exception [Exception] Exception
     # @return [void]
     def fiber_interrupt(fiber, exception)
-      # p fiber_interrupt: [fiber, exception]
-      @machine.schedule(fiber, exception)
+      if fiber.is_a?(Fiber)
+        @machine.schedule(fiber, exception)
+      else
+        m = Thread.current.__um_fiber_interrupt_machine__ ||= UM.new(size: 4)
+        # @machine.schedule(Fiber.current, exception)
+        m.push(@interruptions, [fiber, exception])
+      end
       @machine.wakeup
+      nil
     end
 
     # Resolves an hostname.
@@ -429,8 +571,8 @@ class UringMachine
     # @return [void]
     def p(o)
       UM.debug(o.inspect)
-      UM.debug(caller[2..12].inspect)
-      UM.debug("")
+      # UM.debug(caller[2..12].inspect)
+      # UM.debug("")
     end
 
     # Maps the given ios to fds.

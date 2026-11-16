@@ -371,3 +371,36 @@ class ThreadMachineTest < UMBaseTest
     assert_equal m, m2
   end
 end
+
+class FiberRubyAPITest < UMBaseTest
+  def test_fiber_raise
+    buf = []
+    q = UM::Queue.new
+    f = machine.spin do
+      buf << machine.shift(q)
+    rescue => e
+      buf << e
+    end
+
+    e = RuntimeError.new
+    3.times { machine.snooze }
+    machine.schedule(Fiber.current, nil)
+    f.raise(e)
+
+    assert_equal e, buf[0]
+  end
+
+  def test_fiber_transfer
+    buf = []
+    q = UM::Queue.new
+    f = machine.spin do
+      buf << machine.switch
+    end
+
+    3.times { machine.snooze }
+    machine.schedule(Fiber.current, nil)
+    f.transfer(42)
+
+    assert_equal 42, buf[0]
+  end
+end
