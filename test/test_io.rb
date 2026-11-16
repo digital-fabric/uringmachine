@@ -356,6 +356,15 @@ class IOWriteTest < UMBaseTest
     assert_equal 'foobar', buf
   end
 
+  def test_io_write_io_buf
+    io_buf = IO::Buffer.for('foobar')
+    assert_equal 11, conn.write("6\r\n", io_buf, "\r\n")
+
+    buf = +''
+    machine.read(@s2, buf, 100)
+    assert_equal "6\r\nfoobar\r\n", buf
+  end
+
   def test_io_write_socket_mode
     conn = machine.io(@s2, :socket)
 
@@ -717,7 +726,7 @@ class IOModeTest < UMBaseTest
   end
 
   def test_io_file_mode
-    fn = Tempfile.new('uringmachine_test_io_from_file').path
+    fn = Tempfile.new('uringmachine_test_io_file_mode').path
     IO.write(fn, (0..9).to_a.join)
     fd = machine.open(fn, UM::O_RDONLY)
     io = machine.io(fd, :file)
@@ -729,6 +738,18 @@ class IOModeTest < UMBaseTest
 
     buf = io.read(-4)
     assert_equal '89', buf
+  ensure
+    machine.close(fd) if fd
+  end
+
+  def test_io_file_mode_read_each
+    fn = Tempfile.new('test_io_file_mode_read_each').path
+    IO.write(fn, (0..9).to_a.join)
+    fd = machine.open(fn, UM::O_RDONLY)
+    io = machine.io(fd, :file)
+    buf = []
+    io.read_each { buf << it.get_string }
+    assert_equal ['0123456789'], buf
   ensure
     machine.close(fd) if fd
   end

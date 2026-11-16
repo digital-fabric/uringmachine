@@ -274,10 +274,7 @@ inline void io_shift_head(struct um_io *io) {
 }
 
 inline VALUE make_segment_io_buffer(struct um_segment *segment, size_t pos) {
-  return rb_io_buffer_new(
-    segment->ptr + pos, segment->len - pos,
-    RB_IO_BUFFER_LOCKED|RB_IO_BUFFER_READONLY
-  );
+  return rb_io_buffer_new(segment->ptr + pos, segment->len - pos, RB_IO_BUFFER_READONLY);
 }
 
 inline void io_skip(struct um_io *io, size_t inc, int safe_inc) {

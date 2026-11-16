@@ -1,3 +1,22 @@
+## File copying with IO
+
+```ruby
+# instead of:
+io_foo.read_each { machine.write(some_other_fd, it) }
+
+# or:
+io_foo.read_each { io_bar.write(it) }
+
+# add:
+io_foo.copy_each(some_other_fd || io)
+```
+
+Also, we can add a specialized case: sending chunks from a given IO:
+
+```ruby
+conn.http1_write_chunks_from_io(file_io)
+```
+
 ## Character scanning in UM::IO
 
 - Refactor character scanning
@@ -164,3 +183,85 @@ inline int test_char(char c, uint64 *bitmap) {
   #        ['1.1.1.1:80', '2.2.2.2:80']
   tcp_connect_he(*addrs)
   ```
+
+## Data-Oriented Design
+
+see: https://www.youtube.com/watch?v=uI1Yx1CJAB0
+
+The current UM implementation is a "forest of pointers". It is also quite
+complex, to a large extent because the design has evolved over a long period of
+time. The automatic buffers feature in particular has necessitated many changes
+to the original design, and the code shows this.
+
+Would it be possible to move to a data-oriented design where instead of pointers
+we use indexes into dynamic arrays of:
+
+- `um_op`
+- `um_op_result`
+- `um_segment`
+- `um_buffer`
+
+In and of itself, switching from pointers to indexes is not that hard. What's
+more challenging is the fact that in UM things are happening concurrently and
+asynchronously, which means different `um_op`s (for example) have different
+lifetimes, so we can't just treat a dynamic array of `um_op` as something that
+just grows. A `um_op` in the middle of the array might be freed up, so we need
+to track lifetimes and free slots. We also need to have some kind of abstraction
+for a linked list that's index-based, and at the same time we need to track free
+slots with a free list.
+
+We use the concept of a store. The store itself doesn't deal with tracking the
+list head/tail. This is done at a level above.
+
+```c
+typedef uint32_t um_op_idx;
+#define UM_OP_NIL = (uint32_t)-1;
+
+struct um_op_store {
+  struct um_op *store;
+  size_t size;
+  size_t used_count;
+  um_op_idx free_head;
+};
+
+void um_op_store_init(struct um_op_store *list, size_t initial_size) {
+  list->size = initial_size;
+  list->store = malloc(sizeof(um_op) * initial_size);
+  memset(list->store, 0, sizeof(um_op) * initial_size);
+  if (!(list->store)) rb_raise("Failed to allocate");
+
+  list->used_count = 0;
+  list->free_head = 0;
+
+  for (um_op_idx i = 0; i < (initial_size - 1); i++)
+    list->store[i].next = i + 1;
+}
+
+void um_op_store_deinit(struct um_op_store *list) {
+  free(list->store);
+}
+
+struct um_op *um_op_store_get(struct um_op_store *list, um_op_idx idx) {
+  // TODO: add checkss
+  return list->store + idx;
+}
+
+um_op_idx um_op_store_alloc(struct um_op_store *list) {
+  if (list->free_head == UM_OP_NIL) {
+    // reallocate list with size * 2
+    // set free_head
+  }
+
+  um_op_idx idx = list->free_head;
+  list->free_head = list->store[idx].next;
+  list->store[idx].next = UM_OP_NIL;
+  list->used_count++;
+  return idx;
+}
+
+void um_op_store_free(struct um_op_store *list, um_op_idx idx) {
+  list->store[idx].next = list->free_head;
+  list->free_head = idx;
+  list->used_count--;
+}
+```

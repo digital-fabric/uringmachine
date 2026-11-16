@@ -3,6 +3,8 @@
 
 #include <ruby.h>
 #include <liburing.h>
+#include <ruby/io/buffer.h>
+#include <ruby/fiber/scheduler.h>
 
 // debugging
 enum {
@@ -31,8 +33,18 @@ enum {
 #define likely(cond)	__builtin_expect(!!(cond), 1)
 #endif
 
-#define IO_BUFFER_P(buffer) \
-  (TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer)
+//RUBY_IO_BUFFER_VERSION >= 4
+//RUBY_FIBER_SCHEDULER_VERSION >= 4
+#if RUBY_IO_BUFFER_VERSION >= 4
+  #define IO_BUFFER_P(buffer) \
+    (TYPE(buffer) == RUBY_T_DATA) && ( \
+      rb_obj_is_instance_of(buffer, rb_cIOBufferStorage) || \
+      rb_obj_is_instance_of(buffer, rb_cIOBufferSlice) \
+    )
+#else
+  #define IO_BUFFER_P(buffer) \
+    (TYPE(buffer) == RUBY_T_DATA) && rb_obj_is_instance_of(buffer, rb_cIOBuffer)
+#endif
 
 enum um_op_kind {
   OP_UNDEFINED,

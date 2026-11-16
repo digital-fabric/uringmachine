@@ -1529,6 +1529,8 @@ void Init_UM(void) {
 
   eUMError = rb_define_class_under(cUM, "Error", rb_eStandardError);
 
+  rb_define_const(cUM, "RUBY_IO_BUFFER_VERSION", INT2NUM(RUBY_IO_BUFFER_VERSION));
+  rb_define_const(cUM, "RUBY_FIBER_SCHEDULER_VERSION", INT2NUM(RUBY_FIBER_SCHEDULER_VERSION));
   um_define_net_constants(cUM);
 
   SYM_size                    = ID2SYM(rb_intern("size"));

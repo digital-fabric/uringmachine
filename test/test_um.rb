@@ -8,7 +8,19 @@ class UringMachineTest < Minitest::Test
   def test_kernel_version
     v = UringMachine.kernel_version
     assert_kind_of Integer, v
-    assert_in_range 600..700, v
+    assert_in_range 600..712, v
+  end
+
+  def test_ruby_io_buffer_version
+    v = UringMachine::RUBY_IO_BUFFER_VERSION
+    assert_kind_of Integer, v
+    assert_in_range 1..4, v
+  end
+
+  def test_ruby_fiber_scheduler_version
+    v = UringMachine::RUBY_FIBER_SCHEDULER_VERSION
+    assert_kind_of Integer, v
+    assert_in_range 1..5, v
   end
 end
 
@@ -3050,6 +3062,7 @@ class ForkTest < UMBaseTest
       # we cannot use the same machine after fork
       m = UM.new
       buf = +''
+      puts
       m.read(child_rfd, buf, 8192)
       m.write(child_wfd, buf, buf.bytesize)
       m.close(child_wfd)
@@ -3071,6 +3084,7 @@ class ForkTest < UMBaseTest
     assert_equal 3, ret
     assert_equal 'foo', buf
   ensure
+    Process.kill(:SIGKILL, child_pid)
     Process.wait(child_pid) rescue nil
   end
 end
