@@ -187,6 +187,16 @@ class UringMachine
       rescue Errno => e
         -e.errno
       end
+
+      # Interrupts the given fiber with an exception.
+      #
+      # @param fiber [Fiber] fiber to interrupt
+      # @param exception [Exception] Exception
+      # @return [void]
+      def fiber_interrupt(fiber, exception)
+        @machine.schedule(fiber, exception)
+        @machine.wakeup
+      end
     end
 
     # read/write methods for FiberScheduler interface v>=4
@@ -300,18 +310,53 @@ class UringMachine
       rescue Errno => e
         -e.errno
       end
+
+      # Interrupts the given fiber with an exception.
+      #
+      # @param target [Object] fiber target
+      # @param exception [Exception] Exception
+      # @return [void]
+      def fiber_interrupt(fiber, exception)
+        m = Thread.current.__um_fiber_interrupt_machine__ ||= UM.new(size: 4)
+        m.push(@fiber_interrupt_queue, [fiber, exception])
+        @machine.wakeup
+      end
+
+      # Sets up a fiber interrupt watcher, which handles queued fiber_interrupt
+      # requests. In Ruby 4.1, when the fiber_interrupt hook is invoked, the
+      # fiber to interrupt is wrapped in a custom target class instance that
+      # hides the relevant fiber behind a minimal interface, so we can't
+      # directly schedule the fiber. Instead, we put the target on a queue and
+      # handle it asynchronously.
+      def setup_fiber_interrupt_watcher
+        @fiber_interrupt_queue = UM::Queue.new
+        @machine.spin do
+          loop do
+            target, exception = @machine.shift(@fiber_interrupt_queue)
+            break if target == :STOP
+
+            @machine.schedule(Fiber.current, nil)
+            target.raise(exception)
+          end
+        end
+      end
+    end
+
+    # Thread extensions that allow caching of a UM instance for pushing to a
+    # fiber_interrupt queue.
+    module FiberSchedulerThreadExtensions
+      attr_accessor :__um_fiber_interrupt_machine__
     end
 
     if UM::RUBY_FIBER_SCHEDULER_VERSION < 4
       include(V_LTE_3_Methods)
     else
       include(V_GTE_4_Methods)
+      ::Thread.include(FiberSchedulerThreadExtensions)
     end
     
-    BLOCKING_OP_SUPPORT = ENV['BLOCKING_OP_SUPPORT']
-
-
     # The blocking operation thread pool is shared by all fiber schedulers.
+    BLOCKING_OP_SUPPORT = ENV['BLOCKING_OP_SUPPORT']
     DEFAULT_THREAD_POOL = BLOCKING_OP_SUPPORT && BlockingOperationThreadPool.new
 
     # UringMachine instance associated with scheduler.
@@ -333,14 +378,7 @@ class UringMachine
       @thread_pool = thread_pool
       @fiber_map = ObjectSpace::WeakMap.new
       @thread = Thread.current
-      @interruptions = UM::Queue.new
-      @machine.spin {
-        loop {
-          target, exception = @machine.shift(@interruptions)
-          @machine.schedule(Fiber.current, nil)
-          target.raise(exception)
-        }
-      }
+      setup_fiber_interrupt_watcher if respond_to?(:setup_fiber_interrupt_watcher)
     end
 
     # :nodoc:
@@ -369,6 +407,7 @@ class UringMachine
     #
     # @return [void]
     def scheduler_close
+      @machine.push(@fiber_interrupt_queue, :STOP) if @fiber_interrupt_queue
       join()
     end
 
@@ -387,7 +426,6 @@ class UringMachine
     end
 
     if BLOCKING_OP_SUPPORT
-
       # Runs the given operation in a separate thread, so as not to block other
       # fibers.
       #
@@ -520,11 +558,6 @@ class UringMachine
       end
     end
 
-    module FiberSchedulerThreadExtensions
-      attr_accessor :__um_fiber_interrupt_machine__
-    end
-    ::Thread.include(FiberSchedulerThreadExtensions)
-
     # Interrupts the given fiber with an exception.
     #
     # @param fiber [Fiber] fiber to interrupt
@@ -536,7 +569,7 @@ class UringMachine
       else
         m = Thread.current.__um_fiber_interrupt_machine__ ||= UM.new(size: 4)
         # @machine.schedule(Fiber.current, exception)
-        m.push(@interruptions, [fiber, exception])
+        m.push(@fiber_interrupt_queue, [fiber, exception])
       end
       @machine.wakeup
       nil
