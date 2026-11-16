@@ -1,3 +1,9 @@
+# 1.0.7 2026-11-16
+
+- Update development dependencies
+- Fix `IO::Buffer` locking in `UM::IO#read_each`
+- Make UringMachine compatible with Ruby 4.1 (#12)
+
 # 1.0.6 2026-10-01
 
 - Add `UM#file_read` convenience method
