@@ -3534,7 +3534,7 @@ class IOMethodTest < UMBaseTest
   end
 end
 
-class FileHelperMethodsTest < UMBaseTest
+class ConvenienceMethodsTest < UMBaseTest
   def setup
     super
     @fn = Tempfile.new('uringmachine_test_io_from_file').path
@@ -3548,6 +3548,39 @@ class FileHelperMethodsTest < UMBaseTest
 
   def test_file_read_bad_fn
     assert_raises(Errno::ENOENT) { machine.file_read(@fn + '-missing') }
+  end
+
+  def test_fd_read
+    r, w = UM.pipe
+    machine.write(w, 'foobar' * 321)
+    machine.close(w)
+    buf = machine.fd_read(r)
+    assert_equal 'foobar' * 321, buf
+  end
+
+  def test_fd_read_socket_mode_non_socket
+    r, w = UM.pipe
+    machine.write(w, 'foobar' * 321)
+    machine.close(w)
+    assert_raises(Errno::ENOTSOCK) { machine.fd_read(r, :socket) }
+  end
+
+  def test_fd_read_socket_mode
+    r, w = UM.socketpair(UM::AF_UNIX, UM::SOCK_STREAM, 0)
+    machine.write(w, 'foobar' * 321)
+    machine.close(w)
+    buf = machine.fd_read(r, :socket)
+    assert_equal 'foobar' * 321, buf
+  end
+
+  def test_fd_read_bad_fd
+    r, w = UM.pipe
+    assert_raises(Errno::EBADF) { machine.fd_read(w) }
+  end
+
+  def test_fd_read_bad_mode
+    r, w = UM.pipe
+    assert_raises(UM::Error) { machine.fd_read(r, :foo) }
   end
 end
 

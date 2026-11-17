@@ -1,3 +1,39 @@
+## CSP
+
+How amenable is UringMachine to CSP-style programming?
+
+https://go.dev/talks/2012/concurrency.slide#50
+
+```ruby
+def do_search
+  q = UM::Queue.new
+  @machine.spin { @machine.push(q, query(web1, web2)) }
+  @machine.spin { @machine.push(q, query(img1, img2)) }
+  @machine.spin { @machine.push(q, query(vid1, vid2)) }
+  results = []
+  @machine.timeout(0.08, Timeout::Error) {
+    3.times { results << @machine.shift(q) }
+  }
+  results
+end
+```
+
+But maybe we can build an abstraction on top of it:
+
+```ruby
+def do_search
+  c = UM::Channel.new(@machine)
+  @machine.spin { c << query(web1, web2) }
+  @machine.spin { c << query(img1, img2) }
+  @machine.spin { c << query(vid1, vid2) }
+  results = []
+  @machine.timeout(0.08, Timeout::Error) {
+    3.times { results << c.next }
+  }
+  results
+end
+```
+
 ## File copying with IO
 
 ```ruby

@@ -232,6 +232,19 @@ class UringMachine
     open(fn, O_RDONLY) { io(it, :file).read(-(1 << 30)) }
   end
 
+  # call-seq:
+  #   machine.fd_read(fd) -> data
+  #   machine.fd_read(fd, mode) -> data
+  #
+  # Reads from the given fd until EOF and returns the read data, with a maximum length of 1GB.
+  #
+  # @param fd [Integer] file descriptor
+  # @param mode [Symbol] IO mode (:file, :socket, :ssl)
+  # @return [String] read data
+  def fd_read(fd, mode = :file)
+    io(fd, mode).read(-(1 << 30))
+  end
+
   # Creates, binds and sets up a TCP socket for listening on the given host and
   # port.
   #
