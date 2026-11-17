@@ -18,5 +18,5 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = `git ls-files -z *.rdoc *.md lib/*.rb lib/**/*.rb ext/um/*.c ext/um/*.h benchmark/*.md benchmark/*.png`.split("\x0")
   s.extensions = ["ext/um/extconf.rb"]
   s.require_paths = ["lib"]
-  s.required_ruby_version = '>= 3.5'
+  s.required_ruby_version = '>= 4.0'
 end

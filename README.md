@@ -64,7 +64,7 @@ allow any library that performs I/O using standard-library classes such as `IO`,
 To install UringMachine, simply run `gem install uringmachine` or `bundle add
 uringmachine` in your project directory. Note: to use UringMachine, you'll need
 a Linux machine with a minimum Linux kernel version of 6.7. Some features
-require newer kernel versions.
+require newer kernel versions. You'll also need to use Ruby 4.0 or newer.
 
 To perform I/O using UringMachine, simply create an instance:
 
