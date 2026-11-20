@@ -126,8 +126,8 @@ enum um_io_mode {
 
 #define BP_BGID                     0xF00B
 #define BP_BR_ENTRIES               1024
-#define BP_INITIAL_BUFFER_SIZE      (1U << 14) // 16KB
-#define BP_INITIAL_COMMIT_LEVEL     (BP_INITIAL_BUFFER_SIZE * 16) // 256KB
+#define BP_INITIAL_BUFFER_SIZE      (1U << 16) // 64KB
+#define BP_INITIAL_COMMIT_LEVEL     (BP_INITIAL_BUFFER_SIZE * 4) // 256KB
 #define BP_MAX_BUFFER_SIZE          (1U << 20) // 1MB
 #define BP_MAX_COMMIT_LEVEL         (BP_MAX_BUFFER_SIZE * BP_BR_ENTRIES) // 1GB
 #define BP_AVAIL_BID_BITMAP_WORDS   (BP_BR_ENTRIES / 64)

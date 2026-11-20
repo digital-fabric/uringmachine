@@ -3550,6 +3550,11 @@ class ConvenienceMethodsTest < UMBaseTest
     assert_raises(Errno::ENOENT) { machine.file_read(@fn + '-missing') }
   end
 
+  def test_file_read_portrait
+    buf = machine.file_read(File.join(__dir__, 'fixtures/portrait.jpg'))
+    refute_nil buf
+  end
+
   def test_fd_read
     r, w = UM.pipe
     machine.write(w, 'foobar' * 321)
@@ -3642,7 +3647,7 @@ class TCPHelperMethodsTest < UMBaseTest
     assert_raises(TypeError) { machine.tcp_connect('127.0.0.1', :foo) }
     assert_raises(TypeError) { machine.tcp_connect(1234, 5678) }
   ensure
-    machine.close(server_fd)
+    machine.close(server_fd) if server_fd
   end
 end
 

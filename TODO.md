@@ -4,6 +4,10 @@ How amenable is UringMachine to CSP-style programming?
 
 https://go.dev/talks/2012/concurrency.slide#50
 
+also:
+
+https://www.youtube.com/watch?v=BcHI3U0FuoY
+
 ```ruby
 def do_search
   q = UM::Queue.new
@@ -32,6 +36,33 @@ def do_search
   }
   results
 end
+```
+
+## Enahance working with queues
+
+- Add `#shift_each`
+
+  ```ruby
+  machine.shift_each(queue) { |v| ... }
+  ```
+
+```ruby
+q1 = UM::Queue.new
+q2 = UM::Queue.new
+
+# return value is array containing queue and shifted value
+machine.multi_shift(q1, q2) #=> [q, v]
+```
+
+- Add support for shifting from a UM::IO
+
+This lets us treat an IO as a channel/queue:
+
+```ruby
+io = machine.io(fd)
+queue = UM::Queue.new
+
+q, v = machine.multi_shift(io, queue)
 ```
 
 ## File copying with IO
