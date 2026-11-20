@@ -1,3 +1,9 @@
+# 1.0.8 2026-11-20
+
+- Increase buffer pool initial buffer size to 64KB
+- Fix `UM.file_read` for files bigger than buffer pool buffer size
+- Add `UM.fd_read` method
+
 # 1.0.7 2026-11-16
 
 - Update development dependencies
