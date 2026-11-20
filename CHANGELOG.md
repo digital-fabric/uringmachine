@@ -1,3 +1,7 @@
+# 1.0.9 2026-11-20
+
+- Add `UM::Broadcaster` class, `UM#broadcaster` method
+
 # 1.0.8 2026-11-20
 
 - Increase buffer pool initial buffer size to 64KB
