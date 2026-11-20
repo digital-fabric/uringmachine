@@ -50,7 +50,7 @@ class IOTest < IOBaseTest
 
     # initial buffer size: 6BKV, initial buffers commited: 16 (256KB)
     # (plus an additional buffer commited after first usage)
-    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
+    assert_equal [4, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
     assert_equal 0, machine.metrics[:ops_pending]
   end
 
@@ -72,7 +72,7 @@ class IOTest < IOBaseTest
     assert_equal 0, machine.metrics[:ops_pending]
     assert_equal 256, machine.metrics[:segments_free]
 
-    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
+    assert_equal [4, 0, 256, 16384 * 16, 16384 * 16 - 6], buffer_metrics
   ensure
     machine.close(rfd) rescue nil
     machine.close(wfd) rescue nil
@@ -124,8 +124,8 @@ class IOTest < IOBaseTest
 
     conn.clear
     # numbers may vary with different kernel versions
-    assert_in_range 24..32, machine.metrics[:buffers_allocated]
-    assert_in_range 10..18, machine.metrics[:buffers_free]
+    assert_in_range 3..8, machine.metrics[:buffers_allocated]
+    assert_equal 0, machine.metrics[:buffers_free]
     assert_equal 256, machine.metrics[:segments_free]
   ensure
     machine.terminate(f)
@@ -140,7 +140,7 @@ class IOTest < IOBaseTest
 
     assert_equal 'foo', conn.read_line(0)
 
-    assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
+    assert_equal [4, 0, 255, 16384 * 16, 16384 * 16 - 12], buffer_metrics
     assert_equal 'bar', conn.read_line(0)
     assert_nil conn.read_line(0)
     assert_equal "baz", conn.read(-6)
@@ -156,11 +156,11 @@ class IOTest < IOBaseTest
     machine.close(@wfd)
 
     # three segments received
-    assert_equal [16, 0, 253, 16384 * 16, 16384 * 16 - 13], buffer_metrics
+    assert_equal [4, 0, 253, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_equal 'bar', conn.read_line(0)
-    assert_equal [16, 0, 255, 16384 * 16, 16384 * 16 - 13], buffer_metrics
+    assert_equal [4, 0, 255, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_equal 'baz', conn.read_line(0)
-    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 13], buffer_metrics
+    assert_equal [4, 0, 256, 16384 * 16, 16384 * 16 - 13], buffer_metrics
     assert_nil conn.read_line(0)
   end
 
@@ -186,7 +186,7 @@ class IOTest < IOBaseTest
     assert_equal 'bizz', conn.read_line(5)
 
     assert_nil conn.read_line(8)
-    assert_equal [16, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
+    assert_equal [4, 0, 256, 16384 * 16, 16384 * 16 - 17], buffer_metrics
   end
 
   def test_io_read

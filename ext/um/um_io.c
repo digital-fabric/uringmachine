@@ -239,7 +239,7 @@ int io_get_more_segments_file(struct um_io *io) {
       bp_buffer_checkin(io->machine, io->working_buffer);
       io->working_buffer = NULL;
     }
-    else has_more = 1;
+    has_more = 1;
   }
   um_op_release(io->machine, op);
 
