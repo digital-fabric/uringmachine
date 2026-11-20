@@ -1,3 +1,8 @@
+## Immediate
+
+- `UM::IO`: Implement automatic failover to `IO_MODE` mode when doing a multishot read (in
+  `IO_FD`) and getting a `-EBADFD` error.
+
 ## CSP
 
 How amenable is UringMachine to CSP-style programming?

@@ -3,6 +3,7 @@
 require 'um_ext'
 require 'uringmachine/version'
 require 'uringmachine/dns_resolver'
+require 'uringmachine/broadcaster'
 
 UM = UringMachine
 
@@ -219,6 +220,11 @@ class UringMachine
     res = yield(conn)
     conn.clear
     res
+  end
+
+  # @return [UringMachine::Broadcaster]
+  def broadcaster
+    Broadcaster.new(self)
   end
 
   # call-seq:
